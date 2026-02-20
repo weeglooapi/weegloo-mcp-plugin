@@ -72,6 +72,14 @@ The Claude plugin uses the following MCP configuration (`.mcp.json`):
     "weegloo-system": {
       "type": "http",
       "url": "https://ai.weegloo.com/mcp?group=system"
+    },
+    "weegloo-upload": {
+      "command": "npx",
+      "args": ["-y", "weegloo-upload"],
+      "env": {
+        "UPLOAD_API_URL": "https://dev-upload.weegloo.com/v1",
+        "AUTH_BEARER_TOKEN": "${PERSONAL_ACCESS_TOKEN}"
+      }
     }
   }
 }
@@ -123,6 +131,14 @@ Add the following configuration to connect to the remote Weegloo MCP server:
     "weegloo-system": {
       "type": "http",
       "url": "https://ai.weegloo.com/mcp?group=system"
+    },
+    "weegloo-upload": {
+      "command": "npx",
+      "args": ["-y", "weegloo-upload"],
+      "env": {
+        "UPLOAD_API_URL": "https://dev-upload.weegloo.com/v1",
+        "AUTH_BEARER_TOKEN": "${PERSONAL_ACCESS_TOKEN}"
+      }
     }
   }
 }
