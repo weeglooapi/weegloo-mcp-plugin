@@ -32,7 +32,7 @@
       "command": "npx",
       "args": ["-y", "weegloo-upload"],
       "env": {
-        "UPLOAD_API_URL": "https://dev-upload.weegloo.com/v1",
+        "UPLOAD_API_URL": "https://upload.weegloo.com/v1",
         "AUTH_BEARER_TOKEN": "${PERSONAL_ACCESS_TOKEN}"
       }
     }
