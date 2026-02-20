@@ -2,7 +2,7 @@
   "name": "Weegloo",
   "version": "0.1.0",
   "description": "Weegloo MCP server. Create content, send messages, and perform other Weegloo actions through MCP-compatible clients.",
-  "mcpServers": "../.cursor-mcp.json",
+  "mcpServers": "../plugins/cursor/mcp.json",
   "author": {
     "name": "Weegloo",
     "email": "support@weegloo.com",
