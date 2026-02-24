@@ -1,38 +1,51 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
-        <linearGradient id="skyGradientVolume" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#4DD6F6"/> <stop offset="100%" stop-color="#00A8E8"/> </linearGradient>
-        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
-            <feOffset dx="4" dy="8" result="offsetblur"/>
-            <feComponentTransfer>
-                <feFuncA type="linear" slope="0.3"/>
-            </feComponentTransfer>
+        <linearGradient id="iconBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#64E1FF"/> <stop offset="100%" stop-color="#0090E0"/> </linearGradient>
+        
+        <linearGradient id="contentGradient" x1="50%" y1="0%" x2="50%" y2="100%">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#EDFBFF"/>
+        </linearGradient>
+
+        <filter id="appShadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="12"/>
+            <feOffset dx="4" dy="12" result="offsetblur"/>
+            <feFlood flood-color="rgba(0,0,0,0.25)"/>
+            <feComposite in2="offsetblur" operator="in"/>
             <feMerge>
                 <feMergeNode/>
                 <feMergeNode in="SourceGraphic"/>
             </feMerge>
         </filter>
+
+        <filter id="innerBevel" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+            <feOffset dx="1" dy="2" in="blur" result="offsetBlur"/>
+            <feSpecularLighting in="blur" surfaceScale="5" specularConstant="1" specularExponent="20" lighting-color="#FFFFFF" result="specOut">
+                <fePointLight x="256" y="-100" z="100"/>
+            </feSpecularLighting>
+            <feComposite in="specOut" in2="SourceAlpha" operator="in" result="specOut"/>
+            <feComposite in="SourceGraphic" in2="offsetBlur" operator="over" result="final"/>
+        </filter>
     </defs>
 
-    <rect x="20" y="20" width="472" height="472" rx="90" fill="#E3F8FD" filter="url(#softShadow)"/>
+    <rect x="32" y="32" width="448" height="448" rx="110" fill="url(#iconBgGradient)" filter="url(#appShadow)"/>
     
     <g transform="translate(66, 100)">
         
-        <g filter="url(#softShadow)">
-            <path d="M190 60 C 190 120, 100 120, 100 170" stroke="url(#skyGradientVolume)" stroke-width="24" stroke-linecap="round" fill="none"/>
-            <path d="M190 60 C 190 120, 190 120, 190 170" stroke="url(#skyGradientVolume)" stroke-width="24" stroke-linecap="round" fill="none"/>
-            <path d="M190 60 C 190 120, 280 120, 280 170" stroke="url(#skyGradientVolume)" stroke-width="24" stroke-linecap="round" fill="none"/>
+        <g filter="url(#innerBevel)">
+            <path d="M185 60 C 185 115, 105 115, 105 165 L 95 165 C 95 110, 175 110, 175 60 Z" fill="url(#contentGradient)"/>
+            <path d="M195 60 C 195 115, 195 115, 195 165 L 185 165 C 185 110, 185 110, 185 60 Z" fill="url(#contentGradient)"/>
+            <path d="M195 60 C 195 115, 275 115, 275 165 L 285 165 C 285 110, 205 110, 205 60 Z" fill="url(#contentGradient)"/>
 
-            <circle cx="190" cy="60" r="40" fill="url(#skyGradientVolume)"/>
-            <circle cx="100" cy="170" r="32" fill="url(#skyGradientVolume)"/>
-            <circle cx="190" cy="170" r="32" fill="url(#skyGradientVolume)"/>
-            <circle cx="280" cy="170" r="32" fill="url(#skyGradientVolume)"/>
+            <circle cx="190" cy="60" r="40" fill="url(#contentGradient)"/>
+            <circle cx="100" cy="170" r="30" fill="url(#contentGradient)"/>
+            <circle cx="190" cy="170" r="30" fill="url(#contentGradient)"/>
+            <circle cx="280" cy="170" r="30" fill="url(#contentGradient)"/>
         </g>
 
-        <g transform="translate(20, 260)" filter="url(#softShadow)">
-            <path d="
-                M 10,30 Q 10,60 30,60 Q 50,60 50,30 Q 50,60 70,60 Q 90,60 90,30 M 110,45 a 20,20 0 1,0 40,0 a 20,20 0 1,0 -40,0 M 150,45 H 165 M 165,45 a 20,20 0 1,0 40,0 a 20,20 0 1,0 -40,0 M 220,25 a 20,20 0 1,1 40,0 a 20,20 0 1,1 -40,0 M 260,45 Q 260,80 240,80 Q 220,80 220,60 M 285,10 L 285,60 M 305,45 a 20,20 0 1,0 40,0 a 20,20 0 1,0 -40,0 M 355,45 a 20,20 0 1,0 40,0 a 20,20 0 1,0 -40,0 " stroke="url(#skyGradientVolume)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-             <circle cx="130" cy="45" r="12" fill="url(#skyGradientVolume)"/> <circle cx="185" cy="45" r="12" fill="url(#skyGradientVolume)"/> <circle cx="240" cy="45" r="12" fill="url(#skyGradientVolume)"/> <circle cx="325" cy="45" r="12" fill="url(#skyGradientVolume)"/> <circle cx="375" cy="45" r="12" fill="url(#skyGradientVolume)"/> </g>
+        <g transform="translate(20, 250)" filter="url(#innerBevel)">
+            <path d="M 20,30 Q 20,50 35,50 Q 50,50 50,30 Q 50,50 65,50 Q 80,50 80,30 L 100,30 Q 100,70 70,70 Q 40,70 40,50 Q 40,70 10,70 Q -20,70 -20,30 Z" fill="url(#contentGradient)"/> <path d="M 130,45 a 20,20 0 1,0 40,0 a 20,20 0 1,0 -40,0 M 150,35 H 170 M 130,45 a 10,10 0 1,1 20,0 a 10,10 0 1,1 -20,0" fill="url(#contentGradient)" fill-rule="evenodd"/> <path d="M 185,45 a 20,20 0 1,0 40,0 a 20,20 0 1,0 -40,0 M 205,35 H 225 M 185,45 a 10,10 0 1,1 20,0 a 10,10 0 1,1 -20,0" fill="url(#contentGradient)" fill-rule="evenodd"/> <path d="M 240,25 a 20,20 0 1,1 40,0 a 20,20 0 1,1 -40,0 M 270,45 Q 270,90 230,90 Q 200,90 200,60 L 220,60 Q 220,75 240,75 Q 255,75 255,55 L 240,55 A 10,10 0 1,0 260,45 Z" fill="url(#contentGradient)"/> <path d="M 290,10 L 290,65 Q 290,75 300,75 L 310,75 L 310,55 L 305,55 L 305,10 Z" fill="url(#contentGradient)"/> <path d="M 325,45 a 20,20 0 1,0 40,0 a 20,20 0 1,0 -40,0 M 325,45 a 10,10 0 1,1 20,0 a 10,10 0 1,1 -20,0" fill="url(#contentGradient)" fill-rule="evenodd"/> <path d="M 375,45 a 20,20 0 1,0 40,0 a 20,20 0 1,0 -40,0 M 375,45 a 10,10 0 1,1 20,0 a 10,10 0 1,1 -20,0" fill="url(#contentGradient)" fill-rule="evenodd"/> </g>
     </g>
 </svg>
