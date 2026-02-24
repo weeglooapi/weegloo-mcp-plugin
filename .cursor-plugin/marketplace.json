@@ -12,7 +12,7 @@
   "plugins": [
     {
       "name": "cursor",
-      "source": "./plugins/cursor",
+      "source": "./cursor",
       "description": "Plugin with rules, skills, agents, commands, hooks, and MCP"
     }
   ]

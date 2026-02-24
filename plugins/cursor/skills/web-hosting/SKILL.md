@@ -1,9 +1,9 @@
 ---
 name: web-hosting
-description: Publishes a Web Project and hosts it on the web. Use when deploying a website to make it publicly accessible.
+description: Deploy a Web Project and hosts it on the web. Use when deploying a website to make it publicly accessible.
 ---
 
-# Deploying Website
+# Deploy Website
 
 ## When to use
 

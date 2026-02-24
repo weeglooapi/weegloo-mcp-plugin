@@ -4,10 +4,7 @@ Weegloo Cursor plugin.
 
 ## Included
 
-- `rules/`: coding standards and review checklist
-- `skills/code-reviewer/`: code review skill
-- `agents/`: security reviewer agent
-- `commands/`: deploy-staging command
-- `hooks/hooks.json`: hook definitions
-- `scripts/`: hook script placeholders
+- `rules/`: global rules
+- `skills/create-content-type/`: code review skill
+- `skills/web-hosting/`: deploy web site
 - `mcp.json`: MCP server config
