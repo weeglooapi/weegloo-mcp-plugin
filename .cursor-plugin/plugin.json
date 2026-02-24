@@ -7,7 +7,7 @@
     "name": "Weegloo",
     "email": "support@weegloo.com"
   },
-  "mcpServers": "./mcp.json",
+  "mcpServers": "../.mcp.json",
   "homepage": "https://weegloo.com",
   "license": "MIT",
   "keywords": ["weegloo", "cursor", "plugin", "rules", "skills", "agents", "commands", "hooks", "mcp"],

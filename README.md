@@ -47,18 +47,6 @@ The Claude plugin uses the following MCP configuration (`.mcp.json`):
       "type": "http",
       "url": "https://ai.weegloo.com/mcp"
     },
-    "weegloo-all": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=all"
-    },
-    "weegloo-core": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=core"
-    },
-    "weegloo-extra": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=extra"
-    },
     "weegloo-upload": {
       "command": "npx",
       "args": ["-y", "weegloo-upload"],
@@ -96,18 +84,6 @@ Add the following configuration to connect to the remote Weegloo MCP server:
       "type": "http",
       "url": "https://ai.weegloo.com/mcp"
     },
-    "weegloo-all": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=all"
-    },
-    "weegloo-core": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=core"
-    },
-    "weegloo-extra": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=extra"
-    },
     "weegloo-upload": {
       "command": "npx",
       "args": ["-y", "weegloo-upload"],
@@ -128,6 +104,17 @@ After completing the plugin setup, you must replace the `AUTH_BEARER_TOKEN` envi
 
 Save the configuration. You will also see a connect button once added. Click that to authenticate into your Weegloo.
 Enter the `Personal Access Token` issued in advance from the Weegloo console.
+
+## MCP Servers
+The MCP server tool groups are as follows:
+
+| Group | Description | URL |
+|----------|----------|-----|
+| {none}  | Includes the basic set of tools. | https://ai.weegloo.com/mcp |
+| core  | Includes the basic tools, excluding those related to WebHosting and Tokens. | https://ai.weegloo.com/mcp?group=core |
+| extra | Includes tools related to Usage, Webhooks, Tags, and Limits. | https://ai.weegloo.com/mcp?group=extra |
+| all | Includes all available tools. If you register the MCP server for this group, the other MCP servers are not required. | https://ai.weegloo.com/mcp?group=all |
+
 
 ## Documentation & Resources
 
