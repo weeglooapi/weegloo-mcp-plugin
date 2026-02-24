@@ -4,18 +4,6 @@
       "type": "http",
       "url": "https://ai.weegloo.com/mcp"
     },
-    "weegloo-core": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=core"
-    },
-    "weegloo-extra": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=extra"
-    },
-    "weegloo-all": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=all"
-    },
     "weegloo-upload": {
       "command": "npx",
       "args": ["-y", "weegloo-upload"],
