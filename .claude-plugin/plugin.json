@@ -1,0 +1,11 @@
+{
+    "name": "weegloo",
+    "description": "Weegloo integration for searching entities, publishing web projects, and more.",
+    "version": "0.1.0",
+    "author": {
+    "name": "Weegloo",
+    "url": "https://weegloo.com"
+    },
+    "homepage": "https://github.com/weeglooapi/weegloo-mcp-plugin",
+    "license": "MIT"
+  }
