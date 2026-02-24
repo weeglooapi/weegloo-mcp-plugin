@@ -2,11 +2,12 @@
   "name": "cursor",
   "displayName": "Weegloo",
   "version": "0.1.0",
-  "description": "Cursor plugin starter with rules, skills, agents, commands, hooks, and MCP.",
+  "description": "Weegloo MCP server. Create content, send messages, and perform other Weegloo actions through MCP-compatible clients.",
   "author": {
     "name": "Weegloo",
     "email": "support@weegloo.com"
   },
+  "homepage": "https://weegloo.com",
   "license": "MIT",
   "keywords": ["weegloo", "cursor", "plugin", "rules", "skills", "agents", "commands", "hooks", "mcp"],
   "logo": "assets/logo.svg"
