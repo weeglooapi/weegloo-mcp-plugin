@@ -1,7 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Starter Advanced Logo</title>
-  <desc id="desc">Full-featured plugin logo with lightning and badge.</desc>
-  <rect width="128" height="128" rx="20" fill="#111827" />
-  <path d="M68 18 36 72h24l-6 38 38-58H66z" fill="#F59E0B" />
-  <circle cx="98" cy="30" r="12" fill="#10B981" />
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="16" y="16" width="480" height="480" rx="64" fill="#F8F9FA"/>
+    
+    <g transform="translate(106, 106)">
+        <path d="M150 75 L 75 180" stroke="#00C2CB" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M150 75 L 150 180" stroke="#00C2CB" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M150 75 L 225 180" stroke="#00C2CB" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+        
+        <rect x="45" y="165" width="60" height="60" rx="16" fill="#1A3A63"/>
+        <rect x="120" y="165" width="60" height="60" rx="16" fill="#1A3A63"/>
+        <rect x="195" y="165" width="60" height="60" rx="16" fill="#1A3A63"/>
+
+        <rect x="120" y="45" width="60" height="60" rx="16" fill="#00C2CB"/>
+        
+        <text x="150" y="290" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="700" font-size="48" fill="#1A3A63" text-anchor="middle" letter-spacing="-1">weegloo</text>
+    </g>
 </svg>
