@@ -45,33 +45,21 @@ The Claude plugin uses the following MCP configuration (`.mcp.json`):
 ```json
 {
   "mcpServers": {
-    "weegloo-basic": {
+    "weegloo": {
       "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=basic"
+      "url": "https://ai.weegloo.com/mcp"
     },
-    "weegloo-token": {
+    "weegloo-all": {
       "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=token"
+      "url": "https://ai.weegloo.com/mcp?group=all"
     },
-    "weegloo-collaboration": {
+    "weegloo-core": {
       "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=collaboration"
+      "url": "https://ai.weegloo.com/mcp?group=core"
     },
-    "weegloo-app": {
+    "weegloo-extra": {
       "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=app"
-    },
-    "weegloo-webhook": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=webhook"
-    },
-    "weegloo-ui": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=ui"
-    },
-    "weegloo-system": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=system"
+      "url": "https://ai.weegloo.com/mcp?group=extra"
     },
     "weegloo-upload": {
       "command": "npx",
@@ -104,33 +92,21 @@ Add the following configuration to connect to the remote Weegloo MCP server:
 ```json
 {
   "mcpServers": {
-    "weegloo-basic": {
+    "weegloo": {
       "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=basic"
+      "url": "https://ai.weegloo.com/mcp"
     },
-    "weegloo-token": {
+    "weegloo-all": {
       "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=token"
+      "url": "https://ai.weegloo.com/mcp?group=all"
     },
-    "weegloo-collaboration": {
+    "weegloo-core": {
       "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=collaboration"
+      "url": "https://ai.weegloo.com/mcp?group=core"
     },
-    "weegloo-app": {
+    "weegloo-extra": {
       "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=app"
-    },
-    "weegloo-webhook": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=webhook"
-    },
-    "weegloo-ui": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=ui"
-    },
-    "weegloo-system": {
-      "type": "http",
-      "url": "https://ai.weegloo.com/mcp?group=system"
+      "url": "https://ai.weegloo.com/mcp?group=extra"
     },
     "weegloo-upload": {
       "command": "npx",
