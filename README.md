@@ -9,16 +9,13 @@ The Weegloo MCP server provides the following capabilities:
 - **Entity**: Supports create, read, update, and delete (CRUD) operations for all entities, including Organization, Space, ContentType, Content, and Media.
 - **WebHosting**: You can deploy web projects and host them on the web.
 
-## Prerequisites
+## Requirements
 
 Before setting up the Weegloo MCP server, ensure you have:
-
+- Node.js >= 18
+  - `weegloo-upload` is an npm package required for file transfers with an MCP server. For more details, please refer to [weegloo-upload](https://www.npmjs.com/package/weegloo-upload)
 - Cursor IDE or Claude Code CLI installed
 - You must be registered with Weegloo and generate a Personal Access Token in the Weegloo console in advance to authenticate with the MCP server.
-
-## Requirements
-- Node.js >= 18
-- `weegloo-upload` is an npm package required for file transfers with an MCP server. For more details, please refer to [weegloo-upload](https://www.npmjs.com/package/weegloo-upload)
 
 ## Installation
 
