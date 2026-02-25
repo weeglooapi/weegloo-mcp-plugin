@@ -1,13 +1,13 @@
 ---
-name: web-hosting
-description: Deploy a Web Project and hosts it on the web. Use when deploying a website to make it publicly accessible.
+name: weegloo-web-hosting
+description: Deploy a Web Project and hosts it on the web. Use when deploying a website to make it publicly accessible via Weegloo.
 ---
 
-# Deploy Website
+# Weegloo Deploy Website
 
 ## When to use
 
-- When deploying a website
+- When deploying a website via Weegloo
 
 ## Workflow
 

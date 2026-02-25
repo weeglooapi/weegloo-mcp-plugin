@@ -1,9 +1,9 @@
 ---
-name: create-content-type
-description: Creates a ContentType that defines the structure of Content. Use when creating a ContentType.
+name: weegloo-create-content-type
+description: Creates a ContentType that defines the structure of Content. Use when creating a ContentType in Weegloo.
 ---
 
-# Create ContentType
+# Weegloo Create ContentType
 
 ## When to use
 
