@@ -16,6 +16,10 @@ Before setting up the Weegloo MCP server, ensure you have:
 - Cursor IDE or Claude Code CLI installed
 - You must be registered with Weegloo and generate a Personal Access Token in the Weegloo console in advance to authenticate with the MCP server.
 
+## Requirements
+- Node.js >= 18
+- `weegloo-upload` is an npm package required for file transfers with an MCP server. For more details, please refer to [weegloo-upload](https://www.npmjs.com/package/weegloo-upload)
+
 ## Installation
 
 Choose the installation method for your IDE:
