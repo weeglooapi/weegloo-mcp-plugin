@@ -1,7 +1,7 @@
 ---
 id: global-rules
 type: rule
-title: MCP Global Rules
+title: Weegloo MCP Global Rules
 description: >
   These rules apply to all MCP resources and operations, including WebHosting, Content, and ContentType management.
   They are intended to ensure consistent behavior and proper use of MCP tools across all skills.
