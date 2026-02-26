@@ -11,7 +11,14 @@ description: Deploy a Web Project and hosts it on the web. Use when deploying a 
 
 ## Workflow
 
-1. Build the web project using `index.html` as the entry point.  
+1. Ask the user to provide the desired `subdomain` for the website.
+
+2. Before proceeding, use the `CheckSubdomain` MCP tool to verify that the provided subdomain is unique.
+   - The subdomain must be globally unique within the service.
+   - If the `CheckSubdomain` tool indicates that the subdomain is already in use, the process must stop and the user must provide a different subdomain.
+   - Do not attempt to create a `WebHosting` resource without passing this validation step.
+
+3. Build the web project using `index.html` as the entry point.  
    Ensure that the `env.js` file remains as a separate file and is not bundled or compressed.
    **All asset paths must be generated as relative paths starting with `./`, not absolute paths (`/`).**  
    For example, when using Vite, configure:
@@ -23,12 +30,12 @@ description: Deploy a Web Project and hosts it on the web. Use when deploying a 
    ```
    The final build output must not contain absolute paths such as /assets/....
 
-2. Compress the build output into a ZIP archive.  
+4. Compress the build output into a ZIP archive.  
    The `index.html` file must be located at the root level of the ZIP file.
 
-3. Use the MCP tool to create an `Upload` resource using the generated ZIP file.
+5. Use the MCP tool to create an `Upload` resource using the generated ZIP file.
 
-4. After the `Upload` resource is successfully created, use the MCP tool to create a `WebHosting` resource based on the `Upload`.
+6. After the `Upload` resource is successfully created, use the MCP tool to create a `WebHosting` resource based on the `Upload`.
 
 ## Instructions
 - The `env.js` file must be built as a separate file without any modification or processing.

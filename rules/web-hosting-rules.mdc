@@ -27,6 +27,15 @@ rules:
       - An `Upload` resource must be created using the MCP tool with the generated ZIP file.
       - A `WebHosting` resource must be created using the MCP tool based on the previously created `Upload` resource.
       - Direct API calls or manual uploads outside MCP tools are not allowed.
+  
+  - section: Create WebHosting
+    items:
+      - A `subdomain` value must be provided when creating a `WebHosting` resource.
+      - The provided subdomain must be globally unique within the service.
+      - Before creating the resource, the `CheckSubdomain` MCP tool must be used to verify that the subdomain is not already in use.
+      - The uniqueness check must be performed prior to attempting resource creation.
+      - If the `CheckSubdomain` tool indicates that the subdomain already exists, the creation request must be rejected.
+      - Bypassing the `CheckSubdomain` tool or skipping the uniqueness validation is not allowed.
 
   - section: Update Rules
     items:
