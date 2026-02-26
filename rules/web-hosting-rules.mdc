@@ -1,0 +1,40 @@
+---
+id: web-hosting-rules
+type: rule
+title: Weegloo WebHosting Rules
+description: >
+  These rules apply specifically to WebHosting deployment and update operations.
+  They define mandatory build, packaging, and update constraints for hosting web projects via MCP.
+---
+
+rules:
+  - section: Build Output Requirements
+    items:
+      - The web project must be built using `index.html` as the entry point.
+      - The `env.js` file must remain as a separate file and must not be bundled, transformed, or compressed.
+      - All static resource paths (JS, CSS, images, fonts, etc.) must use relative paths starting with `./`.
+      - Absolute paths starting with `/` are strictly prohibited in the final build output.
+      - If absolute paths are detected in the build result, the deployment must be rejected.
+
+  - section: Packaging Requirements
+    items:
+      - The build output must be compressed into a ZIP archive before upload.
+      - The `index.html` file must be located at the root level of the ZIP archive.
+      - Nested directory structures that place `index.html` below the root are not allowed.
+
+  - section: Deployment Process
+    items:
+      - An `Upload` resource must be created using the MCP tool with the generated ZIP file.
+      - A `WebHosting` resource must be created using the MCP tool based on the previously created `Upload` resource.
+      - Direct API calls or manual uploads outside MCP tools are not allowed.
+
+  - section: Update Rules
+    items:
+      - If only the `env.js` file is changed, the website must not be fully redeployed.
+      - In the case of an `env.js`-only change, update the existing `WebHosting` resource using the MCP tool.
+      - When updating environment values, the `env.js` file may be parsed into key-value pairs and applied as `environments` in the `WebHosting` resource.
+
+  - section: Validation Requirements
+    items:
+      - Before upload or update, it must be verified that `index.html` exists at the root of the build output.
+      - Before deployment, it must be verified that all internal asset references use `./`-based relative paths.
