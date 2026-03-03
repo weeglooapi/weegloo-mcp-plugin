@@ -16,10 +16,25 @@ rules:
       - Absolute paths starting with `/` are strictly prohibited in the final build output.
       - If absolute paths are detected in the build result, the deployment must be rejected.
 
+  - section: Subdirectory Hosting
+    items:
+      - WebHosting serves content under a subdirectory path `https://user-apps.weegloo.com/{subdomain}/`, NOT at the domain root.
+      - The build tool's base path must be configured for subdirectory serving. For Vite, set `base` to `'./'` (relative) or `'/{subdomain}/'` (absolute). Relative `'./'` is preferred as it is portable across different subdomains.
+      - The WebHosting server performs a **302 redirect** from `/{subdomain}` to `/{subdomain}/index.html`. SPA applications must account for this behavior (see SPA Routing section).
+
+  - section: SPA Routing (Client-Side Routing)
+    items:
+      - When the project uses a client-side router (React Router, Vue Router, etc.), the router's base path must match the deployment subdomain.
+      - "For React Router: set `basename=\"/{subdomain}\"` on `<BrowserRouter>`."
+      - "For Vue Router: set `createRouter({ history: createWebHistory('/{subdomain}') })`."
+      - "Because the server redirects `/{subdomain}` ¡æ `/{subdomain}/index.html` (302), the router will see the path `/index.html` instead of `/`. A redirect route must be added to handle this: e.g. `<Route path=\"/index.html\" element={<Navigate to=\"/\" replace />} />`."
+      - Without the `/index.html` redirect route, the home/root page will not render on initial load.
+
   - section: Packaging Requirements
     items:
       - The build output must be compressed into a ZIP archive before upload.
       - The `index.html` file must be located at the root level of the ZIP archive.
+      - All built assets (JS, CSS, images, fonts, videos, etc.) must be included in the ZIP archive alongside `index.html`.
       - Nested directory structures that place `index.html` below the root are not allowed.
 
   - section: Deployment Process
@@ -27,7 +42,7 @@ rules:
       - An `Upload` resource must be created using the MCP tool with the generated ZIP file.
       - A `WebHosting` resource must be created using the MCP tool based on the previously created `Upload` resource.
       - Direct API calls or manual uploads outside MCP tools are not allowed.
-  
+
   - section: Create WebHosting
     items:
       - A `subdomain` value must be provided when creating a `WebHosting` resource.
@@ -37,7 +52,13 @@ rules:
       - If the `CheckSubdomain` tool indicates that the subdomain already exists, the creation request must be rejected.
       - Bypassing the `CheckSubdomain` tool or skipping the uniqueness validation is not allowed.
 
-  - section: Update Rules
+  - section: Redeployment (Updating Existing WebHosting)
+    items:
+      - To redeploy an updated build to an existing subdomain, follow this sequence. 1) Build and ZIP the new output. 2) Create a new `Upload` resource. 3) Retrieve the existing `WebHosting` resource using `GetOneWebHosting` to obtain the current `sys.version`. 4) Call `UpdateOneWebHosting` with the new `Upload` reference and the current `sys.version` in the `X-Weegloo-Version` header.
+      - "`UpdateOneWebHosting` is a full replacement (PUT). All required fields (`name`, `upload`, etc.) must be included in the request, not just the changed fields."
+      - There is no need to delete and recreate the `WebHosting` resource. Use the update tool instead.
+
+  - section: Update Rules (env.js Only)
     items:
       - If only the `env.js` file is changed, the website must not be fully redeployed.
       - In the case of an `env.js`-only change, update the existing `WebHosting` resource using the MCP tool.
@@ -47,3 +68,4 @@ rules:
     items:
       - Before upload or update, it must be verified that `index.html` exists at the root of the build output.
       - Before deployment, it must be verified that all internal asset references use `./`-based relative paths.
+      - After deployment, verify the `WebHosting` resource state is `COMPLETED` by polling the `GetOneWebHosting` MCP tool.
