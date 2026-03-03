@@ -19,16 +19,19 @@ rules:
   - section: Subdirectory Hosting
     items:
       - WebHosting serves content under a subdirectory path `https://user-apps.weegloo.com/{subdomain}/`, NOT at the domain root.
-      - The build tool's base path must be configured for subdirectory serving. For Vite, set `base` to `'./'` (relative) or `'/{subdomain}/'` (absolute). Relative `'./'` is preferred as it is portable across different subdomains.
-      - The WebHosting server performs a **302 redirect** from `/{subdomain}` to `/{subdomain}/index.html`. SPA applications must account for this behavior (see SPA Routing section).
+      - The build tool's base path must use relative paths. For Vite, set `base` to `'./'`. This is portable across any subdomain.
+      - The WebHosting server performs a **302 redirect** from `/{subdomain}` to `/{subdomain}/index.html`.
+      - The WebHosting server does **NOT** support SPA fallback (serving `index.html` for unknown routes). Directly accessing a client-side route URL (e.g. `/{subdomain}/pricing`) or refreshing the page on such a route will result in a **404 error**.
 
   - section: SPA Routing (Client-Side Routing)
     items:
-      - When the project uses a client-side router (React Router, Vue Router, etc.), the router's base path must match the deployment subdomain.
-      - "For React Router: set `basename=\"/{subdomain}\"` on `<BrowserRouter>`."
-      - "For Vue Router: set `createRouter({ history: createWebHistory('/{subdomain}') })`."
-      - "Because the server redirects `/{subdomain}` ¡æ `/{subdomain}/index.html` (302), the router will see the path `/index.html` instead of `/`. A redirect route must be added to handle this: e.g. `<Route path=\"/index.html\" element={<Navigate to=\"/\" replace />} />`."
-      - Without the `/index.html` redirect route, the home/root page will not render on initial load.
+      - Because WebHosting does not support SPA fallback, `HashRouter` (hash-based routing) **must** be used instead of `BrowserRouter` (history-based routing).
+      - "Hash-based routing uses the URL fragment (`#`) for client-side routes (e.g. `/{subdomain}/index.html#/pricing`). The `#` portion is never sent to the server, so the server always serves `index.html` regardless of the route."
+      - "With `HashRouter`, direct URL access, page refresh (F5), and bookmark sharing all work correctly on static hosting."
+      - "`HashRouter` does not require `basename`, `base` path matching, or `/index.html` redirect routes. It is simpler and more robust for static file hosting."
+      - "For React Router: use `<HashRouter>` instead of `<BrowserRouter>`."
+      - "For Vue Router: use `createRouter({ history: createWebHashHistory() })` instead of `createWebHistory()`."
+      - "`BrowserRouter` (history mode) must NOT be used with WebHosting, as it requires server-side SPA fallback which is not available."
 
   - section: Packaging Requirements
     items:
