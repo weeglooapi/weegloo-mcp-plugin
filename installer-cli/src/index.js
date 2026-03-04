@@ -53,7 +53,7 @@ function printBanner() {
   console.log(chalk.bold.cyan('  ┌' + '─'.repeat(48) + '┐'));
   console.log(
     chalk.bold.cyan('  │') +
-    chalk.bold('  🌊  Weegloo MCP Plugin Installer' + ' '.repeat(13)) +
+    chalk.bold('  🌊  Weegloo MCP Plugin Installer' + ' '.repeat(14)) +
     chalk.bold.cyan('│')
   );
   console.log(
