@@ -5,12 +5,12 @@ import { installClaude } from './claude.js';
 
 const SKILL_CHOICES = [
   {
-    name: `${chalk.bold('weegloo-create-content-type')}  ${chalk.dim('ContentType 생성 스킬')}`,
+    name: `${chalk.bold('weegloo-create-content-type')}  ${chalk.dim('Skill for creating ContentType')}`,
     value: 'weegloo-create-content-type',
     checked: true,
   },
   {
-    name: `${chalk.bold('weegloo-web-hosting')}          ${chalk.dim('웹 프로젝트 배포 스킬')}`,
+    name: `${chalk.bold('weegloo-web-hosting')}          ${chalk.dim('Skill for deploying web projects')}`,
     value: 'weegloo-web-hosting',
     checked: true,
   },
@@ -18,12 +18,12 @@ const SKILL_CHOICES = [
 
 const RULE_CHOICES = [
   {
-    name: `${chalk.bold('weegloo-global-rules')}         ${chalk.dim('MCP 전역 규칙')}`,
+    name: `${chalk.bold('weegloo-global-rules')}         ${chalk.dim('Global MCP rules')}`,
     value: 'weegloo-global-rules',
     checked: true,
   },
   {
-    name: `${chalk.bold('weegloo-web-hosting-rules')}    ${chalk.dim('웹 호스팅 전용 규칙')}`,
+    name: `${chalk.bold('weegloo-web-hosting-rules')}    ${chalk.dim('Web hosting specific rules')}`,
     value: 'weegloo-web-hosting-rules',
     checked: true,
   },
@@ -31,25 +31,24 @@ const RULE_CHOICES = [
 
 const MCP_GROUP_CHOICES = [
   {
-    name: `${chalk.bold('default')}   ${chalk.dim('기본 도구 세트 (권장)')}`,
+    name: `${chalk.bold('default')}   ${chalk.dim('Basic tool set (recommended)')}`,
     value: '',
   },
   {
-    name: `${chalk.bold('core')}      ${chalk.dim('기본 도구 (WebHosting, Tokens 제외)')}`,
+    name: `${chalk.bold('core')}      ${chalk.dim('Basic tools, excluding WebHosting and Tokens')}`,
     value: 'core',
   },
   {
-    name: `${chalk.bold('extra')}     ${chalk.dim('Usage, Webhooks, Tags, Limits 도구 추가')}`,
+    name: `${chalk.bold('extra')}     ${chalk.dim('Adds Usage, Webhooks, Tags, and Limits tools')}`,
     value: 'extra',
   },
   {
-    name: `${chalk.bold('all')}       ${chalk.dim('모든 도구 (단일 서버로 통합)')}`,
+    name: `${chalk.bold('all')}       ${chalk.dim('All tools in a single server')}`,
     value: 'all',
   },
 ];
 
 function printBanner() {
-  const line = chalk.bold.cyan('─'.repeat(50));
   console.log();
   console.log(chalk.bold.cyan('  ┌' + '─'.repeat(48) + '┐'));
   console.log(
@@ -64,8 +63,8 @@ function printBanner() {
   );
   console.log(chalk.bold.cyan('  └' + '─'.repeat(48) + '┘'));
   console.log();
-  console.log(chalk.dim('  Weegloo MCP 플러그인을 IDE에 설치합니다.'));
-  console.log(chalk.dim('  MCP 서버, Skills, Rules 를 자동으로 구성합니다.'));
+  console.log(chalk.dim('  Sets up the Weegloo MCP plugin for your IDE.'));
+  console.log(chalk.dim('  Configures MCP servers, Skills, and Rules automatically.'));
   console.log();
 }
 
@@ -73,7 +72,7 @@ async function main() {
   printBanner();
 
   const ide = await select({
-    message: 'IDE를 선택하세요:',
+    message: 'Select your IDE:',
     choices: [
       { name: 'Cursor', value: 'cursor' },
       { name: 'Claude Code', value: 'claude' },
@@ -82,15 +81,15 @@ async function main() {
   });
 
   const token = await password({
-    message: 'Weegloo Personal Access Token을 입력하세요:',
+    message: 'Enter your Weegloo Personal Access Token:',
     mask: '*',
   });
 
   if (!token || token.trim().length === 0) {
     console.log();
-    console.log(chalk.red('  ✖  Personal Access Token은 필수입니다.'));
+    console.log(chalk.red('  ✖  Personal Access Token is required.'));
     console.log(
-      chalk.dim('     Weegloo 콘솔에서 토큰을 발급받으세요: ') +
+      chalk.dim('     Generate one from the Weegloo console: ') +
       chalk.cyan('https://console.weegloo.com')
     );
     console.log();
@@ -98,19 +97,35 @@ async function main() {
   }
 
   const mcpGroup = await select({
-    message: 'MCP 서버 그룹을 선택하세요:',
+    message: 'Select the MCP server group:',
     choices: MCP_GROUP_CHOICES,
   });
 
   const skills = await checkbox({
-    message: 'Skills를 선택하세요:',
+    message: 'Select skills to install:',
     choices: SKILL_CHOICES,
   });
 
   const rules = await checkbox({
-    message: 'Rules를 선택하세요:',
+    message: 'Select rules to install:',
     choices: RULE_CHOICES,
   });
+
+  const scope = (skills.length > 0 || rules.length > 0)
+    ? await select({
+        message: 'Where would you like to install Skills / Rules?',
+        choices: [
+          {
+            name: `Global  ${chalk.dim('~/.cursor/  (applies to all projects)')}`,
+            value: 'global',
+          },
+          {
+            name: `Project  ${chalk.dim('.cursor/  (applies to this project only)')}`,
+            value: 'project',
+          },
+        ],
+      })
+    : 'global';
 
   console.log();
 
@@ -120,6 +135,7 @@ async function main() {
     mcpGroup,
     skills,
     rules,
+    scope,
   };
 
   if (ide === 'cursor' || ide === 'both') {
@@ -131,10 +147,10 @@ async function main() {
   }
 
   console.log();
-  console.log(chalk.bold.green('  ✔  설치 완료!'));
+  console.log(chalk.bold.green('  ✔  Installation complete!'));
   console.log();
   console.log(
-    '  ' + chalk.dim('문서: ') + chalk.cyan('https://docs.weegloo.com/mcp-server/')
+    '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/mcp-server/')
   );
   console.log();
 }
@@ -142,12 +158,12 @@ async function main() {
 main().catch((err) => {
   if (err.name === 'ExitPromptError') {
     console.log();
-    console.log(chalk.yellow('  설치가 취소되었습니다.'));
+    console.log(chalk.yellow('  Installation cancelled.'));
     console.log();
     process.exit(0);
   }
   console.error();
-  console.error(chalk.red('  오류: ') + err.message);
+  console.error(chalk.red('  Error: ') + err.message);
   console.error();
   process.exit(1);
 });

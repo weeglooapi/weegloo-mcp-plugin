@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+installer-cli/node_modules/
 
 # OS and editor
 .DS_Store

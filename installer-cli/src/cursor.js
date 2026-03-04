@@ -7,7 +7,6 @@ import { downloadFile, getPluginRef, SKILL_FILES } from './github.js';
 
 const CURSOR_HOME = path.join(os.homedir(), '.cursor');
 const CURSOR_MCP_PATH = path.join(CURSOR_HOME, 'mcp.json');
-const CURSOR_SKILLS_DIR = path.join(CURSOR_HOME, 'skills');
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -28,15 +27,18 @@ function buildMcpUrl(group) {
   return group ? `https://ai.weegloo.com/mcp?group=${group}` : 'https://ai.weegloo.com/mcp';
 }
 
-export async function installCursor({ token, mcpGroup, skills, rules }) {
+export async function installCursor({ token, mcpGroup, skills, rules, scope }) {
   const ref = getPluginRef();
+  const baseDir = scope === 'global' ? CURSOR_HOME : path.join(process.cwd(), '.cursor');
+  const skillsDir = path.join(baseDir, 'skills');
+  const rulesDir = path.join(baseDir, 'rules');
 
-  console.log(chalk.bold('  ▶  Cursor 설치 중...'));
+  console.log(chalk.bold('  ▶  Installing for Cursor...'));
   console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
   console.log();
 
-  // ── MCP 서버 설정 ──────────────────────────────────────────
-  const mcpSpinner = ora({ text: '  MCP 서버 설정 중', indent: 0 }).start();
+  // ── MCP server configuration ────────────────────────────────
+  const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
   try {
     ensureDir(CURSOR_HOME);
     const config = readJsonSafe(CURSOR_MCP_PATH);
@@ -57,56 +59,55 @@ export async function installCursor({ token, mcpGroup, skills, rules }) {
 
     fs.writeFileSync(CURSOR_MCP_PATH, JSON.stringify(config, null, 2), 'utf-8');
     mcpSpinner.succeed(
-      `  MCP 서버 설정 완료  ${chalk.dim('→ ' + CURSOR_MCP_PATH)}`
+      `  MCP servers configured  ${chalk.dim('→ ' + CURSOR_MCP_PATH)}`
     );
   } catch (err) {
-    mcpSpinner.fail(`  MCP 서버 설정 실패: ${err.message}`);
+    mcpSpinner.fail(`  Failed to configure MCP servers: ${err.message}`);
   }
 
-  // ── Skills 다운로드 & 설치 ─────────────────────────────────
+  // ── Skills download & install ───────────────────────────────
   if (skills.length === 0) {
-    console.log(chalk.dim('  - Skills: 선택 없음, 건너뜀'));
+    console.log(chalk.dim('  - Skills: none selected, skipping'));
   } else {
-    const skillsSpinner = ora({ text: `  Skills 다운로드 중 (0/${skills.length})`, indent: 0 }).start();
+    const skillsSpinner = ora({ text: `  Downloading skills (0/${skills.length})`, indent: 0 }).start();
     try {
-      ensureDir(CURSOR_SKILLS_DIR);
+      ensureDir(skillsDir);
       for (let i = 0; i < skills.length; i++) {
         const skill = skills[i];
-        skillsSpinner.text = `  Skills 다운로드 중 (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
-        const destDir = path.join(CURSOR_SKILLS_DIR, skill);
+        skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
+        const destDir = path.join(skillsDir, skill);
         for (const file of SKILL_FILES) {
           await downloadFile(ref, `skills/${skill}/${file}`, path.join(destDir, file));
         }
       }
       skillsSpinner.succeed(
-        `  Skills 설치 완료   ${chalk.dim(`(${skills.length})  → ${CURSOR_SKILLS_DIR}`)}`
+        `  Skills installed   ${chalk.dim(`(${skills.length})  → ${skillsDir}`)}`
       );
     } catch (err) {
-      skillsSpinner.fail(`  Skills 설치 실패: ${err.message}`);
+      skillsSpinner.fail(`  Failed to install skills: ${err.message}`);
     }
   }
 
-  // ── Rules 다운로드 & 설치 ──────────────────────────────────
+  // ── Rules download & install ────────────────────────────────
   if (rules.length === 0) {
-    console.log(chalk.dim('  - Rules: 선택 없음, 건너뜀'));
+    console.log(chalk.dim('  - Rules: none selected, skipping'));
   } else {
-    const rulesSpinner = ora({ text: `  Rules 다운로드 중 (0/${rules.length})`, indent: 0 }).start();
+    const rulesSpinner = ora({ text: `  Downloading rules (0/${rules.length})`, indent: 0 }).start();
     try {
-      const rulesDestDir = path.join(process.cwd(), '.cursor', 'rules');
-      ensureDir(rulesDestDir);
+      ensureDir(rulesDir);
       for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
-        rulesSpinner.text = `  Rules 다운로드 중 (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-        await downloadFile(ref, `rules/${rule}.mdc`, path.join(rulesDestDir, `${rule}.mdc`));
+        rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
+        await downloadFile(ref, `rules/${rule}.mdc`, path.join(rulesDir, `${rule}.mdc`));
       }
       rulesSpinner.succeed(
-        `  Rules 설치 완료    ${chalk.dim(`(${rules.length})  → ${path.join(process.cwd(), '.cursor', 'rules')}`)}`
+        `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesDir}`)}`
       );
     } catch (err) {
-      rulesSpinner.fail(`  Rules 설치 실패: ${err.message}`);
+      rulesSpinner.fail(`  Failed to install rules: ${err.message}`);
     }
   }
 
   console.log();
-  console.log(chalk.dim('  💡 Cursor를 재시작하거나 MCP 탭에서 weegloo 서버를 연결하세요.'));
+  console.log(chalk.dim('  💡 Restart Cursor or connect the weegloo server from the MCP tab.'));
 }

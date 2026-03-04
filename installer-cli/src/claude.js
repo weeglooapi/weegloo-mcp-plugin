@@ -24,15 +24,19 @@ function buildMcpUrl(group) {
   return group ? `https://ai.weegloo.com/mcp?group=${group}` : 'https://ai.weegloo.com/mcp';
 }
 
-export async function installClaude({ token, mcpGroup, skills, rules }) {
+export async function installClaude({ token, mcpGroup, skills, rules, scope }) {
   const ref = getPluginRef();
+  const claudeHome = path.join(os.homedir(), '.claude');
+  const baseDir = scope === 'global' ? claudeHome : path.join(process.cwd(), '.claude');
+  const skillsDir = path.join(baseDir, 'skills');
+  const rulesDir = path.join(baseDir, 'rules');
 
-  console.log(chalk.bold('  ▶  Claude Code 설치 중...'));
+  console.log(chalk.bold('  ▶  Installing for Claude Code...'));
   console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
   console.log();
 
-  // ── .mcp.json 설정 ─────────────────────────────────────────
-  const mcpSpinner = ora({ text: '  MCP 서버 설정 중', indent: 0 }).start();
+  // ── .mcp.json configuration ─────────────────────────────────
+  const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
   const mcpPath = path.join(process.cwd(), '.mcp.json');
   try {
     const config = readJsonSafe(mcpPath);
@@ -53,60 +57,58 @@ export async function installClaude({ token, mcpGroup, skills, rules }) {
 
     fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2), 'utf-8');
     mcpSpinner.succeed(
-      `  MCP 서버 설정 완료  ${chalk.dim('→ ' + mcpPath)}`
+      `  MCP servers configured  ${chalk.dim('→ ' + mcpPath)}`
     );
   } catch (err) {
-    mcpSpinner.fail(`  MCP 서버 설정 실패: ${err.message}`);
+    mcpSpinner.fail(`  Failed to configure MCP servers: ${err.message}`);
   }
 
-  // ── Skills 다운로드 & 설치 ─────────────────────────────────
+  // ── Skills download & install ───────────────────────────────
   if (skills.length === 0) {
-    console.log(chalk.dim('  - Skills: 선택 없음, 건너뜀'));
+    console.log(chalk.dim('  - Skills: none selected, skipping'));
   } else {
-    const skillsSpinner = ora({ text: `  Skills 다운로드 중 (0/${skills.length})`, indent: 0 }).start();
+    const skillsSpinner = ora({ text: `  Downloading skills (0/${skills.length})`, indent: 0 }).start();
     try {
-      const claudeSkillsDir = path.join(os.homedir(), '.claude', 'skills');
-      ensureDir(claudeSkillsDir);
+      ensureDir(skillsDir);
       for (let i = 0; i < skills.length; i++) {
         const skill = skills[i];
-        skillsSpinner.text = `  Skills 다운로드 중 (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
-        const destDir = path.join(claudeSkillsDir, skill);
+        skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
+        const destDir = path.join(skillsDir, skill);
         for (const file of SKILL_FILES) {
           await downloadFile(ref, `skills/${skill}/${file}`, path.join(destDir, file));
         }
       }
       skillsSpinner.succeed(
-        `  Skills 설치 완료   ${chalk.dim(`(${skills.length})  → ${path.join(os.homedir(), '.claude', 'skills')}`)}`
+        `  Skills installed   ${chalk.dim(`(${skills.length})  → ${skillsDir}`)}`
       );
     } catch (err) {
-      skillsSpinner.fail(`  Skills 설치 실패: ${err.message}`);
+      skillsSpinner.fail(`  Failed to install skills: ${err.message}`);
     }
   }
 
-  // ── Rules 다운로드 & 설치 ──────────────────────────────────
+  // ── Rules download & install ────────────────────────────────
   if (rules.length === 0) {
-    console.log(chalk.dim('  - Rules: 선택 없음, 건너뜀'));
+    console.log(chalk.dim('  - Rules: none selected, skipping'));
   } else {
-    const rulesSpinner = ora({ text: `  Rules 다운로드 중 (0/${rules.length})`, indent: 0 }).start();
+    const rulesSpinner = ora({ text: `  Downloading rules (0/${rules.length})`, indent: 0 }).start();
     try {
-      const rulesDir = path.join(process.cwd(), '.claude', 'rules');
       ensureDir(rulesDir);
       for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
-        rulesSpinner.text = `  Rules 다운로드 중 (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
+        rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
         await downloadFile(ref, `rules/${rule}.mdc`, path.join(rulesDir, `${rule}.mdc`));
       }
       rulesSpinner.succeed(
-        `  Rules 설치 완료    ${chalk.dim(`(${rules.length})  → ${path.join(process.cwd(), '.claude', 'rules')}`)}`
+        `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesDir}`)}`
       );
     } catch (err) {
-      rulesSpinner.fail(`  Rules 설치 실패: ${err.message}`);
+      rulesSpinner.fail(`  Failed to install rules: ${err.message}`);
     }
   }
 
-  // ── 다음 단계 안내 ─────────────────────────────────────────
+  // ── Next steps ──────────────────────────────────────────────
   console.log();
-  console.log(chalk.dim('  💡 Claude Code 플러그인을 활성화하려면 아래 명령을 실행하세요:'));
+  console.log(chalk.dim('  💡 To activate the Claude Code plugin, run:'));
   console.log();
   console.log(
     '     ' +
@@ -115,7 +117,7 @@ export async function installClaude({ token, mcpGroup, skills, rules }) {
     chalk.white('https://github.com/weeglooapi/weegloo-mcp-plugin')
   );
   console.log();
-  console.log(chalk.dim('  또는 로컬 클론 후:'));
+  console.log(chalk.dim('  Or clone locally first:'));
   console.log();
   console.log('     ' + chalk.cyan('git clone https://github.com/weeglooapi/weegloo-mcp-plugin.git'));
   console.log('     ' + chalk.cyan('claude mcp add-from-claude-plugin ./weegloo-mcp-plugin'));

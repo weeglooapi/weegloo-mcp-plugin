@@ -13,17 +13,17 @@ const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
 export const SKILL_FILES = ['SKILL.md', 'metadata.json'];
 
 /**
- * 사용할 GitHub ref(브랜치 또는 태그)를 결정합니다.
+ * Determines the GitHub ref (branch or tag) to fetch plugin files from.
  *
- * 우선순위:
- *   1. CLI 인자  --ref <ref>
- *   2. 환경변수  WEEGLOO_REF
- *   3. package.json 의 pluginRef 필드
+ * Priority:
+ *   1. CLI argument  --ref <ref>
+ *   2. Environment variable  WEEGLOO_REF
+ *   3. pluginRef field in package.json
  *
- * npm dist-tag 과 GitHub 브랜치를 1:1 대응시키는 규칙:
- *   npx create-weegloo@latest  →  pluginRef: "latest"  → GitHub branch: latest
- *   npx create-weegloo@beta    →  pluginRef: "beta"    → GitHub branch: beta
- *   npx create-weegloo@0.1.0   →  pluginRef: "v0.1.0"  → GitHub tag:   v0.1.0
+ * Convention mapping npm dist-tags to GitHub branches/tags:
+ *   npx weegloo@latest  →  pluginRef: "latest"  → GitHub branch: latest
+ *   npx weegloo@beta    →  pluginRef: "beta"    → GitHub branch: beta
+ *   npx weegloo@0.1.0   →  pluginRef: "v0.1.0"  → GitHub tag:   v0.1.0
  */
 export function getPluginRef() {
   const argIdx = process.argv.indexOf('--ref');
@@ -37,7 +37,7 @@ export function getPluginRef() {
 }
 
 /**
- * GitHub raw URL에서 파일을 내려받아 localPath에 씁니다.
+ * Downloads a file from GitHub raw content and writes it to localPath.
  */
 export async function downloadFile(ref, remotePath, localPath) {
   const url = `${RAW_BASE}/${ref}/${remotePath}`;
@@ -46,7 +46,7 @@ export async function downloadFile(ref, remotePath, localPath) {
   try {
     res = await fetch(url);
   } catch (err) {
-    throw new Error(`네트워크 오류 — ${url}\n  ${err.message}`);
+    throw new Error(`Network error — ${url}\n  ${err.message}`);
   }
 
   if (!res.ok) {
