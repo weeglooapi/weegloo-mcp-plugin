@@ -1,0 +1,41 @@
+{
+  "name": "weegloo",
+  "version": "0.1.0",
+  "description": "Interactive CLI to set up the Weegloo MCP plugin for Cursor IDE and Claude Code",
+  "type": "module",
+  "bin": {
+    "weegloo": "./bin.js"
+  },
+  "pluginRef": "latest",
+  "files": [
+    "bin.js",
+    "src"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "weegloo",
+    "mcp",
+    "cursor",
+    "claude",
+    "plugin",
+    "installer"
+  ],
+  "author": {
+    "name": "Weegloo",
+    "email": "support@weegloo.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/weeglooapi/weegloo-mcp-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/weeglooapi/weegloo-mcp-plugin.git",
+    "directory": "installer-cli"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.10.1",
+    "chalk": "^5.6.2",
+    "ora": "^8.2.0"
+  }
+}
