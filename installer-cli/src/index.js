@@ -71,6 +71,20 @@ function printBanner() {
 async function main() {
   printBanner();
 
+  const scope = await select({
+    message: 'Where would you like to install Skills / Rules?',
+    choices: [
+      {
+        name: `Global  ${chalk.dim('~/.cursor/  (applies to all projects)')}`,
+        value: 'global',
+      },
+      {
+        name: `Project  ${chalk.dim('.cursor/  (applies to this project only)')}`,
+        value: 'project',
+      },
+    ],
+  });
+
   const ide = await select({
     message: 'Select your IDE:',
     choices: [
@@ -110,22 +124,6 @@ async function main() {
     message: 'Select rules to install:',
     choices: RULE_CHOICES,
   });
-
-  const scope = (skills.length > 0 || rules.length > 0)
-    ? await select({
-        message: 'Where would you like to install Skills / Rules?',
-        choices: [
-          {
-            name: `Global  ${chalk.dim('~/.cursor/  (applies to all projects)')}`,
-            value: 'global',
-          },
-          {
-            name: `Project  ${chalk.dim('.cursor/  (applies to this project only)')}`,
-            value: 'project',
-          },
-        ],
-      })
-    : 'global';
 
   console.log();
 
