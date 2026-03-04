@@ -2,6 +2,7 @@ import { select, checkbox, password } from '@inquirer/prompts';
 import chalk from 'chalk';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
+import { installAntigravity } from './antigravity.js';
 
 const SKILL_CHOICES = [
   {
@@ -75,11 +76,11 @@ async function main() {
     message: 'Where would you like to install Skills / Rules?',
     choices: [
       {
-        name: `Global  ${chalk.dim('~/.cursor/  (applies to all projects)')}`,
+        name: `Global  ${chalk.dim('(applies to all projects)')}`,
         value: 'global',
       },
       {
-        name: `Project  ${chalk.dim('.cursor/  (applies to this project only)')}`,
+        name: `Project  ${chalk.dim('(applies to this project only)')}`,
         value: 'project',
       },
     ],
@@ -90,7 +91,7 @@ async function main() {
     choices: [
       { name: 'Cursor', value: 'cursor' },
       { name: 'Claude Code', value: 'claude' },
-      { name: 'Both (Cursor + Claude Code)', value: 'both' },
+      { name: 'Antigravity', value: 'antigravity' },
     ],
   });
 
@@ -128,7 +129,6 @@ async function main() {
   console.log();
 
   const answers = {
-    ide,
     token: token.trim(),
     mcpGroup,
     skills,
@@ -136,12 +136,12 @@ async function main() {
     scope,
   };
 
-  if (ide === 'cursor' || ide === 'both') {
+  if (ide === 'cursor') {
     await installCursor(answers);
-  }
-
-  if (ide === 'claude' || ide === 'both') {
+  } else if (ide === 'claude') {
     await installClaude(answers);
+  } else if (ide === 'antigravity') {
+    await installAntigravity(answers);
   }
 
   console.log();

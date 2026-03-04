@@ -1,7 +1,7 @@
 {
   "name": "weegloo",
-  "version": "1.0.3",
-  "description": "Interactive CLI to set up the Weegloo MCP plugin for Cursor IDE and Claude Code",
+  "version": "1.0.6",
+  "description": "Interactive CLI to set up the Weegloo MCP plugin for Cursor IDE, Claude Code, and Antigravity",
   "type": "module",
   "bin": {
     "weegloo": "./bin.js"
@@ -19,6 +19,7 @@
     "mcp",
     "cursor",
     "claude",
+    "antigravity",
     "plugin",
     "installer"
   ],

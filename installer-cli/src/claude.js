@@ -96,7 +96,7 @@ export async function installClaude({ token, mcpGroup, skills, rules, scope }) {
       for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
         rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-        await downloadFile(ref, `rules/${rule}.mdc`, path.join(rulesDir, `${rule}.mdc`));
+        await downloadFile(ref, `rules/${rule}.mdc`, path.join(rulesDir, `${rule}.md`));
       }
       rulesSpinner.succeed(
         `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesDir}`)}`
