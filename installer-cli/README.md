@@ -1,82 +1,83 @@
 # weegloo
 
-Weegloo MCP 플러그인을 Cursor IDE 또는 Claude Code에 대화형으로 설치하는 CLI 도구입니다.
+An interactive CLI to set up the Weegloo MCP plugin for Cursor IDE and Claude Code.
 
-## 사용법
+## Usage
 
 ```bash
 npx weegloo@latest
 ```
 
-또는 전역 설치 후:
+Or install globally:
 
 ```bash
 npm install -g weegloo
 weegloo
 ```
 
-### ref(브랜치/태그) 오버라이드
+### Overriding the ref (branch / tag)
 
-Skills와 Rules 파일은 npm dist-tag과 1:1로 대응되는 GitHub 브랜치/태그에서 실시간으로 다운로드됩니다.
+Skills and Rules files are downloaded in real time from the GitHub branch or tag that corresponds 1:1 with the npm dist-tag.
 
-| npx 명령 | `pluginRef` 값 | 가져오는 GitHub ref |
+| Command | `pluginRef` value | GitHub ref fetched |
 |---|---|---|
 | `npx weegloo@latest` | `"latest"` | branch `latest` |
 | `npx weegloo@beta` | `"beta"` | branch `beta` |
 | `npx weegloo@0.1.0` | `"v0.1.0"` | tag `v0.1.0` |
 
-특정 브랜치에서 직접 받고 싶다면:
+To fetch from a specific branch directly:
 
 ```bash
-# CLI 인자
+# CLI argument
 npx weegloo@latest --ref some-branch
 
-# 환경변수
+# Environment variable
 WEEGLOO_REF=some-branch npx weegloo@latest
 ```
 
-## 설치 과정
+## Installation Flow
 
-CLI를 실행하면 다음 항목을 순서대로 물어봅니다:
+The CLI asks the following questions in order:
 
-1. **IDE 선택** — Cursor / Claude Code / Both
-2. **Personal Access Token** — Weegloo 콘솔에서 발급
-3. **MCP 서버 그룹** — `default` / `core` / `extra` / `all`
-4. **Skills 선택** — 설치할 스킬 선택 (다중 선택)
-5. **Rules 선택** — 설치할 규칙 선택 (다중 선택)
+1. **Install location** — Global (`~/.cursor/`) or current project (`.cursor/`)
+2. **IDE** — Cursor / Claude Code / Both
+3. **Personal Access Token** — Generate from the Weegloo console
+4. **MCP server group** — `default` / `core` / `extra` / `all`
+5. **Skills** — Select skills to install (multi-select)
+6. **Rules** — Select rules to install (multi-select)
 
-## 설치 내용
+## What Gets Installed
 
 ### Cursor
-| 항목 | 경로 |
-|------|------|
-| MCP 서버 설정 | `~/.cursor/mcp.json` |
-| Skills | `~/.cursor/skills/<skill-name>/` |
-| Rules | `<현재 프로젝트>/.cursor/rules/<rule-name>.mdc` |
+| Item | Path (Global) | Path (Project) |
+|------|---------------|----------------|
+| MCP config | `~/.cursor/mcp.json` | `~/.cursor/mcp.json` |
+| Skills | `~/.cursor/skills/<skill-name>/` | `.cursor/skills/<skill-name>/` |
+| Rules | `~/.cursor/rules/<rule-name>.mdc` | `.cursor/rules/<rule-name>.mdc` |
 
 ### Claude Code
-| 항목 | 경로 |
-|------|------|
-| MCP 서버 설정 | `<현재 디렉토리>/.mcp.json` |
-| Skills | `~/.claude/skills/<skill-name>/` |
-| Rules | `<현재 디렉토리>/.claude/rules/<rule-name>.mdc` |
+| Item | Path (Global) | Path (Project) |
+|------|---------------|----------------|
+| MCP config | `.mcp.json` (current directory) | `.mcp.json` (current directory) |
+| Skills | `~/.claude/skills/<skill-name>/` | `.claude/skills/<skill-name>/` |
+| Rules | `~/.claude/rules/<rule-name>.mdc` | `.claude/rules/<rule-name>.mdc` |
 
-## 포함된 Skills
+## Available Skills
 
-- **weegloo-create-content-type** — ContentType 리소스 생성 가이드
-- **weegloo-web-hosting** — 웹 프로젝트 배포 및 호스팅 가이드
+- **weegloo-create-content-type** — Guide for creating ContentType resources
+- **weegloo-web-hosting** — Guide for deploying and hosting web projects
 
-## 포함된 Rules
+## Available Rules
 
-- **weegloo-global-rules** — MCP 전역 규칙 (모든 MCP 작업에 적용)
-- **weegloo-web-hosting-rules** — 웹 호스팅 전용 규칙
+- **weegloo-global-rules** — Global MCP rules (applied to all MCP operations)
+- **weegloo-web-hosting-rules** — Web hosting specific rules
 
-## 요구사항
+## Requirements
 
 - Node.js >= 18
-- Weegloo Personal Access Token ([콘솔에서 발급](https://console.weegloo.com))
+- Weegloo Personal Access Token ([generate from the console](https://console.weegloo.com))
 
-## 관련 링크
+## Links
 
-- [Weegloo 공식 문서](https://docs.weegloo.com/mcp-server/)
+- [Weegloo Documentation](https://docs.weegloo.com/mcp-server/)
 - [GitHub Repository](https://github.com/weeglooapi/weegloo-mcp-plugin)
