@@ -1,0 +1,3 @@
+## git config merge.ours.driver true
+
+.mcp.json merge=ours
