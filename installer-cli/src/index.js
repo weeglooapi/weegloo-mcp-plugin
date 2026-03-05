@@ -1,36 +1,10 @@
 import { select, checkbox, password } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { getPluginRef, fetchBranches } from './github.js';
+import { getPluginRef, fetchBranches, fetchResourceLists } from './github.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
-
-const SKILL_CHOICES = [
-  {
-    name: `${chalk.bold('weegloo-create-content-type')}  ${chalk.dim('Skill for creating ContentType')}`,
-    value: 'weegloo-create-content-type',
-    checked: true,
-  },
-  {
-    name: `${chalk.bold('weegloo-web-hosting')}          ${chalk.dim('Skill for deploying web projects')}`,
-    value: 'weegloo-web-hosting',
-    checked: true,
-  },
-];
-
-const RULE_CHOICES = [
-  {
-    name: `${chalk.bold('weegloo-global-rules')}         ${chalk.dim('Global MCP rules')}`,
-    value: 'weegloo-global-rules',
-    checked: true,
-  },
-  {
-    name: `${chalk.bold('weegloo-web-hosting-rules')}    ${chalk.dim('Web hosting specific rules')}`,
-    value: 'weegloo-web-hosting-rules',
-    checked: true,
-  },
-];
 
 const MCP_GROUP_CHOICES = [
   {
@@ -116,6 +90,14 @@ async function main() {
     }
   }
 
+  // All resources (skills, rules) from the selected branch
+  const resourceSpinner = ora({ text: '  Fetching skills and rules from branch...', indent: 0 }).start();
+  const { skills: skillIds, rules: ruleIds } = await fetchResourceLists(pluginRef);
+  resourceSpinner.stop();
+
+  const skillChoices = skillIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
+  const ruleChoices = ruleIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
+
   const scope = await select({
     message: 'Where would you like to install Skills / Rules?',
     choices: [
@@ -162,12 +144,12 @@ async function main() {
 
   const skills = await checkbox({
     message: 'Select skills to install:',
-    choices: SKILL_CHOICES,
+    choices: skillChoices,
   });
 
   const rules = await checkbox({
     message: 'Select rules to install:',
-    choices: RULE_CHOICES,
+    choices: ruleChoices,
   });
 
   console.log();

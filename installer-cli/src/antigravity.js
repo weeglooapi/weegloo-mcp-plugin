@@ -3,7 +3,7 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
-import { downloadFile, getPluginRef, SKILL_FILES } from './github.js';
+import { downloadFile, getPluginRef, fetchMcpConfig, SKILL_FILES } from './github.js';
 
 const ANTIGRAVITY_HOME = path.join(os.homedir(), '.gemini', 'antigravity');
 const ANTIGRAVITY_MCP_PATH = path.join(ANTIGRAVITY_HOME, 'mcp_config.json');
@@ -24,8 +24,10 @@ function readJsonSafe(filePath) {
   }
 }
 
-function buildMcpUrl(group) {
-  return group ? `https://ai.weegloo.com/mcp?group=${group}` : 'https://ai.weegloo.com/mcp';
+function buildMcpUrlWithGroup(baseUrl, group) {
+  if (!group) return baseUrl;
+  const sep = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${sep}group=${encodeURIComponent(group)}`;
 }
 
 /**
@@ -54,6 +56,8 @@ export async function installAntigravity({ token, pluginRef, mcpGroup, skills, r
   console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
   console.log();
 
+  const { weeglooUrl, uploadApiUrl } = await fetchMcpConfig(ref);
+
   // ── MCP server configuration ────────────────────────────────
   const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
   try {
@@ -62,13 +66,13 @@ export async function installAntigravity({ token, pluginRef, mcpGroup, skills, r
     if (!config.mcpServers) config.mcpServers = {};
 
     config.mcpServers['weegloo'] = {
-      serverUrl: buildMcpUrl(mcpGroup),
+      serverUrl: buildMcpUrlWithGroup(weeglooUrl, mcpGroup),
     };
     config.mcpServers['weegloo-upload'] = {
       command: 'npx',
       args: ['-y', 'weegloo-upload'],
       env: {
-        UPLOAD_API_URL: 'https://upload.weegloo.com/v1',
+        UPLOAD_API_URL: uploadApiUrl,
         AUTH_BEARER_TOKEN: token,
       },
     };
