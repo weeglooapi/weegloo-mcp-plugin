@@ -44,8 +44,8 @@ function appendToGeminiMd(ruleName, content) {
   fs.appendFileSync(GEMINI_MD_PATH, section, 'utf-8');
 }
 
-export async function installAntigravity({ token, mcpGroup, skills, rules, scope }) {
-  const ref = getPluginRef();
+export async function installAntigravity({ token, pluginRef, mcpGroup, skills, rules, scope }) {
+  const ref = pluginRef ?? getPluginRef();
   const skillsDir = scope === 'global'
     ? path.join(ANTIGRAVITY_HOME, 'skills')
     : path.join(process.cwd(), '.agent', 'skills');

@@ -24,8 +24,8 @@ function buildMcpUrl(group) {
   return group ? `https://ai.weegloo.com/mcp?group=${group}` : 'https://ai.weegloo.com/mcp';
 }
 
-export async function installClaude({ token, mcpGroup, skills, rules, scope }) {
-  const ref = getPluginRef();
+export async function installClaude({ token, pluginRef, mcpGroup, skills, rules, scope }) {
+  const ref = pluginRef ?? getPluginRef();
   const claudeHome = path.join(os.homedir(), '.claude');
   const baseDir = scope === 'global' ? claudeHome : path.join(process.cwd(), '.claude');
   const skillsDir = path.join(baseDir, 'skills');

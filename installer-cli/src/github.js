@@ -9,8 +9,26 @@ const pkg = require('../package.json');
 
 const REPO = 'weeglooapi/weegloo-mcp-plugin';
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
+const GITHUB_API_BRANCHES = `https://api.github.com/repos/${REPO}/branches?per_page=100`;
 
 export const SKILL_FILES = ['SKILL.md', 'metadata.json'];
+
+/**
+ * Fetches branch names from the plugin GitHub repo (public API, no auth).
+ * @returns {Promise<string[]>} Branch names, or [] on error.
+ */
+export async function fetchBranches() {
+  try {
+    const res = await fetch(GITHUB_API_BRANCHES, {
+      headers: { Accept: 'application/vnd.github.v3+json' },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data.map((b) => b.name).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Determines the GitHub ref (branch or tag) to fetch plugin files from.

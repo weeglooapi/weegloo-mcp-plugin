@@ -1,5 +1,7 @@
 import { select, checkbox, password } from '@inquirer/prompts';
 import chalk from 'chalk';
+import ora from 'ora';
+import { getPluginRef, fetchBranches } from './github.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -72,6 +74,48 @@ function printBanner() {
 async function main() {
   printBanner();
 
+  // Plugin version (branch): use --ref / WEEGLOO_REF if set, else show branch picker
+  let pluginRef = getPluginRef();
+  const refFromEnvOrArg = process.argv.includes('--ref') || process.env.WEEGLOO_REF;
+  if (!refFromEnvOrArg) {
+    const branchSpinner = ora({ text: '  Fetching plugin versions...', indent: 0 }).start();
+    const branches = await fetchBranches();
+    branchSpinner.stop();
+    if (branches.length > 0) {
+      const parseVersion = (s) => {
+        const m = String(s).replace(/^v/, '').match(/^(\d+(?:\.\d+)*)/);
+        if (!m) return null;
+        return m[1].split('.').map(Number);
+      };
+      const compareVersion = (a, b) => {
+        const aVer = parseVersion(a);
+        const bVer = parseVersion(b);
+        for (let i = 0; i < Math.max(aVer.length, bVer.length); i++) {
+          const x = aVer[i] ?? 0;
+          const y = bVer[i] ?? 0;
+          if (x !== y) return y - x;
+        }
+        return a.localeCompare(b);
+      };
+      const latestOnly = branches.filter((b) => b === 'latest');
+      const versionBranches = branches
+        .filter((b) => b !== 'latest' && parseVersion(b))
+        .sort(compareVersion)
+        .slice(0, 5);
+      const rest = branches
+        .filter((b) => b !== 'latest' && !parseVersion(b))
+        .sort((a, b) => a.localeCompare(b));
+      const sorted = [...latestOnly, ...versionBranches, ...rest];
+      pluginRef = await select({
+        message: 'Select plugin version (branch):',
+        choices: sorted.map((name) => ({
+          name: name === 'latest' ? `${chalk.bold(name)}  ${chalk.dim('(recommended)')}` : name,
+          value: name,
+        })),
+      });
+    }
+  }
+
   const scope = await select({
     message: 'Where would you like to install Skills / Rules?',
     choices: [
@@ -130,6 +174,7 @@ async function main() {
 
   const answers = {
     token: token.trim(),
+    pluginRef,
     mcpGroup,
     skills,
     rules,

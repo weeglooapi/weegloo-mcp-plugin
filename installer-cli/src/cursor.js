@@ -27,8 +27,8 @@ function buildMcpUrl(group) {
   return group ? `https://ai.weegloo.com/mcp?group=${group}` : 'https://ai.weegloo.com/mcp';
 }
 
-export async function installCursor({ token, mcpGroup, skills, rules, scope }) {
-  const ref = getPluginRef();
+export async function installCursor({ token, pluginRef, mcpGroup, skills, rules, scope }) {
+  const ref = pluginRef ?? getPluginRef();
   const baseDir = scope === 'global' ? CURSOR_HOME : path.join(process.cwd(), '.cursor');
   const skillsDir = path.join(baseDir, 'skills');
   const rulesDir = path.join(baseDir, 'rules');
