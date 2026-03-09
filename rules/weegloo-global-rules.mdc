@@ -22,13 +22,15 @@ rules:
           - order: The order in which the list of items is sorted. Multiple fields can be separated by commas for multi-level ordering (e.g., order=sys.createdAt,sys.id). If the field name starts with 'fields.', locale information (e.g., order=fields.title.en-US) must be included.
           - include: Include related resources. For example, to retrieve the creator (createdBy) or other related user information, set include=1. Use include=1 when the user asks who created it or requests additional details.
           - select: Comma-separated string of fields to include (e.g., select=sys.id,sys.createdAt) or exclude (e.g., select=-sys.id,-sys.createdAt) from the result; do not mix inclusion and exclusion, each element is treated as a string.
+       - Do NOT use `skip` for pagination. Use cursor-based pagination via `links.next` and `links.prev` instead (see Pagination Handling).
 
   - section: Pagination Handling
     items:
-      - After requesting a list of resources, the response body (JSON) contains a `links` object with `next` and `prev` properties. Each property includes the information required to make the corresponding API call.
-      - If a next page exists, the `next` property will be present; if there is no next page, `next` will be absent.
-      - If a previous page exists, the `prev` property will be present; if there is no previous page, `prev` will be absent.
-      - To retrieve the next or previous page, use the `next` or `prev` object exactly as provided in the response.
+      - After requesting a list of resources, the response body (JSON) contains a `links` object with `next` and `prev` properties.
+      - `links.next`: Full path for the next page (e.g., /v1/market/apps?limit=6&order=-sys.createdAt,sys.id&next=CURSOR). If absent, there are no more pages.
+      - `links.prev`: Full path for the previous page. If absent, there is no previous page.
+      - To fetch the next page, use the `next` query parameter value from `links.next` (extract from the URL) and pass it as the `next` param in your next request. Alternatively, call the full path in `links.next` directly.
+      - Do NOT use `skip`; pagination is cursor-based only.
 
   - section: Resource Updates
     items:
