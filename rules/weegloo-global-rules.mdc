@@ -14,6 +14,12 @@ rules:
       - Direct API calls or manual edits outside MCP tools, including Swagger or direct HTTP requests, are prohibited.
       - For human developers performing local development or testing, direct API calls are allowed.
 
+  - section: Current User Resources (Me)
+    items:
+      - To get the current user's organization list, use GET /me/organization-memberships (NOT /organizations). Use include=1 to fetch organization details (name, code, etc.).
+      - To get the current user's space list, use GET /me/space-memberships. Use include=1 to fetch space details (name, code, etc.).
+      - Do NOT use /organizations for "my organizations"; use /me/organization-memberships instead.
+      
   - section: Resource Search
     items:
       - When searching a resource list, the following request parameters can be used:
