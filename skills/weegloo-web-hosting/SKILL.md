@@ -11,7 +11,10 @@ description: Deploy a Web Project and hosts it on the web. Use when deploying a 
 
 ## Workflow
 
-1. Ask the user to provide the desired `subdomain` for the website.
+1. **MANDATORY: Ask the user for the desired `subdomain`.**  
+   - Do NOT assume, infer, or default the subdomain (e.g. do not use project name, `weegloo-marketplace`, etc.).
+   - If the user has not explicitly provided a subdomain, STOP and ask: "배포할 subdomain을 알려주세요. (예: my-app)"
+   - Proceed to step 2 only after the user has provided a subdomain.
 
 2. Before proceeding, use the `CheckSubdomain` MCP tool to verify that the provided subdomain is unique.
    - The subdomain must be globally unique within the service.

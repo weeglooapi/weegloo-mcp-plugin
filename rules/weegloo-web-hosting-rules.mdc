@@ -46,9 +46,16 @@ rules:
       - A `WebHosting` resource must be created using the MCP tool based on the previously created `Upload` resource.
       - Direct API calls or manual uploads outside MCP tools are not allowed.
 
+  - section: Subdomain (User Input Required)
+    items:
+      - The `subdomain` MUST be obtained from the user. Never assume, infer, or default it (e.g. do not use project name, package name, or any derived value).
+      - If the user has not explicitly provided a subdomain, STOP the deployment workflow and ask the user to provide one.
+      - Do not proceed with build, upload, or WebHosting creation until the user has provided a subdomain.
+
   - section: Create WebHosting
     items:
       - A `subdomain` value must be provided when creating a `WebHosting` resource.
+      - The subdomain must come from explicit user input; see "Subdomain (User Input Required)" section.
       - The provided subdomain must be globally unique within the service.
       - Before creating the resource, the `CheckSubdomain` MCP tool must be used to verify that the subdomain is not already in use.
       - The uniqueness check must be performed prior to attempting resource creation.
