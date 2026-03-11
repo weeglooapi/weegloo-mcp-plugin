@@ -40,11 +40,12 @@ rules:
       - All built assets (JS, CSS, images, fonts, videos, etc.) must be included in the ZIP archive alongside `index.html`.
       - Nested directory structures that place `index.html` below the root are not allowed.
 
-  - section: Deployment Process
+  - section: Deployment Process (MCP Only)
     items:
-      - An `Upload` resource must be created using the MCP tool with the generated ZIP file.
-      - A `WebHosting` resource must be created using the MCP tool based on the previously created `Upload` resource.
-      - Direct API calls or manual uploads outside MCP tools are not allowed.
+      - **Deployment MUST use Weegloo MCP tools only.** Do NOT use deploy scripts (e.g. `scripts/deploy-weegloo.mjs`), direct `fetch`/API calls, or any method other than MCP.
+      - An `Upload` resource must be created using the `CreateUpload` MCP tool (user-weegloo-upload) with the generated ZIP file.
+      - A `WebHosting` resource must be created or updated using the `cma_CreateWebHosting` or `cma_UpdateOneWebHosting` MCP tool (user-weegloo) based on the previously created `Upload` resource.
+      - Direct API calls, manual uploads, or deploy scripts outside MCP tools are strictly prohibited.
 
   - section: Subdomain (User Input Required)
     items:
