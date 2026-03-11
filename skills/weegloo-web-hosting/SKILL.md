@@ -9,6 +9,12 @@ description: Deploy a Web Project and hosts it on the web. Use when deploying a 
 
 - When deploying a website via Weegloo
 
+## MANDATORY: MCP Tools Only
+
+- **You MUST use Weegloo MCP tools for deployment.** Do NOT use `scripts/deploy-weegloo.mjs` or any deploy script.
+- Use `CreateUpload` (user-weegloo-upload) for upload, and `cma_CreateWebHosting` / `cma_UpdateOneWebHosting` / `cma_GetOneWebHosting` / `cma_GetListWebHostings` (user-weegloo) for WebHosting operations.
+- If the user asks to deploy, always use MCP tools—never fall back to the deploy script.
+
 ## Workflow
 
 1. **MANDATORY: Ask the user for the desired `subdomain`.**  

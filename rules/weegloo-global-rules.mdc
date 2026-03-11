@@ -12,6 +12,7 @@ rules:
     items:
       - Always use the designated MCP tools for creating, reading, updating, or deleting resources.
       - Direct API calls or manual edits outside MCP tools, including Swagger or direct HTTP requests, are prohibited.
+      - Deploy scripts (e.g. `scripts/deploy-weegloo.mjs`) that call Weegloo APIs directly must NOT be used for deployment. Use MCP tools instead.
       - For human developers performing local development or testing, direct API calls are allowed.
 
   - section: Current User Resources (Me)
