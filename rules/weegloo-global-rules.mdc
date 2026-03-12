@@ -1,75 +1,56 @@
 ---
-id: weegloo-web-hosting-rules
+id: weegloo-global-rules
 type: rule
-title: Weegloo WebHosting Rules
+title: Weegloo MCP Global Rules
 description: >
-  These rules apply specifically to WebHosting deployment and update operations.
-  They define mandatory build, packaging, and update constraints for hosting web projects via MCP.
+  These rules apply to all MCP resources and operations, including WebHosting, Content, and ContentType management.
+  They are intended to ensure consistent behavior and proper use of MCP tools across all skills.
 ---
 
 rules:
-  - section: Build Output Requirements
+  - section: MCP Tool Usage
     items:
-      - The web project must be built using `index.html` as the entry point.
-      - The `env.js` file must remain as a separate file and must not be bundled, transformed, or compressed.
-      - All static resource paths (JS, CSS, images, fonts, etc.) must use relative paths starting with `./`.
-      - Absolute paths starting with `/` are strictly prohibited in the final build output.
-      - If absolute paths are detected in the build result, the deployment must be rejected.
+      - Always use the designated MCP tools for creating, reading, updating, or deleting resources.
+      - Direct API calls or manual edits outside MCP tools, including Swagger or direct HTTP requests, are prohibited.
+      - Deploy scripts (e.g. `scripts/deploy-weegloo.mjs`) that call Weegloo APIs directly must NOT be used for deployment. Use MCP tools instead.
+      - For human developers performing local development or testing, direct API calls are allowed.
 
-  - section: SPA Routing (Client-Side Routing)
+  - section: Current User Resources (Me)
     items:
-      - Because WebHosting does not support SPA fallback, `HashRouter` (hash-based routing) **must** be used instead of `BrowserRouter` (history-based routing).
-      - "Hash-based routing uses the URL fragment (`#`) for client-side routes (e.g. `/{subdomain}/index.html#/pricing`). The `#` portion is never sent to the server, so the server always serves `index.html` regardless of the route."
-      - "With `HashRouter`, direct URL access, page refresh (F5), and bookmark sharing all work correctly on static hosting."
-      - "`HashRouter` does not require `basename`, `base` path matching, or `/index.html` redirect routes. It is simpler and more robust for static file hosting."
-      - "For React Router: use `<HashRouter>` instead of `<BrowserRouter>`."
-      - "For Vue Router: use `createRouter({ history: createWebHashHistory() })` instead of `createWebHistory()`."
-      - "`BrowserRouter` (history mode) must NOT be used with WebHosting, as it requires server-side SPA fallback which is not available."
+      - To get the current user's organization list, use GET /me/organization-memberships (NOT /organizations). Use include=1 to fetch organization details (name, code, etc.).
+      - To get the current user's space list, use GET /me/space-memberships. Use include=1 to fetch space details (name, code, etc.).
+      - Do NOT use /organizations for "my organizations"; use /me/organization-memberships instead.
+      
+  - section: Resource Search
+    items:
+      - When searching a resource list, the following request parameters can be used:
+          - limit: The number of items to return per list request.
+          - skip: The number of items to skip before starting to return results in a list request.
+          - order: The order in which the list of items is sorted. Multiple fields can be separated by commas for multi-level ordering (e.g., order=sys.createdAt,sys.id). If the field name starts with 'fields.', locale information (e.g., order=fields.title.en-US) must be included.
+          - include: Include related resources. For example, to retrieve the creator (createdBy) or other related user information, set include=1. Use include=1 when the user asks who created it or requests additional details.
+          - select: Comma-separated string of fields to include (e.g., select=sys.id,sys.createdAt) or exclude (e.g., select=-sys.id,-sys.createdAt) from the result; do not mix inclusion and exclusion, each element is treated as a string.
+       - Do NOT use `skip` for pagination. Use cursor-based pagination via `links.next` and `links.prev` instead (see Pagination Handling).
 
-  - section: Packaging Requirements
+  - section: Pagination Handling
     items:
-      - The build output must be compressed into a ZIP archive before upload.
-      - The `index.html` file must be located at the root level of the ZIP archive.
-      - All built assets (JS, CSS, images, fonts, videos, etc.) must be included in the ZIP archive alongside `index.html`.
-      - Nested directory structures that place `index.html` below the root are not allowed.
+      - After requesting a list of resources, the response body (JSON) contains a `links` object with `next` and `prev` properties.
+      - `links.next`: Full path for the next page (e.g., /v1/market/apps?limit=6&order=-sys.createdAt,sys.id&next=CURSOR). If absent, there are no more pages.
+      - `links.prev`: Full path for the previous page. If absent, there is no previous page.
+      - To fetch the next page, use the `next` query parameter value from `links.next` (extract from the URL) and pass it as the `next` param in your next request. Alternatively, call the full path in `links.next` directly.
+      - Do NOT use `skip`; pagination is cursor-based only.
 
-  - section: Deployment Process (MCP Only)
+  - section: Resource Updates
     items:
-      - **Deployment MUST use Weegloo MCP tools only.** Do NOT use deploy scripts (e.g. `scripts/deploy-weegloo.mjs`), direct `fetch`/API calls, or any method other than MCP.
-      - An `Upload` resource must be created using the `CreateUpload` MCP tool (user-weegloo-upload) with the generated ZIP file.
-      - A `WebHosting` resource must be created or updated using the `cma_CreateWebHosting` or `cma_UpdateOneWebHosting` MCP tool (user-weegloo) based on the previously created `Upload` resource.
-      - Direct API calls, manual uploads, or deploy scripts outside MCP tools are strictly prohibited.
+      - When updating any resource, always include the `x-weegloo-version` header with the current resource's `sys.version`.
+      - All resource updates must use the appropriate MCP tool; direct modifications outside MCP tools are not allowed.
 
-  - section: Subdomain (User Input Required)
+  - section: Optional Guidance
     items:
-      - The `subdomain` MUST be obtained from the user. Never assume, infer, or default it (e.g. do not use project name, package name, or any derived value).
-      - If the user has not explicitly provided a subdomain, STOP the deployment workflow and ask the user to provide one.
-      - Do not proceed with build, upload, or WebHosting creation until the user has provided a subdomain.
+      - For incremental updates of WebHosting, skip rebuilding the project if no other files besides `env.js` have changed.
+      - Always verify that `index.html` remains at the root when re-uploading or updating WebHosting resources.
 
-  - section: Create WebHosting
+  - section: Filter Parameters (API List Endpoints)
     items:
-      - A `subdomain` value must be provided when creating a `WebHosting` resource.
-      - The subdomain must come from explicit user input; see "Subdomain (User Input Required)" section.
-      - The provided subdomain must be globally unique within the service.
-      - Before creating the resource, the `CheckSubdomain` MCP tool must be used to verify that the subdomain is not already in use.
-      - The uniqueness check must be performed prior to attempting resource creation.
-      - If the `CheckSubdomain` tool indicates that the subdomain already exists, the creation request must be rejected.
-      - Bypassing the `CheckSubdomain` tool or skipping the uniqueness validation is not allowed.
-
-  - section: Redeployment (Updating Existing WebHosting)
-    items:
-      - To redeploy an updated build to an existing subdomain, follow this sequence. 1) Build and ZIP the new output. 2) Create a new `Upload` resource. 3) Retrieve the existing `WebHosting` resource using `GetOneWebHosting` to obtain the current `sys.version`. 4) Call `UpdateOneWebHosting` with the new `Upload` reference and the current `sys.version` in the `X-Weegloo-Version` header.
-      - "`UpdateOneWebHosting` is a full replacement (PUT). All required fields (`name`, `upload`, etc.) must be included in the request, not just the changed fields."
-      - There is no need to delete and recreate the `WebHosting` resource. Use the update tool instead.
-
-  - section: Update Rules (env.js Only)
-    items:
-      - If only the `env.js` file is changed, the website must not be fully redeployed.
-      - In the case of an `env.js`-only change, update the existing `WebHosting` resource using the MCP tool.
-      - When updating environment values, the `env.js` file may be parsed into key-value pairs and applied as `environments` in the `WebHosting` resource.
-
-  - section: Validation Requirements
-    items:
-      - Before upload or update, it must be verified that `index.html` exists at the root of the build output.
-      - Before deployment, it must be verified that all internal asset references use `./`-based relative paths.
-      - After deployment, verify the `WebHosting` resource state is `COMPLETED` by polling the `GetOneWebHosting` MCP tool.
+      - Filter conditions are sent as direct query parameters, NOT wrapped in filter[].
+      - Correct: name[prefix]=value. Wrong: filter[name[prefix]]=value.
+      - Format: {fieldName}[{op}]={value}. Operators: eq, ne, prefix, match, gt, gte, lt, lte etc.
