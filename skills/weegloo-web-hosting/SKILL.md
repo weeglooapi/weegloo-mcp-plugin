@@ -18,8 +18,9 @@ description: Deploy a Web Project and hosts it on the web. Use when deploying a 
 ## Workflow
 
 1. **MANDATORY: Ask the user for the desired `subdomain`.**  
-   - Do NOT assume, infer, or default the subdomain (e.g. do not use project name, `weegloo-marketplace`, etc.).
-   - If the user has not explicitly provided a subdomain, STOP and ask: "배포할 subdomain을 알려주세요. (예: my-app)"
+   - Do NOT assume, infer, or default the subdomain (e.g. do not use project name, `marketplace`, etc.).
+   - If the user has not explicitly provided a subdomain, STOP and ask: "Enter a subdomain to use.
+Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https://market.weegloo.app)."
    - Proceed to step 2 only after the user has provided a subdomain.
 
 2. Before proceeding, use the `CheckSubdomain` MCP tool to verify that the provided subdomain is unique.
@@ -29,15 +30,6 @@ description: Deploy a Web Project and hosts it on the web. Use when deploying a 
 
 3. Build the web project using `index.html` as the entry point.  
    Ensure that the `env.js` file remains as a separate file and is not bundled or compressed.
-   **All asset paths must be generated as relative paths starting with `./`, not absolute paths (`/`).**  
-   For example, when using Vite, configure:
-   ```js
-   // vite.config.js
-   export default defineConfig({
-     base: './'
-   })
-   ```
-   The final build output must not contain absolute paths such as /assets/....
 
 4. Compress the build output into a ZIP archive.  
    The `index.html` file must be located at the root level of the ZIP file.
