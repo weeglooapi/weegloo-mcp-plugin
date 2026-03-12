@@ -48,7 +48,7 @@ function printBanner() {
 async function main() {
   printBanner();
 
-  // Plugin version (branch): use --ref / WEEGLOO_REF if set, else show branch picker
+  // 1. Select plugin version (branch) — first
   let pluginRef = getPluginRef();
   const refFromEnvOrArg = process.argv.includes('--ref') || process.env.WEEGLOO_REF;
   if (!refFromEnvOrArg) {
@@ -64,12 +64,12 @@ async function main() {
       const compareVersion = (a, b) => {
         const aVer = parseVersion(a);
         const bVer = parseVersion(b);
-        for (let i = 0; i < Math.max(aVer.length, bVer.length); i++) {
-          const x = aVer[i] ?? 0;
-          const y = bVer[i] ?? 0;
+        for (let i = 0; i < Math.max(aVer?.length ?? 0, bVer?.length ?? 0); i++) {
+          const x = aVer?.[i] ?? 0;
+          const y = bVer?.[i] ?? 0;
           if (x !== y) return y - x;
         }
-        return a.localeCompare(b);
+        return String(a).localeCompare(String(b));
       };
       const latestOnly = branches.filter((b) => b === 'latest');
       const versionBranches = branches
@@ -90,28 +90,7 @@ async function main() {
     }
   }
 
-  // All resources (skills, rules) from the selected branch
-  const resourceSpinner = ora({ text: '  Fetching skills and rules from branch...', indent: 0 }).start();
-  const { skills: skillIds, rules: ruleIds } = await fetchResourceLists(pluginRef);
-  resourceSpinner.stop();
-
-  const skillChoices = skillIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
-  const ruleChoices = ruleIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
-
-  const scope = await select({
-    message: 'Where would you like to install Skills / Rules?',
-    choices: [
-      {
-        name: `Global  ${chalk.dim('(applies to all projects)')}`,
-        value: 'global',
-      },
-      {
-        name: `Project  ${chalk.dim('(applies to this project only)')}`,
-        value: 'project',
-      },
-    ],
-  });
-
+  // 2. IDE
   const ide = await select({
     message: 'Select your IDE:',
     choices: [
@@ -121,46 +100,105 @@ async function main() {
     ],
   });
 
-  const token = await password({
-    message: 'Enter your Weegloo Personal Access Token:',
-    mask: '*',
+  // 3. Checkbox: what to install?
+  const installOptions = await checkbox({
+    message: 'What would you like to install?',
+    choices: [
+      {
+        name: `Install MCP server  ${chalk.dim('(weegloo, weegloo-upload)')}`,
+        value: 'mcp',
+        checked: true,
+      },
+      {
+        name: `Install Skills and Rules  ${chalk.dim('(from selected branch)')}`,
+        value: 'skillsRules',
+        checked: true,
+      },
+    ],
   });
 
-  if (!token || token.trim().length === 0) {
+  const installMcp = installOptions.includes('mcp');
+  const installSkillsRules = installOptions.includes('skillsRules');
+
+  if (!installMcp && !installSkillsRules) {
     console.log();
-    console.log(chalk.red('  ✖  Personal Access Token is required.'));
-    console.log(
-      chalk.dim('     Generate one from the Weegloo console: ') +
-      chalk.cyan('https://console.weegloo.com')
-    );
+    console.log(chalk.red('  ✖  Select at least one option.'));
     console.log();
     process.exit(1);
   }
 
-  const mcpGroup = await select({
-    message: 'Select the MCP server group:',
-    choices: MCP_GROUP_CHOICES,
-  });
+  let token = '';
+  let mcpGroup = '';
+  let scope = 'global';
+  let skills = [];
+  let rules = [];
 
-  const skills = await checkbox({
-    message: 'Select skills to install:',
-    choices: skillChoices,
-  });
+  if (installMcp) {
+    token = await password({
+      message: 'Enter your Weegloo Personal Access Token:',
+      mask: '*',
+    });
+    if (!token || token.trim().length === 0) {
+      console.log();
+      console.log(chalk.red('  ✖  Personal Access Token is required for MCP server.'));
+      console.log(
+        chalk.dim('     Generate one from the Weegloo console: ') +
+        chalk.cyan('https://console.weegloo.com')
+      );
+      console.log();
+      process.exit(1);
+    }
+    token = token.trim();
+    mcpGroup = await select({
+      message: 'Select the MCP server group:',
+      choices: MCP_GROUP_CHOICES,
+    });
+  }
 
-  const rules = await checkbox({
-    message: 'Select rules to install:',
-    choices: ruleChoices,
-  });
+  if (installSkillsRules) {
+    scope = await select({
+      message: 'Where would you like to install Skills / Rules?',
+      choices: [
+        {
+          name: `Global  ${chalk.dim('(applies to all projects)')}`,
+          value: 'global',
+        },
+        {
+          name: `Project  ${chalk.dim('(applies to this project only)')}`,
+          value: 'project',
+        },
+      ],
+    });
+
+    const resourceSpinner = ora({ text: '  Fetching skills and rules from branch...', indent: 0 }).start();
+    const { skills: skillIds, rules: ruleIds } = await fetchResourceLists(pluginRef);
+    resourceSpinner.stop();
+
+    const skillChoices = skillIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
+    const ruleChoices = ruleIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
+
+    skills = await checkbox({
+      message: 'Select skills to install:',
+      choices: skillChoices,
+    });
+
+    rules = await checkbox({
+      message: 'Select rules to install:',
+      choices: ruleChoices,
+    });
+  }
 
   console.log();
 
   const answers = {
-    token: token.trim(),
+    token: installMcp ? token : undefined,
     pluginRef,
     mcpGroup,
     skills,
     rules,
     scope,
+    installMcp,
+    installSkillsRules,
   };
 
   if (ide === 'cursor') {
@@ -174,6 +212,18 @@ async function main() {
   console.log();
   console.log(chalk.bold.green('  ✔  Installation complete!'));
   console.log();
+  if (installMcp) {
+    console.log(chalk.bgYellow.black.bold('  ⚠  IMPORTANT  '));
+    console.log(
+      chalk.yellow.bold('  The weegloo MCP server requires login/authentication.')
+    );
+    console.log(
+      chalk.yellow('  Use the ') +
+      chalk.yellow.bold('[Connect]') +
+      chalk.yellow(' button in your IDE\'s MCP settings to sign in.')
+    );
+    console.log();
+  }
   console.log(
     '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/mcp-server/')
   );

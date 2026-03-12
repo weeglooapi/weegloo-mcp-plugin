@@ -46,7 +46,7 @@ function appendToGeminiMd(ruleName, content) {
   fs.appendFileSync(GEMINI_MD_PATH, section, 'utf-8');
 }
 
-export async function installAntigravity({ token, pluginRef, mcpGroup, skills, rules, scope }) {
+export async function installAntigravity({ token, pluginRef, mcpGroup, skills, rules, scope, installMcp, installSkillsRules }) {
   const ref = pluginRef ?? getPluginRef();
   const skillsDir = scope === 'global'
     ? path.join(ANTIGRAVITY_HOME, 'skills')
@@ -56,37 +56,41 @@ export async function installAntigravity({ token, pluginRef, mcpGroup, skills, r
   console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
   console.log();
 
-  const { weeglooUrl, uploadApiUrl } = await fetchMcpConfig(ref);
+  if (installMcp) {
+    const { weeglooUrl, uploadApiUrl } = await fetchMcpConfig(ref);
+    const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
+    try {
+      ensureDir(ANTIGRAVITY_HOME);
+      const config = readJsonSafe(ANTIGRAVITY_MCP_PATH);
+      if (!config.mcpServers) config.mcpServers = {};
 
-  // ── MCP server configuration ────────────────────────────────
-  const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
-  try {
-    ensureDir(ANTIGRAVITY_HOME);
-    const config = readJsonSafe(ANTIGRAVITY_MCP_PATH);
-    if (!config.mcpServers) config.mcpServers = {};
+      config.mcpServers['weegloo'] = {
+        serverUrl: buildMcpUrlWithGroup(weeglooUrl, mcpGroup),
+      };
+      config.mcpServers['weegloo-upload'] = {
+        command: 'npx',
+        args: ['-y', 'weegloo-upload'],
+        env: {
+          UPLOAD_API_URL: uploadApiUrl,
+          AUTH_BEARER_TOKEN: token,
+        },
+      };
 
-    config.mcpServers['weegloo'] = {
-      serverUrl: buildMcpUrlWithGroup(weeglooUrl, mcpGroup),
-    };
-    config.mcpServers['weegloo-upload'] = {
-      command: 'npx',
-      args: ['-y', 'weegloo-upload'],
-      env: {
-        UPLOAD_API_URL: uploadApiUrl,
-        AUTH_BEARER_TOKEN: token,
-      },
-    };
-
-    fs.writeFileSync(ANTIGRAVITY_MCP_PATH, JSON.stringify(config, null, 2), 'utf-8');
-    mcpSpinner.succeed(
-      `  MCP servers configured  ${chalk.dim('→ ' + ANTIGRAVITY_MCP_PATH)}`
-    );
-  } catch (err) {
-    mcpSpinner.fail(`  Failed to configure MCP servers: ${err.message}`);
+      fs.writeFileSync(ANTIGRAVITY_MCP_PATH, JSON.stringify(config, null, 2), 'utf-8');
+      mcpSpinner.succeed(
+        `  MCP servers configured  ${chalk.dim('→ ' + ANTIGRAVITY_MCP_PATH)}`
+      );
+    } catch (err) {
+      mcpSpinner.fail(`  Failed to configure MCP servers: ${err.message}`);
+    }
+  } else {
+    console.log(chalk.dim('  - MCP servers: skipped (Skills/Rules only)'));
   }
 
   // ── Skills download & install ───────────────────────────────
-  if (skills.length === 0) {
+  if (!installSkillsRules) {
+    console.log(chalk.dim('  - Skills: skipped (MCP only)'));
+  } else if (skills.length === 0) {
     console.log(chalk.dim('  - Skills: none selected, skipping'));
   } else {
     const skillsSpinner = ora({ text: `  Downloading skills (0/${skills.length})`, indent: 0 }).start();
@@ -109,7 +113,9 @@ export async function installAntigravity({ token, pluginRef, mcpGroup, skills, r
   }
 
   // ── Rules download & install ────────────────────────────────
-  if (rules.length === 0) {
+  if (!installSkillsRules) {
+    console.log(chalk.dim('  - Rules: skipped (MCP only)'));
+  } else if (rules.length === 0) {
     console.log(chalk.dim('  - Rules: none selected, skipping'));
   } else {
     const rulesSpinner = ora({ text: `  Downloading rules (0/${rules.length})`, indent: 0 }).start();
