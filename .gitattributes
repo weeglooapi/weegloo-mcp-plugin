@@ -1,3 +1,4 @@
 ## git config merge.ours.driver true
 
 .mcp.json merge=ours
+rules/weegloo-api-endpoints.mdc merge=ours
