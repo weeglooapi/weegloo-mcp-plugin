@@ -11,10 +11,10 @@ rules:
   - section: Base URL by API Type (never guess or infer)
     items:
       - Weegloo API has three types: **CMA**, **CDA**, and **Upload**. Each uses a different base URL.
-      - **CMA** (Content Management API): Supports read, create, update, and delete. Base URL: `https://dev-cma.weegloo.com`
-      - **CDA** (Content Delivery API): Cache-based, optimized for reads, **read-only**. Base URL: `https://dev-cda.weegloo.com`
-      - **Upload**: File uploads. Base URL: `https://dev-upload.weegloo.com`
-      - API paths typically use `/v1/...`, so full base is e.g. `https://dev-cda.weegloo.com/v1` (for CDA).
+      - **CMA** (Content Management API): Supports read, create, update, and delete. Base URL: `https://cma.weegloo.com`
+      - **CDA** (Content Delivery API): Cache-based, optimized for reads, **read-only**. Base URL: `https://cda.weegloo.com`
+      - **Upload**: File uploads. Base URL: `https://upload.weegloo.com`
+      - API paths typically use `/v1/...`, so full base is e.g. `https://cda.weegloo.com/v1` (for CDA).
 
   - section: CMA vs CDA Selection Criteria
     items:
@@ -31,11 +31,11 @@ rules:
   - section: Common Mistakes to Avoid
     items:
       - Do not infer or guess URLs. Use only the base URLs specified above.
-      - Wrong: `https://dev-cda-weegloo.com` (hyphen), using `https://dev-cma.weegloo.com` for CDA purposes.
-      - Correct: For CDA content fetch, use `https://dev-cda.weegloo.com/v1/spaces/{spaceId}/...`.
+      - Wrong: `https://cda-weegloo.com` (hyphen), using `https://cma.weegloo.com` for CDA purposes.
+      - Correct: For CDA content fetch, use `https://cda.weegloo.com/v1/spaces/{spaceId}/...`.
 
   - section: Base URL Reference
     items:
-      - CMA: `https://dev-cma.weegloo.com`
-      - CDA: `https://dev-cda.weegloo.com`
-      - Upload: `https://dev-upload.weegloo.com`
+      - CMA: `https://cma.weegloo.com`
+      - CDA: `https://cda.weegloo.com`
+      - Upload: `https://upload.weegloo.com`
