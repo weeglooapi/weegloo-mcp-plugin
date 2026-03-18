@@ -20,7 +20,7 @@ description: Deploy a Web Project and hosts it on the web. Use when deploying a 
 1. **MANDATORY: Ask the user for the desired `subdomain`.**  
    - Do NOT assume, infer, or default the subdomain (e.g. do not use project name, `marketplace`, etc.).
    - If the user has not explicitly provided a subdomain, STOP and ask: "Enter a subdomain to use.
-Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https://market.weegloo.app)."
+Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https://market.weegloo.com)."
    - Proceed to step 2 only after the user has provided a subdomain.
 
 2. Before proceeding, use the `CheckSubdomain` MCP tool to verify that the provided subdomain is unique.
