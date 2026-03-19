@@ -16,10 +16,13 @@ rules:
   - section: Runtime env.js (LLM checklist)
     items:
       - Path on the hosted site must be **`./env.js`** (same directory as `index.html` in the ZIP / export root). The HTML must load it with a **synchronous** script early in `<head>` (e.g. `<script src="./env.js"></script>`) **before** application bundles so `window.__ENV__` exists when the app runs.
-      - Required JavaScript shape (plain script, no modules): **`window.__ENV__ = { "KEY": "value", ... };`** Use **string** values. For Next.js public client env, keys should match **`NEXT_PUBLIC_*`** names (e.g. `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`).
-      - Do not import `env.js` from webpack/Turbopack; keep it as a **static asset** copied to export root. Changing values must **not** require a rebuild.
+      - Required JavaScript shape (plain script, no modules): **`window.__ENV__ = { "KEY": "value", ... };`** with **string** values only.
+      - **Market / template apps:** Users install from a **service template** into their own Space, then **replace values in `env.js`**. The app must read **only** `window.__ENV__` at **runtime** — **do not** read `.env.local` or `process.env` in the browser for those values.
+      - **Build-time pitfall:** Frameworks often copy a **template** `public/env.js` to `out/env.js` unchanged. Unless the project **explicitly regenerates `out/env.js` from `.env` / `.env.local` (or CI secrets)** before ZIP upload, production will ship **placeholders** and CDA will fail. LLMs implementing Next/static export should add or verify that step.
+      - **Weegloo Delivery Access Token** is **not treated as a secret** for this class of app; it **must** appear in `env.js` under **`DELIVERY_ACCESS_TOKEN`** (alongside Space-scoped settings). It is normal for the committed template to include placeholder strings (e.g. `YOUR_DELIVERY_ACCESS_TOKEN`) that installers replace.
+      - **Keys in `window.__ENV__` are app-defined, not a closed set.** The names `WEEGLOO_CDA_BASE_URL`, `WEEGLOO_SPACE_ID`, `WEEGLOO_LOCALE`, `DELIVERY_ACCESS_TOKEN` are **one product’s example**; other apps may add or use different keys — document them per project. Do not imply in docs that only those four keys may exist.
+      - Do not import `env.js` from webpack/Turbopack; keep it as a **static asset** copied to export root. Operators may edit **`out/env.js`** on the host without rebuilding; optionally the **build pipeline** may **regenerate `out/env.js` from `.env.local`** so the ZIP matches CI secrets (see CareerResume `scripts/stage-careerresume-out.mjs`).
       - **Next.js App Router:** the framework may inject many `<script>` tags before layout children. If `window.__ENV__` is undefined at runtime, use a **post-build step** to insert `<script src="./env.js"></script>` **immediately after** the opening `<head>` tag in exported HTML (this project does that in `scripts/stage-careerresume-out.mjs`).
-      - **`.env.local`** (or CI env) is for **local development / build-time fallbacks** only; **hosted runtime** configuration is **`env.js`** so operators can edit values on the server or via WebHosting env update MCP without redeploying the full site when only env changes.
 
   - section: Packaging Requirements
     items:
