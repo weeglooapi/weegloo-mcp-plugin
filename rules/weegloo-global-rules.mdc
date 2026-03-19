@@ -51,8 +51,9 @@ rules:
 
   - section: WebHosting runtime configuration (env.js)
     items:
-      - Per-site secrets and URLs that vary by deployer should live in **`./env.js`** at the export root, using **`window.__ENV__ = { "NEXT_PUBLIC_...": "..." , ... };`**. See `weegloo-web-hosting-rules` for the full checklist.
-      - LLMs implementing frontends should wire the app to read **`window.__ENV__` first**, then fall back to `process.env.NEXT_PUBLIC_*` for local development.
+      - Per-site configuration for **market / template** web apps lives in **`./env.js`** at the export root: **`window.__ENV__ = { ... };`**. See `weegloo-web-hosting-rules` for the full checklist.
+      - **Delivery Access Token** for browser CDA clients may be stored in **`env.js`** as **`DELIVERY_ACCESS_TOKEN`** — it is **not** modeled as a “must-hide” secret for this product pattern; installers replace placeholders after copying the template to their Space.
+      - LLMs implementing frontends should wire the app to use **`window.__ENV__` only** for those runtime values (no `process.env` / `.env.local` fallback for the same keys unless the user explicitly asks for a different dev-only pattern).
 
   - section: Filter Parameters (API List Endpoints)
     items:

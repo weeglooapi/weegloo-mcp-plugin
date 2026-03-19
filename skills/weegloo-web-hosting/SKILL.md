@@ -35,16 +35,22 @@ Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https
 
 - **Location:** `./env.js` at the **root of the ZIP** (same folder as `index.html`).
 - **Load order:** Add `<script src="./env.js"></script>` **early in `<head>`**, synchronously, **before** any app JS so globals exist at startup.
-- **Format:** assign a plain object:
+- **Format:** assign any plain object to **`window.__ENV__`**. Keys are **not** fixed by Weegloo — each app defines what it reads (document required keys in that project’s README / env template). Prefer **string** values for portability.
+  - **Illustrative sample only** (e.g. a CDA-powered resume app — **you may add or omit keys** as needed):
   ```js
   window.__ENV__ = {
-    NEXT_PUBLIC_SOME_KEY: "value",
-    NEXT_PUBLIC_OTHER: "",
+    WEEGLOO_CDA_BASE_URL: "https://dev-cda.weegloo.com",
+    WEEGLOO_SPACE_ID: "YOUR_SPACE_ID",
+    WEEGLOO_LOCALE: "en-US",
+    DELIVERY_ACCESS_TOKEN: "YOUR_DELIVERY_ACCESS_TOKEN",
+    // MY_OTHER_SETTING: "…",  // OK: extra keys are allowed
   };
   ```
-  Use **double-quoted strings** for keys and values. Keys should mirror **`NEXT_PUBLIC_*`** names the app reads at runtime.
-- **Dev vs prod:** Repository may use `.env.local` for local dev; **hosted sites** rely on **`env.js`** so humans can change values without rebuilding.
-- **Next.js App Router:** ensure `env.js` runs before app bundles (often requires a **post-build HTML patch** inserting `<script src="./env.js"></script>` right after `<head>`; see `scripts/stage-careerresume-out.mjs` in CareerResume).
+  **Template flow:** users install from a **market/service template**, then edit **`env.js`** (or rebuild after setting CI `.env`).
+- **Build vs runtime (avoid confusion):** **`npm run build` must produce a ZIP whose `./env.js` contains the real values** for that deploy. If developers keep secrets in `.env.local`, the **build pipeline should merge `.env` / `.env.local` into `out/env.js`** (see CareerResume `stage-careerresume-out.mjs`). **Do not assume** copying `public/env.js` alone is enough — without a merge step, production will ship placeholders. **In the browser**, the app reads **only** `window.__ENV__` from the loaded `./env.js` file — not live reads of `.env.local`.
+- **Delivery Access Token:** for Weegloo CDA browser clients, this token is **not a “secret” in env.js** — it **must** live in **`env.js`** as **`DELIVERY_ACCESS_TOKEN`** so installers can swap it without rebuilding. Placeholder values in the repo are expected.
+- **Single source of truth at runtime:** read **only** `window.__ENV__` from `./env.js` — **not** `process.env` or inlined `NEXT_PUBLIC_*` in the JS bundle for those settings.
+- **Next.js App Router:** ensure `env.js` runs before app bundles (often a **post-build HTML patch** right after `<head>`; see `scripts/stage-careerresume-out.mjs` in CareerResume).
 
 4. Compress the build output into a ZIP archive.  
    The `index.html` file must be located at the root level of the ZIP file.

@@ -49,8 +49,8 @@ rules:
   - section: CDA requirements (Delivery Access Token)
     items:
       - CDA requires a **Delivery Access Token** (and ACDA its equivalent when using that API—follow Swagger and env conventions for the project).
-      - Request tokens from the user / project owner and store them in the project’s `./env.js` where applicable.
-      - `./env.js` format: `window.__ENV__ = { key1: value, key2: value }`
+      - For **market / WebHosting template** apps, store values in **`./env.js`** only: `window.__ENV__ = { ... }`. Use **`DELIVERY_ACCESS_TOKEN`** for the Delivery Access Token (not a “hidden secret” in this pattern—it is expected in `env.js` so installers can swap it after copying the template to their Space).
+      - Typical keys alongside the token: `WEEGLOO_CDA_BASE_URL`, `WEEGLOO_SPACE_ID`, `WEEGLOO_LOCALE`. The running app should read **only** `window.__ENV__` for these (see `weegloo-web-hosting-rules`).
 
   - section: Common Mistakes to Avoid
     items:
