@@ -39,7 +39,7 @@ Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https
   - **Illustrative sample only** (e.g. a CDA-powered resume app — **you may add or omit keys** as needed):
   ```js
   window.__ENV__ = {
-    WEEGLOO_CDA_BASE_URL: "https://dev-cda.weegloo.com",
+    WEEGLOO_CDA_BASE_URL: "https://cda.weegloo.com",
     WEEGLOO_SPACE_ID: "YOUR_SPACE_ID",
     WEEGLOO_LOCALE: "en-US",
     DELIVERY_ACCESS_TOKEN: "YOUR_DELIVERY_ACCESS_TOKEN",
