@@ -13,6 +13,14 @@ rules:
       - The web project must be built using `index.html` as the entry point.
       - The `env.js` file must remain as a separate file and must not be bundled, transformed, or compressed.
 
+  - section: Runtime env.js (LLM checklist)
+    items:
+      - Path on the hosted site must be **`./env.js`** (same directory as `index.html` in the ZIP / export root). The HTML must load it with a **synchronous** script early in `<head>` (e.g. `<script src="./env.js"></script>`) **before** application bundles so `window.__ENV__` exists when the app runs.
+      - Required JavaScript shape (plain script, no modules): **`window.__ENV__ = { "KEY": "value", ... };`** Use **string** values. For Next.js public client env, keys should match **`NEXT_PUBLIC_*`** names (e.g. `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`).
+      - Do not import `env.js` from webpack/Turbopack; keep it as a **static asset** copied to export root. Changing values must **not** require a rebuild.
+      - **Next.js App Router:** the framework may inject many `<script>` tags before layout children. If `window.__ENV__` is undefined at runtime, use a **post-build step** to insert `<script src="./env.js"></script>` **immediately after** the opening `<head>` tag in exported HTML (this project does that in `scripts/stage-careerresume-out.mjs`).
+      - **`.env.local`** (or CI env) is for **local development / build-time fallbacks** only; **hosted runtime** configuration is **`env.js`** so operators can edit values on the server or via WebHosting env update MCP without redeploying the full site when only env changes.
+
   - section: Packaging Requirements
     items:
       - The build output must be compressed into a ZIP archive before upload.
@@ -54,6 +62,7 @@ rules:
       - If only the `env.js` file is changed, the website must not be fully redeployed.
       - In the case of an `env.js`-only change, update the existing `WebHosting` resource using the MCP tool.
       - When updating environment values, the `env.js` file may be parsed into key-value pairs and applied as `environments` in the `WebHosting` resource.
+      - When parsing `env.js` for MCP, expect the pattern **`window.__ENV__ = { ... };`** (object literal with string keys/values). Strip comments if present before parsing.
 
   - section: Validation Requirements
     items:

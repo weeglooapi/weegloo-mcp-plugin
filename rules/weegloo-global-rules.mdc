@@ -49,6 +49,11 @@ rules:
       - For incremental updates of WebHosting, skip rebuilding the project if no other files besides `env.js` have changed.
       - Always verify that `index.html` remains at the root when re-uploading or updating WebHosting resources.
 
+  - section: WebHosting runtime configuration (env.js)
+    items:
+      - Per-site secrets and URLs that vary by deployer should live in **`./env.js`** at the export root, using **`window.__ENV__ = { "NEXT_PUBLIC_...": "..." , ... };`**. See `weegloo-web-hosting-rules` for the full checklist.
+      - LLMs implementing frontends should wire the app to read **`window.__ENV__` first**, then fall back to `process.env.NEXT_PUBLIC_*` for local development.
+
   - section: Filter Parameters (API List Endpoints)
     items:
       - Filter conditions are sent as direct query parameters, NOT wrapped in filter[].

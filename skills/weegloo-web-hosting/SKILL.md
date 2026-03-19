@@ -29,7 +29,22 @@ Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https
    - Do not attempt to create a `WebHosting` resource without passing this validation step.
 
 3. Build the web project using `index.html` as the entry point.  
-   Ensure that the `env.js` file remains as a separate file and is not bundled or compressed.
+   Ensure that **`env.js`** is shipped as a **separate static file** at **`./env.js`** next to `index.html` (not bundled or minified by the app bundler).
+
+### Runtime `env.js` (required shape for LLMs)
+
+- **Location:** `./env.js` at the **root of the ZIP** (same folder as `index.html`).
+- **Load order:** Add `<script src="./env.js"></script>` **early in `<head>`**, synchronously, **before** any app JS so globals exist at startup.
+- **Format:** assign a plain object:
+  ```js
+  window.__ENV__ = {
+    NEXT_PUBLIC_SOME_KEY: "value",
+    NEXT_PUBLIC_OTHER: "",
+  };
+  ```
+  Use **double-quoted strings** for keys and values. Keys should mirror **`NEXT_PUBLIC_*`** names the app reads at runtime.
+- **Dev vs prod:** Repository may use `.env.local` for local dev; **hosted sites** rely on **`env.js`** so humans can change values without rebuilding.
+- **Next.js App Router:** ensure `env.js` runs before app bundles (often requires a **post-build HTML patch** inserting `<script src="./env.js"></script>` right after `<head>`; see `scripts/stage-careerresume-out.mjs` in CareerResume).
 
 4. Compress the build output into a ZIP archive.  
    The `index.html` file must be located at the root level of the ZIP file.
@@ -39,7 +54,7 @@ Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https
 6. After the `Upload` resource is successfully created, use the MCP tool to create a `WebHosting` resource based on the `Upload`.
 
 ## Instructions
-- The `env.js` file must be built as a separate file without any modification or processing.
+- The `env.js` file must ship **verbatim** as static content (no bundling). Prefer committing a template in `public/env.js` (or equivalent) so exports include it automatically.
 - The `index.html` file must be located at the root of the ZIP archive.
 
 ## Important
