@@ -3,39 +3,65 @@ id: weegloo-api-endpoints
 type: rule
 title: Weegloo API Base URLs (for development code)
 description: >
-  Distinction between CMA, CDA, and Upload endpoints and correct base URL usage.
+  CMA, CDA, Upload, ACMA, ACDA base URLs, Swagger links, and MCP vs direct API usage.
   Must be followed when calling Weegloo API via fetch, axios, etc. in project code.
 ---
 
 rules:
+  - section: AI Agent vs application code (mandatory)
+    items:
+      - **AI Agent (Cursor, Claude, etc.)** must **not** call these HTTP APIs directly. Use **Weegloo MCP tools** only.
+      - **Application / development code** (frontend, backend, scripts) may call the APIs using the base URLs and paths documented below.
+      - APIs are for **implementation in project code**; agents integrate via **MCP**, not raw REST calls.
+
   - section: Base URL by API Type (never guess or infer)
     items:
-      - Weegloo API has three types: **CMA**, **CDA**, and **Upload**. Each uses a different base URL.
-      - **CMA** (Content Management API): Supports read, create, update, and delete. Base URL: `https://dev-cma.weegloo.com`
-      - **CDA** (Content Delivery API): Cache-based, optimized for reads, **read-only**. Base URL: `https://dev-cda.weegloo.com`
+      - Weegloo APIs include **CMA**, **CDA**, **Upload**, and when the app manages its own members, **ACMA** and **ACDA** instead of CMA/CDA for those flows.
+      - **CMA** (Content Management API): Read, create, update, delete. Base URL: `https://dev-cma.weegloo.com`
+      - **CDA** (Content Delivery API): Cache-based, read-only. Base URL: `https://dev-cda.weegloo.com`
       - **Upload**: File uploads. Base URL: `https://dev-upload.weegloo.com`
-      - API paths typically use `/v1/...`, so full base is e.g. `https://dev-cda.weegloo.com/v1` (for CDA).
+      - **ACMA** (App Content Management API): Use when the app uses **its own member management** instead of Weegloo’s default model. In that case use **ACMA instead of CMA** for the relevant operations. Base URL: `https://dev-acma.weegloo.com`
+      - **ACDA** (App Content Delivery API): Same scenario—**app-managed members**. Use **ACDA instead of CDA** for delivery/read paths that map to that model. Base URL: `https://dev-acda.weegloo.com`
+      - API paths typically use `/v1/...`, e.g. `https://dev-cda.weegloo.com/v1` for CDA.
 
-  - section: CMA vs CDA Selection Criteria
+  - section: Swagger (OpenAPI) documentation per API
     items:
-      - Most web services only need **read** access, since content create/update/delete is managed in Weegloo Console. Use **CDA** in that case.
-      - CMA supports read, create, update, and delete, but CDA is preferable for read-only use due to its cache-based design.
-      - Do not confuse CMA and CDA. Use CDA for read-only, CMA for management operations.
+      - **CMA**: `https://dev-cma.weegloo.com/v1/swagger`
+      - **CDA**: `https://dev-cda.weegloo.com/v1/swagger`
+      - **Upload**: `https://dev-upload.weegloo.com/v1/swagger`
+      - **ACMA**: `https://dev-acma.weegloo.com/v1/swagger`
+      - **ACDA**: `https://dev-acda.weegloo.com/v1/swagger`
 
-  - section: CDA Requirements (Delivery Access Token)
+  - section: CMA vs CDA selection (standard Weegloo member model)
     items:
-      - CDA requires a **Delivery Access Token**.
-      - Always request this token from the user and store it in the project's `./env.js` for use.
+      - Most web services only need **read** access when content is managed in Weegloo Console. Use **CDA** in that case.
+      - CMA supports full CRUD; CDA is preferable for read-only use (cache-optimized).
+      - Do not confuse CMA and CDA. Use CDA for read-only delivery; CMA for management operations.
+
+  - section: ACMA / ACDA vs CMA / CDA (app-managed members)
+    items:
+      - Most web services only need **read** access, since content create/update/delete is managed in Weegloo Console. Use **CDA** or **ACDA** in that case.
+      - CMA/ACMA supports read, create, update, and delete, but CDA is preferable for read-only use due to its cache-based design.
+      - Do not confuse CMA/ACMA and CDA/ACDA. Use CDA/ACDA for read-only, CMA/ACMA for management operations.
+      - When the product uses **app-owned member management** (not the default Weegloo member flow), **do not use CMA/CDA** for those features—use **ACMA** and **ACDA** as documented in Swagger and product docs.
+      - **ACMA** replaces **CMA** for that integration style; **ACDA** replaces **CDA** for the corresponding delivery/read usage.
+
+  - section: CDA requirements (Delivery Access Token)
+    items:
+      - CDA requires a **Delivery Access Token** (and ACDA its equivalent when using that API—follow Swagger and env conventions for the project).
+      - Request tokens from the user / project owner and store them in the project’s `./env.js` where applicable.
       - `./env.js` format: `window.__ENV__ = { key1: value, key2: value }`
 
   - section: Common Mistakes to Avoid
     items:
-      - Do not infer or guess URLs. Use only the base URLs specified above.
-      - Wrong: `https://dev-cda-weegloo.com` (hyphen), using `https://dev-cma.weegloo.com` for CDA purposes.
+      - Do not infer or guess URLs. Use only the base URLs listed in this rule.
+      - Wrong: `https://dev-cda-weegloo.com` (wrong host pattern), using CMA base URL for CDA traffic.
       - Correct: For CDA content fetch, use `https://dev-cda.weegloo.com/v1/spaces/{spaceId}/...`.
 
-  - section: Base URL Reference
+  - section: Base URL quick reference
     items:
       - CMA: `https://dev-cma.weegloo.com`
       - CDA: `https://dev-cda.weegloo.com`
       - Upload: `https://dev-upload.weegloo.com`
+      - ACMA: `https://dev-acma.weegloo.com`
+      - ACDA: `https://dev-acda.weegloo.com`
