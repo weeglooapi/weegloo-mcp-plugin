@@ -1,6 +1,6 @@
 ---
 name: weegloo-create-content-type
-description: Creates a ContentType in Weegloo. Use when defining a new ContentType; apply validations when product meaning is clear (FieldValidation + soft guidance in the skill)—not a blanket requirement on every field. Skill text and examples are English-only.
+description: Creates a ContentType in Weegloo. Emphasizes ShortText vs LongText vs RichText by Weegloo/CDA search behavior (not literal “long”/“rich”), plus FieldValidation and soft guidance. English only.
 ---
 
 # Weegloo Create ContentType
@@ -12,7 +12,7 @@ description: Creates a ContentType in Weegloo. Use when defining a new ContentTy
 ## Why validations were often missing before
 
 - This skill used to **only** describe field types. Nothing told the model to **infer** constraints from names (`start`, `url`, `sku`, …), so the default was `validations: []` everywhere.
-- MCP tool schemas for `validations` often surface **only part** of the API (`message`, `dateRange`, …). The full list is in **CMA Swagger** — see [CreateContentType](https://cma.weegloo.com/v1/swagger-ui/index.html#/About%20ContentType/CreateContentType) and the `FieldValidation` schema in [`/v1/swagger/v3/api-docs`](https://cma.weegloo.com/v1/swagger/v3/api-docs).
+- MCP tool schemas for `validations` often surface **only part** of the API (`message`, `dateRange`, …). The full list is in **CMA OpenAPI** — get Swagger UI and OpenAPI JSON URLs **only** from **`weegloo-api-endpoints`**; look up **`CreateContentType`** and **`FieldValidation`** there (**do not** paste Swagger or `api-docs` links in this skill).
 
 **From now on:** avoid defaulting every field to **`validations: []`** without thought—check **`FieldValidation`** and the soft guidance below. Add constraints when the product meaning is clear; omit or keep them loose when formats are locale- or product-dependent. For **Refer → Media**, consider **media file size / mime / dimensions** when the product requires it.
 
@@ -21,8 +21,9 @@ description: Creates a ContentType in Weegloo. Use when defining a new ContentTy
 ## Core workflow
 
 1. Before any `Content`, create the `ContentType`.
-2. **Design fields → add `validations` only where it clearly helps** (see soft guidance below + `FieldValidation` reference).
-3. Publish the `ContentType` (`cma_PublishOneContentType`) before creating `Content`.
+2. **Assign `ShortText` / `LongText` / `RichText` using the search-semantics section below** — not by gut feel from the words “short”, “long”, or “rich”.
+3. **Design fields → add `validations` only where it clearly helps** (see soft guidance below + `FieldValidation` reference).
+4. Publish the `ContentType` (`cma_PublishOneContentType`) before creating `Content`.
 
 ---
 
@@ -41,7 +42,7 @@ If the user explicitly says “free text, any string” → you may leave `valid
 
 ## `FieldValidation` (CMA API) — supported keys
 
-Authoritative shape: **OpenAPI `FieldValidation`** on [Create ContentType](https://cma.weegloo.com/v1/swagger-ui/index.html#/About%20ContentType/CreateContentType). A single validation object may include **`message`** (user-facing) plus **one or more** of:
+Authoritative shape: **OpenAPI `FieldValidation`** for **`CreateContentType`** (see **`weegloo-api-endpoints`** → CMA). A single validation object may include **`message`** (user-facing) plus **one or more** of:
 
 | Key | Purpose | Payload shape (summary) |
 |-----|---------|---------------------------|
@@ -81,7 +82,7 @@ Combine constraints in **one** `validations[]` element when they share the same 
 ```
 
 - Escape backslashes in JSON: `\\d` not `\d`.
-- Optional **`flags`** on `regexp` / `prohibitRegexp` per Swagger `RegexpParameter`.
+- Optional **`flags`** on `regexp` / `prohibitRegexp` per CMA OpenAPI `RegexpParameter` (**`weegloo-api-endpoints`**).
 
 **Optional ShortText** (empty **or** `YYYY.MM`):
 
@@ -104,6 +105,38 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 
 ---
 
+## ShortText vs LongText vs RichText — **search semantics, not English words**
+
+**Do not** choose these types from the everyday meaning of “short”, “long”, or “rich”. In Weegloo, they differ by **how CDA indexes and lets you query** the field. Ask: **will this Space ship a product that uses the Weegloo API to search this field?**
+
+### Decision (use in order)
+
+1. **`LongText`** — Use **only** when the product **will** run **CDA full-text search** (`match`-style / full-text similarity) **on this field** in real features (site search, discovery, admin search, etc.).  
+   - If there is **no** planned full-text search over this field via Weegloo, **`LongText` is the wrong type** — even for paragraphs, bios, or “about” copy.
+
+2. **`RichText`** — Use for **text that must not be full-text indexed** for Weegloo search: long copy, descriptions, article bodies, **“About” sections**, anything loaded by id/locale and **never** queried with CDA full-text on that field.  
+   - **`RichText` does not mean “Markdown” or “must contain markup”** — it means **non-searchable long (or long-ish) text** in the API sense. Rich formatting in the editor is incidental.
+
+3. **`ShortText`** — Use for values that are **short** and/or need **exact or prefix** matching in CDA (codes, slugs, one-line labels, emails-as-identifiers, etc.).  
+   - If the app **never** needs keyword/prefix/exact indexing but the string is tiny and acts like an identifier, **`ShortText`** is still appropriate.  
+   - If indexing/search is **never** needed and the shape is not “short identifier-like”, prefer **`RichText`** over **`ShortText`** only when **`ShortText`** would be a poor fit (e.g. unstructured paragraphs); for **very short** strings, **`ShortText`** usually stays clearer.
+
+### Anti-patterns LLMs must avoid
+
+- **Wrong:** “It’s a long paragraph → **`LongText`**.”  
+  **Right:** “We only display it / fetch by key → **`RichText`** (unless full-text search is a real requirement).”
+
+- **Wrong:** “**`RichText`** = Markdown field.”  
+  **Right:** “**`RichText`** = **no Weegloo full-text search** on that field; naming is historical.”
+
+- **Resume-style sites:** e.g. **`aboutBody`**, long **`description`** shown on a page with **no** CDA full-text search feature → use **`RichText`**, not **`LongText`**.
+
+### Quick check before you finalize the `ContentType`
+
+- List every **`LongText`** field and confirm: **“We will run CDA full-text queries against this field.”** If **no** → change design to **`RichText`** (or **`ShortText`** if it’s really a short exact/prefix field).
+
+---
+
 ## Field types (reminder)
 
 - **Array**: Stores multiple values in an array format.
@@ -113,12 +146,12 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 - **Number**: Stored values can be used for search; supports decimal numbers.
 - **Refer**: Stored values can be used for search.
 - **Json**: Stored values are **not indexed** and cannot be searched.
-- **ShortText**: Stored values support only exact or prefix search; suitable for storing product codes or similar identifiers.
-- **LongText**: Stored values support full-text search; suitable for storing titles, descriptions, or long text content.
-- **RichText**: Stored values are **not indexed** and cannot be searched; suitable for article bodies or content where search is not required.
+- **ShortText**: **Exact and prefix** search in CDA. Use for short identifiers, labels, codes—when that query style matches the product. See **ShortText vs LongText vs RichText** above—not every non-search field should default here if **`RichText`** fits better.
+- **LongText**: **Full-text search** in CDA. Use **only** when the product **requires** full-text search on this field via the API; otherwise use **`RichText`**. Do not use **`LongText`** “because the copy is long.”
+- **RichText**: **Not** full-text indexed; **not searchable** via Weegloo full-text. Use for long (or structured) body copy **without** CDA full-text search—**not** synonymous with Markdown/markup as a type rule.
 - **Location**: Stored values support geographic searches such as `near` or `within`; suitable for storing latitude and longitude coordinates.
 
-**Mapping types → `validations`:** For **Array**, define element type under **`items`**; per-element rules go in **`items.validations`**. Prefer **`dateRange`** on **Date**, **`range`** on **Number** / **Long**, **`regexp` / `prohibitRegexp` / `size` / `in` / `unique`** on text-like fields, and on **Refer** use **`referContentType`** (→ Content), or **`mediaMimetypeGroup` / `mediaFileSize` / `mediaImageDimensions`** (→ Media) when the product requires it — see **`FieldValidation`** above and [CMA Swagger](https://cma.weegloo.com/v1/swagger-ui/index.html#/About%20ContentType/CreateContentType).
+**Mapping types → `validations`:** For **Array**, define element type under **`items`**; per-element rules go in **`items.validations`**. Prefer **`dateRange`** on **Date**, **`range`** on **Number** / **Long**, **`regexp` / `prohibitRegexp` / `size` / `in` / `unique`** on text-like fields, and on **Refer** use **`referContentType`** (→ Content), or **`mediaMimetypeGroup` / `mediaFileSize` / `mediaImageDimensions`** (→ Media) when the product requires it — see **`FieldValidation`** above and **`weegloo-api-endpoints`** for CMA schema links.
 
 ---
 
@@ -127,3 +160,4 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 - A `ContentType` must be **published** before creating `Content`.
 - **Updates** are **full replacement** (`cma_UpdateOneContentType`): preserve **field `id`s** and send **all** fields when editing.
 - Stricter validations may break **existing** entries on next save — warn when migrating live data.
+- Changing **`LongText` ↔ `RichText`** (or other type changes) on a live field is a **schema migration**—plan content re-save and app typing, not a silent rename.

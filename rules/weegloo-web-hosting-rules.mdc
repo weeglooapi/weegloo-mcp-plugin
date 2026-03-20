@@ -3,32 +3,49 @@ id: weegloo-web-hosting-rules
 type: rule
 title: Weegloo WebHosting Rules
 description: >
-  These rules apply specifically to WebHosting deployment and update operations.
-  They define mandatory build, packaging, and update constraints for hosting web projects via MCP.
+  WebHosting deployment and updates via MCP: static-only (no SSR), max 100 files per ZIP, env.js,
+  packaging, and MCP-only deploy constraints.
 ---
 
 rules:
+  - section: Platform limits (static hosting)
+    items:
+      - **Scope:** These constraints apply **only when the production deployment target is Weegloo WebHosting** (static ZIP on Weegloo). They do **not** dictate how you build an app that is **self-hosted elsewhere** (Vercel, your own VPS, Kubernetes, etc.)—see the last bullet below.
+      - **Weegloo WebHosting is static hosting only.** It serves files from an uploaded ZIP (HTML, JS, CSS, assets). **Server-Side Rendering (SSR), dynamic Node/Java servers, and per-request server logic are not supported.** Frameworks must be built to **static export** (e.g. Next.js `output: 'export'`, Vite `build`, plain static sites). Do not assume middleware, API routes, or `getServerProps`-style execution on Weegloo’s edge.
+      - **Weegloo APIs from a WebHosted app:** Because there is **no application server** on Weegloo at request time, calls to **Weegloo REST APIs (CDA, etc.) must be made from the user’s browser** using **`fetch`, XHR, or equivalent client-side HTTP**—not from SSR or a backend process running on the WebHosting origin. (MCP and CMA from CI are separate; they are not “the hosted site” calling the API.)
+      - **Self-hosted or other hosts:** If the site is **not** deployed on Weegloo WebHosting, you may use **SSR**, a **BFF**, **server-side** `fetch` to Weegloo, or any pattern your host supports. The “static only + browser AJAX” rules above are **specific to Weegloo WebHosting**.
+      - **Maximum file count: 100 files** in the deployed bundle (after unzip). The total number of files in the ZIP **must not exceed 100**. Plan assets accordingly: avoid shipping large numbers of small static files (e.g. many self-hosted font files per weight/format).
+      - **Fonts:** Prefer **web fonts** loaded from a CDN or font service (`<link>` / CSS to Google Fonts, etc.) so font payloads are not dozens of files inside the ZIP. Self-hosted variable fonts or many `.woff2` slices consume the file budget quickly.
+
   - section: Build Output Requirements
     items:
       - The web project must be built using `index.html` as the entry point.
       - The `env.js` file must remain as a separate file and must not be bundled, transformed, or compressed.
 
+  - section: Next.js `.env` vs Weegloo `env.js` (LLM mental model)
+    items:
+      - **`.env.local` / `.env.example` / `NEXT_PUBLIC_*`** are for **developer machines and CI at build time**. Next injects `NEXT_PUBLIC_*` into the client bundle when you run `next build`. They are **not** files the end user’s browser reads on Weegloo Hosting.
+      - **Weegloo WebHosting** serves a **static ZIP** (e.g. Next `output: 'export'` → `out/`). There is **no Node process** reading `.env` per request. **Runtime** configuration for the browser must live in **`./env.js`**, which sets **`window.__ENV__`** and is loaded with a **synchronous** `<script>` **before** the app bundle.
+      - **Implement apps** so the browser reads **`window.__ENV__` first**, then falls back to **`process.env.NEXT_PUBLIC_*`** for local dev. Prefer **functions** that resolve config **when issuing fetches** (not only at module import time), so `env.js` always runs first.
+      - **Name mapping (typical Weegloo CDA apps):** `NEXT_PUBLIC_WEEGLOO_CDA_BASE_URL` → `WEEGLOO_CDA_BASE_URL`; `NEXT_PUBLIC_WEEGLOO_SPACE_ID` → `WEEGLOO_SPACE_ID`; `NEXT_PUBLIC_WEEGLOO_LOCALE` → `WEEGLOO_LOCALE`; `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN` → **`DELIVERY_ACCESS_TOKEN`**. Document this table in **`.env.example`** and/or README so operators know what to copy into `env.js`.
+      - **One build, many installs:** If every Space used only inlined `NEXT_PUBLIC_*`, you would need a **separate build per Space**. Using **`env.js`** lets the **same** static assets work for different Spaces when operators only change **`env.js`** (or WebHosting `environments`).
+
   - section: Runtime env.js (LLM checklist)
     items:
-      - Path on the hosted site must be **`./env.js`** (same directory as `index.html` in the ZIP / export root). The HTML must load it with a **synchronous** script early in `<head>` (e.g. `<script src="./env.js"></script>`) **before** application bundles so `window.__ENV__` exists when the app runs.
+      - Path on the hosted site must be **`./env.js`** (same directory as `index.html` in the ZIP / export root). The HTML must load it with a **synchronous** script early in `<head>` (e.g. `<script src="/env.js"></script>` or `<script src="./env.js"></script>`) **before** application bundles so `window.__ENV__` exists when the app runs.
       - Required JavaScript shape (plain script, no modules): **`window.__ENV__ = { "KEY": "value", ... };`** with **string** values only.
-      - **Market / template apps:** Users install from a **service template** into their own Space, then **replace values in `env.js`**. The app must read **only** `window.__ENV__` at **runtime** — **do not** read `.env.local` or `process.env` in the browser for those values.
-      - **Build-time pitfall:** Frameworks often copy a **template** `public/env.js` to `out/env.js` unchanged. Unless the project **explicitly regenerates `out/env.js` from `.env` / `.env.local` (or CI secrets)** before ZIP upload, production will ship **placeholders** and CDA will fail. LLMs implementing Next/static export should add or verify that step.
+      - **Market / template apps:** Users install from a **service template** into their own Space, then **replace values in `env.js`**. On the **hosted** site, the app must obtain those values from **`window.__ENV__`** at runtime — not from `.env.local` (which does not exist in the browser).
+      - **Build-time pitfall:** Copying a **template** `public/env.js` to `out/env.js` without filling values ships **placeholders** and CDA fails. Mitigations: (1) operators edit **`out/env.js`** (or hosted `env.js`) before/after upload with real values; (2) a **post-build script** generates `out/env.js` from `.env.local` / CI env vars before zipping.
       - **Weegloo Delivery Access Token** is **not treated as a secret** for this class of app; it **must** appear in `env.js` under **`DELIVERY_ACCESS_TOKEN`** (alongside Space-scoped settings). It is normal for the committed template to include placeholder strings (e.g. `YOUR_DELIVERY_ACCESS_TOKEN`) that installers replace.
-      - **Keys in `window.__ENV__` are app-defined, not a closed set.** The names `WEEGLOO_CDA_BASE_URL`, `WEEGLOO_SPACE_ID`, `WEEGLOO_LOCALE`, `DELIVERY_ACCESS_TOKEN` are **one product’s example**; other apps may add or use different keys — document them per project. Do not imply in docs that only those four keys may exist.
-      - Do not import `env.js` from webpack/Turbopack; keep it as a **static asset** copied to export root. Operators may edit **`out/env.js`** on the host without rebuilding; optionally the **build pipeline** may **regenerate `out/env.js` from `.env.local`** so the ZIP matches CI secrets (see CareerResume `scripts/stage-careerresume-out.mjs`).
-      - **Next.js App Router:** the framework may inject many `<script>` tags before layout children. If `window.__ENV__` is undefined at runtime, use a **post-build step** to insert `<script src="./env.js"></script>` **immediately after** the opening `<head>` tag in exported HTML (this project does that in `scripts/stage-careerresume-out.mjs`).
+      - **Keys in `window.__ENV__` are unrestricted** (no Weegloo whitelist). Skill **samples** show **syntax and one CDA-style convention only**—LLMs must **not** treat them as “only these keys allowed.” Add, omit, or rename keys per user/product; document the real set in each project’s README / `.env.example`.
+      - Do not import `env.js` from webpack/Turbopack; keep it as a **static asset** copied to export root (e.g. Next **`public/env.js`** → **`out/env.js`**).
+      - **Next.js App Router:** use **`next/script`** with **`strategy="beforeInteractive"`** and **`src="/env.js"`** in the root layout so `/env.js` runs before async framework bundles. A raw `<script>` in `<head>` is often reordered **after** async chunks—avoid relying on “first child” alone. Fallback: **post-build HTML patch** inserting a synchronous `./env.js` at the top of `<head>`.
 
   - section: Packaging Requirements
     items:
       - The build output must be compressed into a ZIP archive before upload.
       - The `index.html` file must be located at the root level of the ZIP archive.
-      - All built assets (JS, CSS, images, fonts, videos, etc.) must be included in the ZIP archive alongside `index.html`.
+      - All built assets (JS, CSS, images, fonts, videos, etc.) must be included in the ZIP archive alongside `index.html`, subject to the **100-file maximum** (see Platform limits).
       - Nested directory structures that place `index.html` below the root are not allowed.
 
   - section: Deployment Process (MCP Only)
@@ -70,4 +87,5 @@ rules:
   - section: Validation Requirements
     items:
       - Before upload or update, it must be verified that `index.html` exists at the root of the build output.
+      - Before upload, verify the build directory contains **at most 100 files** (recursive count); exceeding this will violate platform limits.
       - After deployment, verify the `WebHosting` resource state is `COMPLETED` by polling the `GetOneWebHosting` MCP tool.

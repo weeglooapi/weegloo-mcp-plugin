@@ -129,7 +129,7 @@ async function main() {
 
   let token = '';
   let mcpGroup = '';
-  let scope = 'global';
+  let scope = 'project';
   let skills = [];
   let rules = [];
 
@@ -158,14 +158,15 @@ async function main() {
   if (installSkillsRules) {
     scope = await select({
       message: 'Where would you like to install Skills / Rules?',
+      default: 'project',
       choices: [
-        {
-          name: `Global  ${chalk.dim('(applies to all projects)')}`,
-          value: 'global',
-        },
         {
           name: `Project  ${chalk.dim('(applies to this project only)')}`,
           value: 'project',
+        },
+        {
+          name: `Global  ${chalk.dim('(applies to all projects)')}`,
+          value: 'global',
         },
       ],
     });
