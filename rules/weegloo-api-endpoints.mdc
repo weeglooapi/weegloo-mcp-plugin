@@ -3,8 +3,8 @@ id: weegloo-api-endpoints
 type: rule
 title: Weegloo API Base URLs (for development code)
 description: >
-  CMA, CDA, Upload, ACMA, ACDA base URLs, Swagger links, and MCP vs direct API usage.
-  Must be followed when calling Weegloo API via fetch, axios, etc. in project code.
+  CMA, CDA, Upload, ACMA, ACDA base URLs, Swagger links, vendor JSON media type / Accept header rules,
+  and MCP vs direct API usage. Follow when calling Weegloo APIs from application code.
 ---
 
 rules:
@@ -24,13 +24,24 @@ rules:
       - **ACDA** (App Content Delivery API): Same scenario—**app-managed members**. Use **ACDA instead of CDA** for delivery/read paths that map to that model. Base URL: `https://acda.weegloo.com`
       - API paths typically use `/v1/...`, e.g. `https://cda.weegloo.com/v1` for CDA.
 
+  - section: Accept header and JSON media type (mandatory for HTTP clients)
+    items:
+      - Weegloo API responses use **`Content-Type: application/vnd.com.weegloo.v1+json;charset=UTF-8`**, **not** plain `application/json`.
+      - **Do not** send **`Accept: application/json`**. Negotiation against that value does **not** match Weegloo’s vendor media type and can cause **406 Not Acceptable** or other failures.
+      - **Preferred:** **omit** the `Accept` header on requests (e.g. `fetch` without `Accept`) unless you have a specific reason to set it.
+      - **If** you must set `Accept`, use the same vendor type as the API: **`application/vnd.com.weegloo.v1+json;charset=UTF-8`** (exactly—with charset as the service expects).
+      - When implementing wrappers (axios instances, shared `fetch` helpers), ensure defaults do **not** force `Accept: application/json`. Strip or override client-wide JSON defaults for Weegloo hosts.
+
   - section: Swagger (OpenAPI) documentation per API
     items:
+      - **Canonical URLs only here.** Do **not** paste Swagger UI or **`/v1/swagger/v3/api-docs`** links into other `.cursor` rules or skills—reference **this section** so hosts and paths stay maintainable.
+      - **Swagger UI** (human browsing; use the host that matches your environment—`*` below vs production when applicable):
       - **CMA**: `https://cma.weegloo.com/v1/swagger`
       - **CDA**: `https://cda.weegloo.com/v1/swagger`
       - **Upload**: `https://upload.weegloo.com/v1/swagger`
       - **ACMA**: `https://acma.weegloo.com/v1/swagger`
       - **ACDA**: `https://acda.weegloo.com/v1/swagger`
+      - **OpenAPI JSON** per API: same host as that API’s CMA/CDA/… base, path **`/v1/swagger/v3/api-docs`** (e.g. CMA schema: `https://cma.weegloo.com/v1/swagger/v3/api-docs`). Use it for **`FieldValidation`**, **`CreateSpaceRole`**, **`CreateDeliveryAccessToken`**, **`CreateContentType`**, etc.
 
   - section: CMA vs CDA selection (standard Weegloo member model)
     items:
@@ -49,14 +60,18 @@ rules:
   - section: CDA requirements (Delivery Access Token)
     items:
       - CDA requires a **Delivery Access Token** (and ACDA its equivalent when using that API—follow Swagger and env conventions for the project).
-      - Request tokens from the user / project owner and store them in the project’s `./env.js` where applicable.
-      - `./env.js` format: `window.__ENV__ = { key1: value, key2: value }`
+      - When **creating** a `DeliveryAccessToken` via CMA (`cma_CreateDeliveryAccessToken`), follow the **`weegloo-delivery-access-token`** skill: **never** bind **Administrator** `SpaceRole`; prefer a **read-only** role for required `ContentType`s only, or **ask the user** to pick a role after listing `SpaceRole`s.
+      - **Local Next.js development:** use **`.env.local`** with **`NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`** (and other `NEXT_PUBLIC_WEEGLOO_*` vars) — see `.env.example`.
+      - **Weegloo WebHosting (static export):** the browser loads **`./env.js`**, which assigns **`window.__ENV__`**. Use **`DELIVERY_ACCESS_TOKEN`** there (same token role as `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`, different key name). Also set **`WEEGLOO_CDA_BASE_URL`**, **`WEEGLOO_SPACE_ID`**, **`WEEGLOO_LOCALE`** as strings. This is **not** a “hidden secret” in this pattern—installers swap values in `env.js` after copying a template.
+      - **Mapping:** `NEXT_PUBLIC_WEEGLOO_CDA_BASE_URL` → `WEEGLOO_CDA_BASE_URL`; `NEXT_PUBLIC_WEEGLOO_SPACE_ID` → `WEEGLOO_SPACE_ID`; `NEXT_PUBLIC_WEEGLOO_LOCALE` → `WEEGLOO_LOCALE`; `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN` → **`DELIVERY_ACCESS_TOKEN`**.
+      - Application code should read **`window.__ENV__` first** when present, then fall back to **`process.env.NEXT_PUBLIC_*`** for local dev (see `weegloo-web-hosting-rules`).
 
   - section: Common Mistakes to Avoid
     items:
       - Do not infer or guess URLs. Use only the base URLs listed in this rule.
       - Wrong: `https://cda-weegloo.com` (wrong host pattern), using CMA base URL for CDA traffic.
       - Correct: For CDA content fetch, use `https://cda.weegloo.com/v1/spaces/{spaceId}/...`.
+      - Wrong: `Accept: application/json` on Weegloo API requests. Prefer **no** `Accept` header, or **`application/vnd.com.weegloo.v1+json;charset=UTF-8`** if `Accept` is required.
 
   - section: Base URL quick reference
     items:
