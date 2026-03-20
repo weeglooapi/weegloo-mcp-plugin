@@ -8,6 +8,15 @@ description: >
 ---
 
 rules:
+  - section: HTTP JSON media type (when calling Weegloo APIs from code)
+    items:
+      - Weegloo APIs respond with **`application/vnd.com.weegloo.v1+json;charset=UTF-8`**, not plain `application/json`.
+      - Application code (**fetch**, axios, etc.) must **not** send **`Accept: application/json`**; **omit `Accept`** or use the vendor type (see `weegloo-api-endpoints`). Agents normally use **MCP**, not raw HTTP—this applies to **human-written** clients and scripts.
+
+  - section: DeliveryAccessToken and SpaceRole (security)
+    items:
+      - When creating **`DeliveryAccessToken`** (`cma_CreateDeliveryAccessToken`), follow the **`weegloo-delivery-access-token`** skill. **Do not** use **Administrator** `SpaceRole`; prefer **read-only** roles for required `ContentType`s or **ask the user** to pick a role after **`cma_GetListSpaceRoles`**.
+
   - section: MCP Tool Usage
     items:
       - Always use the designated MCP tools for creating, reading, updating, or deleting resources.
@@ -49,11 +58,19 @@ rules:
       - For incremental updates of WebHosting, skip rebuilding the project if no other files besides `env.js` have changed.
       - Always verify that `index.html` remains at the root when re-uploading or updating WebHosting resources.
 
+  - section: WebHosting platform limits
+    items:
+      - **Applies only to Weegloo WebHosting** as the deploy target—not to apps self-hosted on other platforms.
+      - **Static sites only:** no SSR or app server on the host—ship a **pre-built** static export (see `weegloo-web-hosting-rules`).
+      - **Weegloo REST from a WebHosted site:** the **browser** must call Weegloo REST APIs such as **CDA** (**`fetch` / AJAX**); there is no server on Weegloo to do it per request. Elsewhere-hosted apps may use SSR or server-side clients as they choose.
+      - **At most 100 files** per deployment ZIP; prefer **web fonts** from CDNs (see `weegloo-web-hosting-rules`).
+
   - section: WebHosting runtime configuration (env.js)
     items:
-      - Per-site configuration for **market / template** web apps lives in **`./env.js`** at the export root: **`window.__ENV__ = { ... };`**. See `weegloo-web-hosting-rules` for the full checklist.
-      - **Delivery Access Token** for browser CDA clients may be stored in **`env.js`** as **`DELIVERY_ACCESS_TOKEN`** — it is **not** modeled as a “must-hide” secret for this product pattern; installers replace placeholders after copying the template to their Space.
-      - LLMs implementing frontends should wire the app to use **`window.__ENV__` only** for those runtime values (no `process.env` / `.env.local` fallback for the same keys unless the user explicitly asks for a different dev-only pattern).
+      - Per-site configuration for **market / template** web apps lives in **`./env.js`** at the export root: **`window.__ENV__ = { ... };`**. See `weegloo-web-hosting-rules` and the **weegloo-web-hosting** skill for the full checklist and **`.env` → `env.js` key mapping**.
+      - **Not the same as Next `.env.local`:** `NEXT_PUBLIC_*` variables apply at **build time** on the developer/CI machine. **Weegloo Hosting** serves **static files**; the browser never reads `.env.local`. Operators copy equivalent values into **`env.js`** (different key names — e.g. `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN` → **`DELIVERY_ACCESS_TOKEN`**).
+      - **Delivery Access Token** for browser CDA clients is stored in **`env.js`** as **`DELIVERY_ACCESS_TOKEN`** — it is **not** modeled as a “must-hide” secret for this product pattern; installers replace placeholders after copying the template to their Space.
+      - LLMs implementing frontends should read **`window.__ENV__` at runtime (hosted)** and may use **`process.env.NEXT_PUBLIC_*` as a fallback for local `next dev` / build**, documented per project. Prefer resolving these values in **functions used at fetch time**, not only once at module load.
 
   - section: Filter Parameters (API List Endpoints)
     items:
