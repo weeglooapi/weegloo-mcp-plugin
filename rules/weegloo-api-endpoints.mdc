@@ -4,7 +4,7 @@ type: rule
 title: Weegloo API Base URLs (for development code)
 description: >
   CMA, CDA, Upload, ACMA, ACDA base URLs, Swagger links, vendor JSON media type / Accept header rules,
-  and MCP vs direct API usage. Follow when calling Weegloo APIs from application code.
+  Media list mimeGroup query filters, and MCP vs direct API usage. Follow when calling Weegloo APIs from application code.
 ---
 
 rules:
@@ -65,7 +65,7 @@ rules:
       - **Weegloo WebHosting (static export):** the browser loads **`./env.js`**, which assigns **`window.__ENV__`**. Use **`DELIVERY_ACCESS_TOKEN`** there (same token role as `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`, different key name). Also set **`WEEGLOO_CDA_BASE_URL`**, **`WEEGLOO_SPACE_ID`**, **`WEEGLOO_LOCALE`** as strings. This is **not** a “hidden secret” in this pattern—installers swap values in `env.js` after copying a template.
       - **Mapping:** `NEXT_PUBLIC_WEEGLOO_CDA_BASE_URL` → `WEEGLOO_CDA_BASE_URL`; `NEXT_PUBLIC_WEEGLOO_SPACE_ID` → `WEEGLOO_SPACE_ID`; `NEXT_PUBLIC_WEEGLOO_LOCALE` → `WEEGLOO_LOCALE`; `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN` → **`DELIVERY_ACCESS_TOKEN`**.
       - Application code should read **`window.__ENV__` first** when present, then fall back to **`process.env.NEXT_PUBLIC_*`** for local dev (see `weegloo-web-hosting-rules`).
-      
+
   - section: CMA / ACMA document updates (PATCH, PUT)
     items:
       - For **ContentType**, **Content**, and **Media**, CMA and ACMA REST APIs support **partial updates** via **`PATCH`** using **[RFC 6902 JSON Patch](https://www.rfc-editor.org/rfc/rfc6902)** (array of `op` / `path` / `value` / `from` operations, JSON Pointer paths per RFC 6901).
@@ -73,6 +73,15 @@ rules:
       - **`PUT`** may still be used with the **full** resource body, or — where the OpenAPI contract allows — with a **partial** body containing only the fields or structure you intend to change.
       - Exact **`PATCH`** paths and whether a given **`PUT`** is full or partial replacement are defined per operation in **Swagger** (same host as CMA/ACMA, `/v1/swagger` and `/v1/swagger/v3/api-docs` — see **Swagger** section above).
       - Agent-oriented detail and usage notes live in the **`weegloo-cma-json-patch`** skill.
+
+  - section: CMA Media list — filter by `mimeGroups` (query parameter)
+    items:
+      - On **`GET .../spaces/{spaceId}/medias`**, filter to a **single media category** by adding a query parameter whose key includes the **locale** used for the **`fields.file`** bucket, e.g. **`fields.file.en-US.mimeGroups=Image`**.
+      - General shape: **`fields.file.{locale}.mimeGroups={MimeGroup}`** (same pattern for **video**, **audio**, etc.).
+      - Example path+query fragment: **`/medias?limit=20&order=-sys.createdAt&fields.file.en-US.mimeGroups=Image`** (prepend CMA base + `/v1/spaces/{spaceId}` for a full URL).
+      - Use the **correct locale code** for the space (often the **default locale** when listing assets for a single-locale UI).
+      - Allowed **`MimeGroup`** values (enum): **`Attachment`**, **`Plaintext`**, **`Image`**, **`Audio`**, **`Video`**, **`RichText`**, **`Presentation`**, **`Spreadsheet`**, **`PdfDocument`**, **`Archive`**, **`Code`**, **`Markup`**.
+      - After the first filtered request, continue pagination with **`links.next`** from the response body so filters stay consistent (**`weegloo-list-pagination`** skill).
 
   - section: Common Mistakes to Avoid
     items:
