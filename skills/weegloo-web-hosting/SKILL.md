@@ -155,3 +155,7 @@ window.__ENV__ = {
 ## Optional Actions
 
 - Parse `env.js` key/value pairs and pass them as `environments` when calling WebHosting update MCP tools, if the tool supports that mapping.
+
+## Related skills
+
+- **Browser admin login** (console popup, `postMessage`, `sessionStorage`, CMA `/me` + space membership): **`weegloo-web-hosting-fe-login`**.
