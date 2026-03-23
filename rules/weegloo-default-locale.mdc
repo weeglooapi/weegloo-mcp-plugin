@@ -1,0 +1,40 @@
+---
+id: weegloo-default-locale
+type: rule
+title: Weegloo default locale and per-field locale buckets
+description: >
+  Space default locale, localized vs localized-false ContentType fields, per-locale buckets, read fallback,
+  and write rules. Apply when defining ContentTypes, creating Content/Media, or locale-aware APIs.
+---
+
+rules:
+  - section: Default locale (space-level)
+    items:
+      - Every Weegloo **Space** defines exactly one **default locale** (among configured locales). It is not optional for content semantics.
+      - **Localized** (`localized: true`) **Content** and **Media** fields store values in **per-locale buckets** (e.g. `fields.someField["en-US"]`). Paths and API parameters that reference `fields.*` must include the **locale code** where the API requires it.
+
+  - section: Non-localized fields (`localized: false` on ContentType)
+    items:
+      - On **ContentType** definition, set **`localized: false`** for fields whose value is **the same for every locale** by design (stable IDs, codes, or a single global **Refer → Media** such as a profile thumbnail that does not vary by language).
+      - **`localized: false` means**: when creating or updating **Content**, that field accepts a value **only under the space default locale**—it is **not** a multi-locale map. You **cannot** persist values for that field under non-default locales.
+      - Do **not** use **`localized: true`** for such fields and then duplicate the identical value into every locale bucket; prefer **`localized: false`** and a single default-locale write. Field-level design details: **`weegloo-create-content-type`** skill.
+
+  - section: Read path and fallback (CDA / delivery)
+    items:
+      - For **`localized: true`** fields: when a client requests content for a **given locale**, if that locale has **no value**, the platform **falls back** to the **default locale** value for that field.
+      - **`localized: false`** fields have a single stored slot (default locale only); there is no per-locale map to fall back within the same field.
+      - Fallback is **read-time** behavior for **localized** fields; it does **not** remove the requirement to store a **default locale** value when **`localized: true`**.
+
+  - section: Write rules (mandatory)
+    items:
+      - For each localized field you intend to populate, the value for the **default locale** is **required**. The API / validation will not treat “only non-default locales filled” as a complete, valid state for that field.
+      - You **must not** plan workflows that set **only** non-default locale buckets while leaving the **default locale** empty for the same field—such writes are invalid or will fail validation.
+      - If the product needs **only one language** and does not care about separate locale-specific copy, store that single value **only in the default locale** bucket. Delivery for other requested locales will **reuse it via fallback** (see above).
+      - For **`localized: false`** fields, only the **default locale** slot exists for writes; there is nothing to “fallback” between locales on that field—still use **default locale** in CMA payloads.
+
+  - section: LLM operational summary
+    items:
+      - **Always** resolve which locale is the space **default** (e.g. CMA locales list, MCP, or app helpers such as `cmaResolveDefaultSpaceLocale`) before authoring multi-locale payloads.
+      - When mirroring a value into both **active** and **default** locale buckets in code, that pattern exists precisely to satisfy **“default locale must have a value”** (**`localized: true`**) while the user edits a non-default locale—do not drop the default bucket.
+      - Prefer **`localized: false`** on the **ContentType** for locale-agnostic fields (IDs, one global **Refer → Media** thumbnail) so Content writes use **default locale only** for that field—see **`weegloo-create-content-type`**.
+      - Deeper patterns and examples live in the **`weegloo-default-locale`** skill; **`weegloo-create-content-type`** covers **`localized`**, field types, and validations.

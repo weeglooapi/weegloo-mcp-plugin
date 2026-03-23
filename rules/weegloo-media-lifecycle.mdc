@@ -1,0 +1,48 @@
+---
+id: weegloo-media-lifecycle
+type: rule
+title: Weegloo Media — sys.status, file processing, and safe use from Content
+description: >
+  Media sys.status and fields.file locale state; automatic processing and transition to Published;
+  wait before referencing from Content; unpublish before delete. CMA/MCP and app code.
+---
+
+rules:
+  - section: Media `sys.status` (exactly one of)
+    items:
+      - **`Draft`**: Not published — **unpublished** editorial state.
+      - **`Changed`**: Was published; the asset has **local modifications** not yet reflected in the published view (republish workflow may apply per product/API).
+      - **`Published`**: Published and **no pending unpublished edits** relative to that published snapshot.
+      - **`Archived`**: Archived (treated as archived in the product lifecycle).
+
+  - section: Media `fields.file.{locale}.state` (per locale file)
+    items:
+      - **`null`** or the **`file` / locale bucket absent** for that aspect: **processing finished successfully** for that file representation (ready from the processor’s perspective).
+      - **`PENDING`**: Queued; the system has **not** started processing yet.
+      - **`PROCESSING`**: The system is **actively processing** the file.
+      - **`FAILED`**: Processing **errored**; do not treat the asset as deliverable until the failure is addressed.
+
+  - section: Create → automatic processing → `Published` (no mandatory manual Publish for the happy path)
+    items:
+      - After **Media** is **created**, the platform **automatically** runs the **processing pipeline** for **all** relevant **`file`** locale entries.
+      - When **processing completes successfully**, Weegloo **automatically** moves **`sys.status`** to **`Published`**—you **do not** rely on the author **calling a separate Publish API** just to reach **`Published`** after a normal create+process flow.
+      - **Before** attaching a **Refer → Media** from **Content** (or assuming CDA-safe delivery), **wait** until **`sys.status === Published`** (and confirm **`file.{locale}.state`** is not **`PENDING`**, **`PROCESSING`**, or **`FAILED`** for the locales you care about). Polling GET Media or equivalent is the usual pattern in app code (e.g. **`lib/weegloo/cma-media-upload.ts`**).
+      - **Do not** equate “safe to use” with “user clicked Publish”: for new uploads, **“wait until Published”** means **wait for the system** to finish processing and set status—**not** “always invoke **`cma_PublishOneMedia`** manually.” Manual publish may still exist for other transitions (e.g. **`Draft`** / **`Changed`** workflows); follow OpenAPI for those cases.
+
+  - section: Using Media from Content (summary)
+    items:
+      - **Requirement:** reference only when the Media is **deliverable** — typically **`sys.status`** is **`Published`** and file **`state`** indicates **completion** (see above).
+      - This is **not** a separate human step after every upload in the default pipeline; it is **readiness gating** (poll/wait).
+
+  - section: Delete order
+    items:
+      - **Unpublish** (or move out of a published state per API rules) **before** **delete** when the API requires it—do not assume delete replaces unpublish.
+      - **`Archived`** is a distinct lifecycle state; follow CMA/OpenAPI for whether delete is allowed from **`Archived`** vs requires another transition.
+
+  - section: LLM summary
+    items:
+      - **Statuses:** `Draft` | `Changed` | `Published` | `Archived` on **`sys.status`**.
+      - **File states:** `null`/missing = done; **`PENDING`** / **`PROCESSING`** / **`FAILED`** = not done or error.
+      - **After create:** system processes files → on success **`sys.status`** becomes **`Published`** automatically — **wait/poll**, don’t teach “always call Publish” as the default post-upload step.
+      - **Before Content references:** wait until **`Published`** + acceptable **`file.*.state`**.
+      - **Delete:** **Unpublish** (or required precursor) → **Delete** when the API demands it.
