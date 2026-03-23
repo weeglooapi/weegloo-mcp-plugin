@@ -1,6 +1,6 @@
 ---
 name: weegloo-create-content-type
-description: Creates a ContentType in Weegloo. Emphasizes ShortText vs LongText vs RichText by Weegloo/CDA search behavior (not literal “long”/“rich”), plus FieldValidation and soft guidance. English only.
+description: Creates a ContentType in Weegloo. Covers localized vs localized-false fields, ShortText vs LongText vs RichText (search semantics), FieldValidation, and soft guidance. English only.
 ---
 
 # Weegloo Create ContentType
@@ -8,6 +8,7 @@ description: Creates a ContentType in Weegloo. Emphasizes ShortText vs LongText 
 ## When to use
 
 - When creating a new `ContentType` in Weegloo (via MCP `cma_CreateContentType`, then publish).
+- When deciding **`localized: true` vs `false`** per field (and how that affects **Content** payloads).
 
 ## Why validations were often missing before
 
@@ -21,9 +22,32 @@ description: Creates a ContentType in Weegloo. Emphasizes ShortText vs LongText 
 ## Core workflow
 
 1. Before any `Content`, create the `ContentType`.
-2. **Assign `ShortText` / `LongText` / `RichText` using the search-semantics section below** — not by gut feel from the words “short”, “long”, or “rich”.
-3. **Design fields → add `validations` only where it clearly helps** (see soft guidance below + `FieldValidation` reference).
-4. Publish the `ContentType` (`cma_PublishOneContentType`) before creating `Content`.
+2. For **each field**, decide **`localized: true` vs `false`** (see **`localized` flag** section next)—before types and validations.
+3. **Assign `ShortText` / `LongText` / `RichText` using the search-semantics section below** — not by gut feel from the words “short”, “long”, or “rich”.
+4. **Design fields → add `validations` only where it clearly helps** (see soft guidance below + `FieldValidation` reference).
+5. Publish the `ContentType` (`cma_PublishOneContentType`) before creating `Content`.
+
+---
+
+## Per-field `localized` (ContentType) — affects Content creation
+
+This flag is part of the **ContentType** field definition. It tells Weegloo whether the field stores **one value per locale** or **a single space-wide value** (always authored under the **default locale** only).
+
+### When to use `localized: false`
+
+- The value is **logically identical in every locale**: stable **identifiers** (codes, UUID-like strings), or a **single global reference** that does not vary by language.
+- Typical examples: internal **`id`**-like ShortText shown the same everywhere; **one profile photo** (**Refer → Media**) shared across locales; a global **attachment** that is not translated.
+- **In this repo**, **`resumeProfile.profileImage`** is a good candidate for **`localized: false`**: one thumbnail, not per-locale artwork—today’s app still works with **`localized: true`**, but **`false`** avoids duplicating the same refer into every locale bucket.
+
+### Semantics for Content / Media writes
+
+- **`localized: false`**: when creating or updating entries, put the value **only in the default locale** key for that field. The API **does not** allow additional locale buckets for that field—**non-default locale values are rejected** (or invalid). This is stricter than “fallback”: there is simply **no** per-locale map for that field.
+- **`localized: true`**: per-locale buckets; the **default locale** value is **required** when the field is populated; other locales are optional overrides (read-time **fallback** to default when missing—see **`weegloo-default-locale`** rule/skill).
+
+### LLM checklist
+
+- Ask: *“Could this field ever legitimately differ between `en-US` and `ko-KR`?”* **No** → strongly consider **`localized: false`**.
+- Avoid **`localized: true`** + copying the **same** Media refer into every locale if **`localized: false`** fits—reduces payload size and authoring errors.
 
 ---
 
@@ -95,6 +119,21 @@ Combine constraints in **one** `validations[]` element when they share the same 
 
 ---
 
+## `in` — allow-list (console: **Accept only specified values**)
+
+For **enum-like** ShortText (including **empty string** as a permitted value), prefer **`in`** over **`regexp`**.
+
+**Example** — optional kind: empty, `employment`, or `activity`:
+
+```json
+{
+  "in": ["", "employment", "activity"],
+  "message": "Leave empty, or choose employment or activity."
+}
+```
+
+---
+
 ## When to consider validations (soft guidance)
 
 Fields support **`validations`**; the CMA accepts the kinds summarized in **`FieldValidation`** above (and the full OpenAPI schema). Use them when they **match the product**—not as a checklist of generic regexes.
@@ -157,6 +196,7 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 
 ## Important
 
+- **Locale model** (default locale, fallback, `localized: false` writes): **`weegloo-default-locale`** rule and skill.
 - A `ContentType` must be **published** before creating `Content`.
 - **Updates** are **full replacement** (`cma_UpdateOneContentType`): preserve **field `id`s** and send **all** fields when editing.
 - Stricter validations may break **existing** entries on next save — warn when migrating live data.
