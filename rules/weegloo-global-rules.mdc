@@ -15,7 +15,8 @@ rules:
 
   - section: DeliveryAccessToken and SpaceRole (security)
     items:
-      - When creating **`DeliveryAccessToken`** (`cma_CreateDeliveryAccessToken`), follow the **`weegloo-delivery-access-token`** skill. **Do not** use **Administrator** `SpaceRole`; prefer **read-only** roles for required `ContentType`s or **ask the user** to pick a role after **`cma_GetListSpaceRoles`**.
+      - Follow **`weegloo-delivery-access-token`**. **`cma_CreateDeliveryAccessToken.role.sys.id`** MUST be the **`sys.id`** of the **intended** least-privilege **`SpaceRole`** (e.g. the one created in the same flow for CDA read access, or a **`sys.id`** the user explicitly chose). **Forbidden:** the **first** item from **`cma_GetListSpaceRoles`**, **Administrator**, or switching to Administrator after **`WGL422001`** or any error.
+      - **Do not** use **Administrator** for browser-exposed tokens; use **read-only** roles scoped to the needed **`ContentType`s**, or **ask the user** to select **`sys.id`** after listing roles.
 
   - section: MCP Tool Usage
     items:

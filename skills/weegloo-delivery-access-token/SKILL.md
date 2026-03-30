@@ -1,6 +1,6 @@
 ---
 name: weegloo-delivery-access-token
-description: Create Weegloo DeliveryAccessToken (CDA) safely via CMA—least-privilege SpaceRole only; never Administrator; ask the user if the role cannot be created or chosen. Skill text in English only.
+description: Create Weegloo DeliveryAccessToken (CDA) via CMA—bind role.sys.id to the intended least-privilege SpaceRole only; never Administrator or first list item; handle WGL422001 without fallback. Skill text in English only.
 ---
 
 # Weegloo Delivery Access Token (CDA)
@@ -12,24 +12,53 @@ description: Create Weegloo DeliveryAccessToken (CDA) safely via CMA—least-pri
 
 ## Why this skill exists
 
-**`cma_CreateDeliveryAccessToken`** requires a **`role`** argument: a **`Refer`** to a **`SpaceRole`**. LLMs often pick the first role they find—frequently **Administrator**—which yields a **highly privileged** token. That is a **critical security flaw** for public or browser-exposed tokens.
+**`cma_CreateDeliveryAccessToken`** requires a **`role`**: a **`Refer`** to a **`SpaceRole`**. Agents often pass the **wrong** role—typically the **first** entry from **`cma_GetListSpaceRoles`** (**Administrator**)—or **replace** the intended least-privilege role after an error. Tokens used in browsers must be **least-privilege** only.
 
 ---
 
 ## Mandatory rules
 
-1. **Never** create a **`DeliveryAccessToken`** using the **Administrator** **`SpaceRole`** (or any role that grants **broad write/admin** access equivalent to running the Space as an admin). **No exceptions** for agent workflows—if the user insists, refuse and explain risk; they must create such a token themselves in the console if they truly intend it.
+1. **Never** create a **`DeliveryAccessToken`** using the **Administrator** **`SpaceRole`** (or any role with **broad write/admin** access). **No exceptions** in agent workflows; if the user insists, refuse and explain; they may use the console themselves.
 
-2. **Preferred path:** Create a **dedicated least-privilege `SpaceRole`** that grants **read** access **only** to the **`ContentType`(s)** the product actually needs for CDA, then reference that role in **`cma_CreateDeliveryAccessToken`**.
-   - Use CMA **`cma_CreateSpaceRole`**. For HTTP schema details (**`CreateSpaceRole`**, permission payloads), open **CMA Swagger UI** and **OpenAPI JSON** only via the **`weegloo-api-endpoints`** Cursor rule—do **not** duplicate URLs in this skill.
-   - Scope permissions to **minimum read** for those types; do **not** add create/update/delete unless the user clearly requires them (they usually do **not** for CDA-only sites).
+2. **Bind `role` to the intended `SpaceRole` by `sys.id`.** If you just created a read-only **`SpaceRole`** for CDA, **`cma_CreateDeliveryAccessToken`** MUST set **`role.sys.id`** to **that** role’s **`sys.id`** from the **`cma_CreateSpaceRole`** response (or from **`cma_GetOneSpaceRole`** for a user-approved role). **Do not** substitute another id from a fresh list; **do not** use Administrator.
 
-3. **If you cannot create a `SpaceRole`** (missing rights, policy, or tool failure): **do not guess.**
-   - Call **`cma_GetListSpaceRoles`** (and **`cma_GetOneSpaceRole`** if needed) to gather **`sys.id`**, **`name`**, and **`description`** (and any summary fields available).
-   - **Present the list to the user** and **ask which `SpaceRole` ID** to bind to the **`DeliveryAccessToken`**.
-   - **Stop** until the user answers with an explicit choice.
+3. **Preferred order:** **`cma_CreateSpaceRole`** (read-only for the **`ContentType`s** CDA needs) → copy **`sys.id`** from the response → **`cma_CreateDeliveryAccessToken`** with **`role`** referencing **only** that id. OpenAPI: **`weegloo-api-endpoints`** (do not duplicate URLs here).
 
-4. **Never** choose a **`SpaceRole`** silently. **No** “first role in the list”, **no** defaulting to Administrator, **no** inferred “probably Editor”. **Security-sensitive.**
+4. **Required `role` shape:**
+
+```json
+"role": {
+  "sys": {
+    "type": "Refer",
+    "id": "<SpaceRole_sys_id>",
+    "targetType": "SpaceRole"
+  }
+}
+```
+
+5. **If you cannot create a `SpaceRole`:** call **`cma_GetListSpaceRoles`**, show **non-Administrator** roles with **`name`** and **`sys.id`**, **require the user to choose `sys.id`**, then use **only** that id. **Do not** default to the first list item.
+
+6. **Never** pick a **`SpaceRole`** silently.
+
+---
+
+## Error `WGL422001` (cannot assign permission you do not own)
+
+If **`cma_CreateDeliveryAccessToken`** fails with an ownership / permission error while using the **correct** least-privilege **`SpaceRole`**:
+
+- **Do not** fall back to **Administrator**.
+- **Do:** explain; options include creating the token in the **Weegloo console** with the same **`SpaceRole`**, or using a CMA principal that may assign that role.
+
+Do **not** treat Administrator as an acceptable workaround for public **`env.js`** tokens.
+
+---
+
+## Suggested workflow
+
+1. Identify **published `ContentType`s** CDA must read.
+2. **`cma_CreateSpaceRole`** with read-only rules and a clear **`name`** (product-specific; chosen by the team).
+3. **`sys.id`** from the **create response** → pass into **`cma_CreateDeliveryAccessToken`** as **`role.sys.id`**.
+4. If step 3 fails with **`WGL422001`**: follow the section above—**no** Administrator fallback.
 
 ---
 
@@ -42,21 +71,12 @@ description: Create Weegloo DeliveryAccessToken (CDA) safely via CMA—least-pri
 | Create least-privilege role | `cma_CreateSpaceRole` |
 | Create token | `cma_CreateDeliveryAccessToken` |
 
-**`cma_CreateDeliveryAccessToken`**: requires **`spaceId`**, **`name`**, and **`role`** where **`role.sys`** is a **`Refer`** to the chosen **`SpaceRole`** (**`targetType`** must match the API schema, e.g. **`SpaceRole`**). Full schema: **`weegloo-api-endpoints`** → CMA Swagger / OpenAPI (**`CreateDeliveryAccessToken`**).
-
----
-
-## Suggested workflow
-
-1. From the product (or user), list which **published `ContentType`s** CDA must **read**.
-2. If permitted: **`cma_CreateSpaceRole`** with **read-only** (or minimal) permissions for **only** those types; name it clearly (e.g. `cda-read-resume-types`).
-3. **`cma_CreateDeliveryAccessToken`** with **`role`** → that new **`SpaceRole`**’s **`sys.id`**.
-4. If step 2 is not possible: show **`cma_GetListSpaceRoles`** results; **require explicit user selection** of **`SpaceRole` id** before **`cma_CreateDeliveryAccessToken`**.
-5. Remind the user: tokens used in **`env.js` / browsers** are **exposed**—least privilege is **mandatory**.
+Schema: **`weegloo-api-endpoints`** → CMA OpenAPI (**`CreateDeliveryAccessToken`**).
 
 ---
 
 ## Important
 
-- **Agents** must use **MCP** for CMA operations per project rules—do not hand-craft REST for token creation in the agent path unless the user is doing local dev outside MCP.
-- **Administrator**-backed delivery tokens can **read and mutate** everything that role allows—unacceptable for typical marketing/resume/market templates.
+- Use **MCP** for CMA per project rules where applicable.
+- **`env.js`** tokens are **public**—least privilege is mandatory.
+- Administrator-backed delivery tokens are **not** acceptable for typical **public, browser-exposed** CDA clients.

@@ -27,6 +27,7 @@ rules:
 
   - section: Write rules (mandatory)
     items:
+      - **Content create:** when **creating** Content, **every field** you include in the create payload must have a value under the **space default locale** (e.g. if default is **`en-US`**, each **`localized: true`** field must have an **`en-US`** entry; **`localized: false`** fields use only that default-locale slot). Do not submit creates that populate only non-default locales.
       - For each localized field you intend to populate, the value for the **default locale** is **required**. The API / validation will not treat “only non-default locales filled” as a complete, valid state for that field.
       - You **must not** plan workflows that set **only** non-default locale buckets while leaving the **default locale** empty for the same field—such writes are invalid or will fail validation.
       - If the product needs **only one language** and does not care about separate locale-specific copy, store that single value **only in the default locale** bucket. Delivery for other requested locales will **reuse it via fallback** (see above).

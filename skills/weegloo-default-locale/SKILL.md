@@ -1,13 +1,13 @@
 ---
 name: weegloo-default-locale
-description: Weegloo default locale, localized vs localized-false fields, per-locale buckets, read fallback, and mandatory default-locale writes. Use when creating ContentTypes, creating Content, or reviewing CMA/CDA locale usage.
+description: Weegloo default locale, localized vs localized-false fields, per-locale buckets, read fallback, and mandatory default-locale values on every field for Content create. Use when creating ContentTypes, creating Content, or reviewing CMA/CDA locale usage.
 ---
 
 # Weegloo — default locale and localized fields
 
 ## When to use
 
-- Creating or updating **Content** or **Media** with localized fields (CMA, MCP, or app code).
+- Creating or updating **Content** or **Media** with localized fields (CMA, MCP, or app code)—including **Content create** payloads where **every field** must include the **default locale** bucket.
 - Explaining why a value appears even when the “requested locale” was empty.
 - Designing **single-language** apps that still must write the **default locale** bucket.
 - Reviewing helpers that **duplicate** values into default + active locale (e.g. resume app create/merge).
@@ -20,6 +20,16 @@ description: Weegloo default locale, localized vs localized-false fields, per-lo
 3. On **read** (e.g. CDA with a `locale` query): for **`localized: true`** fields, if the requested locale has **no** entry, the API **falls back** to the **default locale’s** value when one exists.
 4. On **write** (**`localized: true`**): the **default locale** entry is **mandatory** when the field is populated. You cannot leave default empty and only set `fr-FR`, `ko-KR`, etc.
 5. **Single locale for the whole product** (**`localized: true`**): put the value **only under the default locale**; other requested locales still resolve via **fallback** (step 3).
+
+## Content creation: default locale on every field
+
+When **creating** **Content** (CMA / MCP), **each field** in the payload must include a value under the space **default locale**.
+
+- If the space default is **`en-US`**, then for **every** field you set, the **`en-US`** bucket must exist (e.g. **`fields.title["en-US"]`**, **`fields.body["en-US"]`**, … for **`localized: true`** fields). You cannot create a document that only fills **`ko-KR`** or **`fr-FR`** while leaving **`en-US`** empty for those fields.
+- **`localized: false`** fields still store **only** under the default locale in CMA—there is no separate “other locale” slot; the same **default-locale** rule applies as a **single** bucket.
+- This is **stricter than “populate default when you touch a field”** in the abstract: **create** is where editors and integrations most often miss the default bucket—validate or merge so **default locale is always written** for each field in the create body.
+
+**CDA note:** delivery reads **published** snapshots only; see **`weegloo-cda-publish`** skill and **`weegloo-api-endpoints`** rule (CDA publish section).
 
 ## `localized: false` on the ContentType (locale-agnostic fields)
 
@@ -52,3 +62,4 @@ The canonical source for “this field has content” remains **default locale +
 - **Rule (concise invariants):** `weegloo-default-locale` (`.cursor/rules/weegloo-default-locale.mdc`).
 - **ContentType field design (`localized`, types, validations):** `weegloo-create-content-type` skill.
 - **HTTP / Swagger:** `weegloo-api-endpoints` rule (locale in `fields.*` paths and query params).
+- **CDA shows published content only:** **`weegloo-cda-publish`** skill.
