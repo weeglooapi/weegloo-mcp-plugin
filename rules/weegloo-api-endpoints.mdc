@@ -4,6 +4,7 @@ type: rule
 title: Weegloo API Base URLs (for development code)
 description: >
   CMA, CDA, Upload, ACMA, ACDA base URLs, Swagger links, vendor JSON media type / Accept header rules,
+  CDA published-only semantics (create/update/unpublish/delete), Media list mimeGroup query filters,
   and MCP vs direct API usage. Follow when calling Weegloo APIs from application code.
 ---
 
@@ -49,6 +50,15 @@ rules:
       - CMA supports full CRUD; CDA is preferable for read-only use (cache-optimized).
       - Do not confuse CMA and CDA. Use CDA for read-only delivery; CMA for management operations.
 
+  - section: CDA — published snapshot only (vs CMA drafts)
+    items:
+      - **CDA** returns **only published** resources. Field values are the **published snapshot** at the time of publish—not necessarily the latest **draft** visible in CMA.
+      - **Appear on CDA:** **Create** the resource in **CMA** (or the console), then **Publish**. Until publish completes, the resource is **not** visible on **CDA**.
+      - **Refresh CDA after edits:** **Update** in **CMA**, then **Publish** again. CDA reflects changes **only after** that publish (subject to cache; see product docs for invalidation).
+      - **Unpublish** removes the resource from **CDA** (delivery) but does **not** delete it from **CMA**—it may remain as an unpublished draft. To **remove the resource entirely**, call the **Delete** API (or equivalent management operation) per **OpenAPI**, not “unpublish only.”
+      - **ACDA** follows the same **published-delivery** idea for app-managed spaces—confirm operation names in Swagger.
+      - Narrative and troubleshooting: **`weegloo-cda-publish`** skill.
+
   - section: ACMA / ACDA vs CMA / CDA (app-managed members)
     items:
       - Most web services only need **read** access, since content create/update/delete is managed in Weegloo Console. Use **CDA** or **ACDA** in that case.
@@ -65,6 +75,23 @@ rules:
       - **Weegloo WebHosting (static export):** the browser loads **`./env.js`**, which assigns **`window.__ENV__`**. Use **`DELIVERY_ACCESS_TOKEN`** there (same token role as `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`, different key name). Also set **`WEEGLOO_CDA_BASE_URL`**, **`WEEGLOO_SPACE_ID`**, **`WEEGLOO_LOCALE`** as strings. This is **not** a “hidden secret” in this pattern—installers swap values in `env.js` after copying a template.
       - **Mapping:** `NEXT_PUBLIC_WEEGLOO_CDA_BASE_URL` → `WEEGLOO_CDA_BASE_URL`; `NEXT_PUBLIC_WEEGLOO_SPACE_ID` → `WEEGLOO_SPACE_ID`; `NEXT_PUBLIC_WEEGLOO_LOCALE` → `WEEGLOO_LOCALE`; `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN` → **`DELIVERY_ACCESS_TOKEN`**.
       - Application code should read **`window.__ENV__` first** when present, then fall back to **`process.env.NEXT_PUBLIC_*`** for local dev (see `weegloo-web-hosting-rules`).
+
+  - section: CMA / ACMA document updates (PATCH, PUT)
+    items:
+      - For **ContentType**, **Content**, and **Media**, CMA and ACMA REST APIs support **partial updates** via **`PATCH`** using **[RFC 6902 JSON Patch](https://www.rfc-editor.org/rfc/rfc6902)** (array of `op` / `path` / `value` / `from` operations, JSON Pointer paths per RFC 6901).
+      - For those **`PATCH`** requests, the **`Content-Type`** request header **must** be **`application/json-patch+json`** (not plain `application/json`).
+      - **`PUT`** may still be used with the **full** resource body, or — where the OpenAPI contract allows — with a **partial** body containing only the fields or structure you intend to change.
+      - Exact **`PATCH`** paths and whether a given **`PUT`** is full or partial replacement are defined per operation in **Swagger** (same host as CMA/ACMA, `/v1/swagger` and `/v1/swagger/v3/api-docs` — see **Swagger** section above).
+      - Agent-oriented detail and usage notes live in the **`weegloo-cma-json-patch`** skill.
+
+  - section: CMA Media list — filter by `mimeGroups` (logical asset type)
+    items:
+      - On **`GET /v1/spaces/{spaceId}/medias`** (CMA), add a query parameter to keep only assets whose file falls into **one logical category**—e.g. **images**, **video**, **audio**, **PDFs**, **archives**, **code**—instead of listing all Media and filtering in the client.
+      - **Parameter shape:** **`fields.file.{locale}.mimeGroups={MimeGroup}`**. The **`{locale}`** segment must match the locale key of the **`fields.file`** map for that space (example: **`fields.file.en-US.mimeGroups=Image`**).
+      - **Full URL example (fragment):** **`/v1/spaces/{spaceId}/medias?limit=20&order=-sys.createdAt&fields.file.en-US.mimeGroups=Image`** — prepend the **CMA** base URL from this rule.
+      - Pick the **locale** your app uses for **`fields.file`** (often the space **default locale** for a single-locale UI).
+      - **Allowed `MimeGroup` enum values** (use the identifier exactly): **`Attachment`**, **`Plaintext`**, **`Image`**, **`Audio`**, **`Video`**, **`RichText`**, **`Presentation`**, **`Spreadsheet`**, **`PdfDocument`**, **`Archive`**, **`Code`**, **`Markup`**.
+      - For **pagination**, send **`mimeGroups`** on the **first** request, then follow **`links.next`** so the same filter applies on every page (**`weegloo-list-pagination`** skill).
 
   - section: Common Mistakes to Avoid
     items:
