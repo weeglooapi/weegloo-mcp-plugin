@@ -4,7 +4,8 @@ type: rule
 title: Weegloo API Base URLs (for development code)
 description: >
   CMA, CDA, Upload, ACMA, ACDA base URLs, Swagger links, vendor JSON media type / Accept header rules,
-  Media list mimeGroup query filters, and MCP vs direct API usage. Follow when calling Weegloo APIs from application code.
+  CDA published-only semantics (create/update/unpublish/delete), Media list mimeGroup query filters,
+  and MCP vs direct API usage. Follow when calling Weegloo APIs from application code.
 ---
 
 rules:
@@ -48,6 +49,15 @@ rules:
       - Most web services only need **read** access when content is managed in Weegloo Console. Use **CDA** in that case.
       - CMA supports full CRUD; CDA is preferable for read-only use (cache-optimized).
       - Do not confuse CMA and CDA. Use CDA for read-only delivery; CMA for management operations.
+
+  - section: CDA — published snapshot only (vs CMA drafts)
+    items:
+      - **CDA** returns **only published** resources. Field values are the **published snapshot** at the time of publish—not necessarily the latest **draft** visible in CMA.
+      - **Appear on CDA:** **Create** the resource in **CMA** (or the console), then **Publish**. Until publish completes, the resource is **not** visible on **CDA**.
+      - **Refresh CDA after edits:** **Update** in **CMA**, then **Publish** again. CDA reflects changes **only after** that publish (subject to cache; see product docs for invalidation).
+      - **Unpublish** removes the resource from **CDA** (delivery) but does **not** delete it from **CMA**—it may remain as an unpublished draft. To **remove the resource entirely**, call the **Delete** API (or equivalent management operation) per **OpenAPI**, not “unpublish only.”
+      - **ACDA** follows the same **published-delivery** idea for app-managed spaces—confirm operation names in Swagger.
+      - Narrative and troubleshooting: **`weegloo-cda-publish`** skill.
 
   - section: ACMA / ACDA vs CMA / CDA (app-managed members)
     items:
