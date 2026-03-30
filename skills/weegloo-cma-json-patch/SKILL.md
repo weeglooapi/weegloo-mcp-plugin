@@ -1,6 +1,6 @@
 ---
 name: weegloo-cma-json-patch
-description: Weegloo CMA/ACMA partial updates — HTTP PATCH with RFC 6902 JSON Patch for ContentType, Content, and Media; PUT full or contract-based partial bodies. Use when implementing or reasoning about document updates.
+description: Weegloo CMA/ACMA updates — prefer HTTP PATCH with RFC 6902 JSON Patch over PUT for smaller payloads; PUT full or contract-based partial bodies when appropriate. Use when implementing or reasoning about document updates.
 ---
 
 # Weegloo CMA / ACMA — JSON Patch and document updates
@@ -9,6 +9,13 @@ description: Weegloo CMA/ACMA partial updates — HTTP PATCH with RFC 6902 JSON 
 
 - When updating **ContentType**, **Content**, or **Media** over **CMA** or **ACMA** REST APIs (application code or design — agents still prefer **MCP tools** where applicable).
 - When choosing between **full replacement** and **partial** updates.
+
+## Prefer `PATCH` over `PUT` for updates
+
+**Both** **`PUT`** and **`PATCH`** are valid for updates on these APIs. **Default to `PATCH`** with **JSON Patch** whenever the change can be expressed that way.
+
+- **Why:** you send **only the operations** that mutate the document (add/remove/replace/…), so request bodies stay **small** and you avoid **re-serializing** a full resource when a few paths changed—**better for network use** and **payload size** than a typical **`PUT`**.
+- **When `PUT` is appropriate:** replacing the **entire** representation, or when the **OpenAPI contract** for that operation clearly expects a **full** (or contract-specific) body and **`PATCH`** is not the better fit.
 
 ## PATCH and [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902)
 
@@ -25,7 +32,7 @@ description: Weegloo CMA/ACMA partial updates — HTTP PATCH with RFC 6902 JSON 
 - **`PUT`** remains valid for updates.
 - You may send the **full** resource value (typical “replace the representation” style).
 - Alternatively, **`PUT`** may accept a **partial** payload when the **API contract** for that endpoint allows it — send **only the parts you intend to change**, as documented in Swagger for that operation.
-- Prefer **PATCH + JSON Patch** when you want a **sequence of explicit operations** (add/remove/replace/…) without shipping the entire document.
+- For **small or localized edits**, still **prefer `PATCH` + JSON Patch** (see **Prefer `PATCH` over `PUT`**) so the client sends **explicit operations** rather than a larger **`PUT`** body when **`PATCH`** can express the same change.
 
 ## Practical notes
 
