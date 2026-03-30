@@ -37,7 +37,7 @@ Values are typically **relative** paths starting with **`/v1/...`** (not absolut
 2. **Read** `items` (and optionally `totalCount`) from the JSON body.
 3. **Next page:** if **`links.next`** is present, issue **GET** to  
    **`{apiBase}{links.next}`**  
-   where **`apiBase`** is the **same host** you used for the first call (e.g. CMA `https://dev-cma.weegloo.com`, CDA, Upload—**never** mix hosts).
+   where **`apiBase`** is the **same host** you used for the first call (e.g. CMA `https://cma.weegloo.com`, CDA, Upload—**never** mix hosts).
 4. **Repeat** until **`links.next`** is **absent** / `undefined` / empty.
 5. **Previous page:** same pattern with **`links.prev`** when building a “back” UI.
 6. **Do not** re-parse `links.self` for forward progress unless you are **refreshing** the current page; prefer **`links.next`** for “load more”.
