@@ -1,6 +1,6 @@
 ---
 name: weegloo-api-query-optimization
-description: Weegloo list APIs — projection with select (include/exclude, object paths), list-as-single via sys.id, and batch fetch with sys.id[in]. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call.
+description: Weegloo list APIs — projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call.
 ---
 
 # Weegloo — query optimization for list APIs
@@ -10,6 +10,7 @@ description: Weegloo list APIs — projection with select (include/exclude, obje
 - Designing or reviewing **HTTP** calls to Weegloo **list** endpoints (CMA, CDA, or other documented list APIs) where **payload size**, **latency**, or **request count** matter.
 - Combining **`select`** with **`include`** (reference expansion) so expanded linked resources do not bloat the response.
 - Replacing **one GET-by-id** when you only need a **subset of fields**, or replacing **many GET-by-id** calls with **one filtered list**.
+- Loading **`sys.id`** and **`sys.version`** before **`PATCH`** or **`PUT`** without paying for a full **single-resource GET** on each id.
 
 Base URLs and Swagger: **`weegloo-api-endpoints`** (do not duplicate `api-docs` links here).
 
@@ -99,7 +100,33 @@ Combine with **`select`** from section 1 when you do not need full documents.
 
 ---
 
+## 4. `sys.version` before `PATCH` or `PUT`
+
+Updates on **CMA** / **ACMA** (and similar) usually require the **current** **`sys.version`** so the server can enforce **optimistic concurrency** (e.g. via **`X-Weegloo-Version`** or the contract in OpenAPI—see **`weegloo-cma-json-patch`**). You only need **`sys.id`** and **`sys.version`** in the read phase; you do **not** need the **dedicated single-resource GET** for that.
+
+**Prefer the list endpoint** with a **tight `select`:**
+
+| Goal | Suggested query (illustrative) |
+|------|--------------------------------|
+| **One** resource | **`?sys.id={resourceId}&select=sys.id,sys.version`** |
+| **Several** resources (bulk follow-up patches) | **`?sys.id[in]=1,2,3,4,5&select=sys.id,sys.version`** |
+
+This matches the patterns in **§2** and **§3**: list + filter + projection. Response **`items`** give you each id with its **current version** in a **small** payload—**fewer round trips** and **less data** than **`N`** full **GET-by-id** responses.
+
+Filter syntax (**`sys.id`**, **`sys.id[in]`**, delimiters) is defined per API in **OpenAPI**.
+
+---
+
+## 5. Media list: filter by logical type (`mimeGroups`)
+
+On **CMA** **`GET .../spaces/{spaceId}/medias`**, add **`fields.file.{locale}.mimeGroups={MimeGroup}`** so the API returns only assets in that **category** (e.g. **`Image`**, **`Video`**, **`Audio`**, **`Code`**)—smaller **`items`** than an unfiltered list. Use the same **`{locale}`** you use for **`fields.file`** (often the space default locale).
+
+**Allowed `MimeGroup` values** and full URL examples: **`weegloo-api-endpoints`** rule → *CMA Media list — filter by `mimeGroups`*.
+
+---
+
 ## Related
 
 - **Endpoints and headers:** **`weegloo-api-endpoints`** rule.
 - **Pagination:** **`weegloo-list-pagination`** skill (`links.next`, first-page params).
+- **PATCH/PUT, JSON Patch, version headers:** **`weegloo-cma-json-patch`** skill.

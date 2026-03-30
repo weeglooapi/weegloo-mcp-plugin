@@ -74,14 +74,14 @@ rules:
       - Exact **`PATCH`** paths and whether a given **`PUT`** is full or partial replacement are defined per operation in **Swagger** (same host as CMA/ACMA, `/v1/swagger` and `/v1/swagger/v3/api-docs` — see **Swagger** section above).
       - Agent-oriented detail and usage notes live in the **`weegloo-cma-json-patch`** skill.
 
-  - section: CMA Media list — filter by `mimeGroups` (query parameter)
+  - section: CMA Media list — filter by `mimeGroups` (logical asset type)
     items:
-      - On **`GET .../spaces/{spaceId}/medias`**, filter to a **single media category** by adding a query parameter whose key includes the **locale** used for the **`fields.file`** bucket, e.g. **`fields.file.en-US.mimeGroups=Image`**.
-      - General shape: **`fields.file.{locale}.mimeGroups={MimeGroup}`** (same pattern for **video**, **audio**, etc.).
-      - Example path+query fragment: **`/medias?limit=20&order=-sys.createdAt&fields.file.en-US.mimeGroups=Image`** (prepend CMA base + `/v1/spaces/{spaceId}` for a full URL).
-      - Use the **correct locale code** for the space (often the **default locale** when listing assets for a single-locale UI).
-      - Allowed **`MimeGroup`** values (enum): **`Attachment`**, **`Plaintext`**, **`Image`**, **`Audio`**, **`Video`**, **`RichText`**, **`Presentation`**, **`Spreadsheet`**, **`PdfDocument`**, **`Archive`**, **`Code`**, **`Markup`**.
-      - After the first filtered request, continue pagination with **`links.next`** from the response body so filters stay consistent (**`weegloo-list-pagination`** skill).
+      - On **`GET /v1/spaces/{spaceId}/medias`** (CMA), add a query parameter to keep only assets whose file falls into **one logical category**—e.g. **images**, **video**, **audio**, **PDFs**, **archives**, **code**—instead of listing all Media and filtering in the client.
+      - **Parameter shape:** **`fields.file.{locale}.mimeGroups={MimeGroup}`**. The **`{locale}`** segment must match the locale key of the **`fields.file`** map for that space (example: **`fields.file.en-US.mimeGroups=Image`**).
+      - **Full URL example (fragment):** **`/v1/spaces/{spaceId}/medias?limit=20&order=-sys.createdAt&fields.file.en-US.mimeGroups=Image`** — prepend the **CMA** base URL from this rule.
+      - Pick the **locale** your app uses for **`fields.file`** (often the space **default locale** for a single-locale UI).
+      - **Allowed `MimeGroup` enum values** (use the identifier exactly): **`Attachment`**, **`Plaintext`**, **`Image`**, **`Audio`**, **`Video`**, **`RichText`**, **`Presentation`**, **`Spreadsheet`**, **`PdfDocument`**, **`Archive`**, **`Code`**, **`Markup`**.
+      - For **pagination**, send **`mimeGroups`** on the **first** request, then follow **`links.next`** so the same filter applies on every page (**`weegloo-list-pagination`** skill).
 
   - section: Common Mistakes to Avoid
     items:
