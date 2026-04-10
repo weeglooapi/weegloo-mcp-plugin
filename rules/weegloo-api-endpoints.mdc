@@ -3,7 +3,7 @@ id: weegloo-api-endpoints
 type: rule
 title: Weegloo API Base URLs (for development code)
 description: >
-  CMA, CDA, Upload, ACMA, ACDA base URLs, Swagger links, vendor JSON media type / Accept header rules,
+  CMA, CDA, Upload, ACMA, ACDA base URLs, API-Docs links, vendor JSON media type / Accept header rules,
   CDA published-only semantics (create/update/unpublish/delete), Media list mimeGroup query filters,
   and MCP vs direct API usage. Follow when calling Weegloo APIs from application code.
 ---
@@ -33,16 +33,16 @@ rules:
       - **If** you must set `Accept`, use the same vendor type as the API: **`application/vnd.com.weegloo.v1+json;charset=UTF-8`** (exactly—with charset as the service expects).
       - When implementing wrappers (axios instances, shared `fetch` helpers), ensure defaults do **not** force `Accept: application/json`. Strip or override client-wide JSON defaults for Weegloo hosts.
 
-  - section: Swagger (OpenAPI) documentation per API
+  - section: API documentation (OpenAPI) per API
     items:
-      - **Canonical URLs only here.** Do **not** paste Swagger UI or **`/v1/swagger/v3/api-docs`** links into other `.cursor` rules or skills—reference **this section** so hosts and paths stay maintainable.
-      - **Swagger UI** (human browsing; use the host that matches your environment—`*` below vs production when applicable):
-      - **CMA**: `https://cma.weegloo.com/v1/swagger`
-      - **CDA**: `https://cda.weegloo.com/v1/swagger`
-      - **Upload**: `https://upload.weegloo.com/v1/swagger`
-      - **ACMA**: `https://acma.weegloo.com/v1/swagger`
-      - **ACDA**: `https://acda.weegloo.com/v1/swagger`
-      - **OpenAPI JSON** per API: same host as that API’s CMA/CDA/… base, path **`/v1/swagger/v3/api-docs`** (e.g. CMA schema: `https://cma.weegloo.com/v1/swagger/v3/api-docs`). Use it for **`FieldValidation`**, **`CreateSpaceRole`**, **`CreateDeliveryAccessToken`**, **`CreateContentType`**, etc.
+      - **Canonical URLs only here.** Do **not** paste duplicate **`docs.weegloo.com/api-docs/...`** links into other `.cursor` rules or skills—reference **this section** so paths stay maintainable.
+      - **API docs** (OpenAPI / operations—human browsing):
+      - **CMA**: `https://docs.weegloo.com/api-docs/cma`
+      - **CDA**: `https://docs.weegloo.com/api-docs/cda`
+      - **Upload**: `https://docs.weegloo.com/api-docs/upload`
+      - **ACMA**: `https://docs.weegloo.com/api-docs/acma`
+      - **ACDA**: `https://docs.weegloo.com/api-docs/acda`
+      - Use these for **`FieldValidation`**, **`CreateSpaceRole`**, **`CreateDeliveryAccessToken`**, **`CreateContentType`**, **`PATCH`** paths, query parameters, and any operation-level detail.
 
   - section: CMA vs CDA selection (standard Weegloo member model)
     items:
@@ -56,7 +56,7 @@ rules:
       - **Appear on CDA:** **Create** the resource in **CMA** (or the console), then **Publish**. Until publish completes, the resource is **not** visible on **CDA**.
       - **Refresh CDA after edits:** **Update** in **CMA**, then **Publish** again. CDA reflects changes **only after** that publish (subject to cache; see product docs for invalidation).
       - **Unpublish** removes the resource from **CDA** (delivery) but does **not** delete it from **CMA**—it may remain as an unpublished draft. To **remove the resource entirely**, call the **Delete** API (or equivalent management operation) per **OpenAPI**, not “unpublish only.”
-      - **ACDA** follows the same **published-delivery** idea for app-managed spaces—confirm operation names in Swagger.
+      - **ACDA** follows the same **published-delivery** idea for app-managed spaces—confirm operation names in **API docs** (see **API documentation** section above).
       - Narrative and troubleshooting: **`weegloo-cda-publish`** skill.
 
   - section: ACMA / ACDA vs CMA / CDA (app-managed members)
@@ -64,12 +64,12 @@ rules:
       - Most web services only need **read** access, since content create/update/delete is managed in Weegloo Console. Use **CDA** or **ACDA** in that case.
       - CMA/ACMA supports read, create, update, and delete, but CDA is preferable for read-only use due to its cache-based design.
       - Do not confuse CMA/ACMA and CDA/ACDA. Use CDA/ACDA for read-only, CMA/ACMA for management operations.
-      - When the product uses **app-owned member management** (not the default Weegloo member flow), **do not use CMA/CDA** for those features—use **ACMA** and **ACDA** as documented in Swagger and product docs.
+      - When the product uses **app-owned member management** (not the default Weegloo member flow), **do not use CMA/CDA** for those features—use **ACMA** and **ACDA** as documented in **API docs** and product docs.
       - **ACMA** replaces **CMA** for that integration style; **ACDA** replaces **CDA** for the corresponding delivery/read usage.
 
   - section: CDA requirements (Delivery Access Token)
     items:
-      - CDA requires a **Delivery Access Token** (and ACDA its equivalent when using that API—follow Swagger and env conventions for the project).
+      - CDA requires a **Delivery Access Token** (and ACDA its equivalent when using that API—follow **API docs** and env conventions for the project).
       - When **creating** a `DeliveryAccessToken` via CMA (`cma_CreateDeliveryAccessToken`), follow the **`weegloo-delivery-access-token`** skill: **never** bind **Administrator** `SpaceRole`; prefer a **read-only** role for required `ContentType`s only, or **ask the user** to pick a role after listing `SpaceRole`s.
       - **Local Next.js development:** use **`.env.local`** with **`NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`** (and other `NEXT_PUBLIC_WEEGLOO_*` vars) — see `.env.example`.
       - **Weegloo WebHosting (static export):** the browser loads **`./env.js`**, which assigns **`window.__ENV__`**. Use **`DELIVERY_ACCESS_TOKEN`** there (same token role as `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`, different key name). Also set **`WEEGLOO_CDA_BASE_URL`**, **`WEEGLOO_SPACE_ID`**, **`WEEGLOO_LOCALE`** as strings. This is **not** a “hidden secret” in this pattern—installers swap values in `env.js` after copying a template.
@@ -81,7 +81,7 @@ rules:
       - For **ContentType**, **Content**, and **Media**, CMA and ACMA REST APIs support **partial updates** via **`PATCH`** using **[RFC 6902 JSON Patch](https://www.rfc-editor.org/rfc/rfc6902)** (array of `op` / `path` / `value` / `from` operations, JSON Pointer paths per RFC 6901).
       - For those **`PATCH`** requests, the **`Content-Type`** request header **must** be **`application/json-patch+json`** (not plain `application/json`).
       - **`PUT`** may still be used with the **full** resource body, or — where the OpenAPI contract allows — with a **partial** body containing only the fields or structure you intend to change.
-      - Exact **`PATCH`** paths and whether a given **`PUT`** is full or partial replacement are defined per operation in **Swagger** (same host as CMA/ACMA, `/v1/swagger` and `/v1/swagger/v3/api-docs` — see **Swagger** section above).
+      - Exact **`PATCH`** paths and whether a given **`PUT`** is full or partial replacement are defined per operation in **OpenAPI** on **CMA** / **ACMA**—see **API documentation** section above (`https://docs.weegloo.com/api-docs/cma` or `https://docs.weegloo.com/api-docs/acma`).
       - Agent-oriented detail and usage notes live in the **`weegloo-cma-json-patch`** skill.
 
   - section: CMA Media list — filter by `mimeGroups` (logical asset type)

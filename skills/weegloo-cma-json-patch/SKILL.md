@@ -25,7 +25,7 @@ description: Weegloo CMA/ACMA updates — prefer HTTP PATCH with RFC 6902 JSON P
   - Body is a **JSON array** of operations.
   - Each operation has an **`op`**: `add`, `remove`, `replace`, `move`, `copy`, or `test`.
   - **`path`** (and **`from`** where required) use **JSON Pointer** ([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901)).
-- Confirm the **`PATCH`** URL and any extra headers (e.g. version) per resource in **OpenAPI** (Swagger URLs live only in **`weegloo-api-endpoints`** — do not duplicate `api-docs` links here).
+- Confirm the **`PATCH`** URL and any extra headers (e.g. version) per resource in **OpenAPI** (canonical API doc URLs live only in **`weegloo-api-endpoints`** — do not duplicate them here).
 
 ## PUT — full document or partial by contract
 

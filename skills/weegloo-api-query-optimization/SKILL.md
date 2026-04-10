@@ -12,7 +12,7 @@ description: Weegloo list APIs — projection with select (include/exclude, obje
 - Replacing **one GET-by-id** when you only need a **subset of fields**, or replacing **many GET-by-id** calls with **one filtered list**.
 - Loading **`sys.id`** and **`sys.version`** before **`PATCH`** or **`PUT`** without paying for a full **single-resource GET** on each id.
 
-Base URLs and Swagger: **`weegloo-api-endpoints`** (do not duplicate `api-docs` links here).
+Base URLs and API documentation: **`weegloo-api-endpoints`** (do not duplicate doc links here).
 
 ---
 
