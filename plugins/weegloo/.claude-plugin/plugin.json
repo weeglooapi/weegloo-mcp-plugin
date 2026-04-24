@@ -1,0 +1,13 @@
+{
+  "name": "weegloo",
+  "description": "Weegloo integration for Claude Code: MCP servers (CMA, upload, WebHosting) and companion skills.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Weegloo",
+    "email": "support@weegloo.com",
+    "url": "https://weegloo.com"
+  },
+  "homepage": "https://github.com/weeglooapi/weegloo-mcp-plugin",
+  "license": "MIT",
+  "keywords": ["weegloo", "mcp", "cms", "cda", "cma", "web-hosting", "skills"]
+}

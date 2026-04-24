@@ -3,7 +3,13 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
-import { downloadFile, getPluginRef, fetchMcpConfig, SKILL_FILES } from './github.js';
+import {
+  downloadFile,
+  getPluginRef,
+  fetchMcpConfig,
+  SKILL_FILES,
+  PLUGIN_PACKAGE_ROOT,
+} from './github.js';
 
 const CURSOR_HOME = path.join(os.homedir(), '.cursor');
 const CURSOR_MCP_PATH = path.join(CURSOR_HOME, 'mcp.json');
@@ -85,7 +91,7 @@ export async function installCursor({ token, pluginRef, mcpGroup, skills, rules,
         skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
         const destDir = path.join(skillsDir, skill);
         for (const file of SKILL_FILES) {
-          await downloadFile(ref, `skills/${skill}/${file}`, path.join(destDir, file));
+          await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/skills/${skill}/${file}`, path.join(destDir, file));
         }
       }
       skillsSpinner.succeed(
@@ -108,7 +114,7 @@ export async function installCursor({ token, pluginRef, mcpGroup, skills, rules,
       for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
         rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-        await downloadFile(ref, `rules/${rule}.mdc`, path.join(rulesDir, `${rule}.mdc`));
+        await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/rules/${rule}.mdc`, path.join(rulesDir, `${rule}.mdc`));
       }
       rulesSpinner.succeed(
         `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesDir}`)}`

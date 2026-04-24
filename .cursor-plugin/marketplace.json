@@ -1,0 +1,21 @@
+{
+  "name": "weegloo-plugins",
+  "owner": {
+    "name": "Weegloo",
+    "email": "support@weegloo.com"
+  },
+  "metadata": {
+    "description": "Weegloo Cursor plugins: MCP, rules, and skills for Weegloo CMA/CDA and WebHosting."
+  },
+  "plugins": [
+    {
+      "name": "weegloo",
+      "source": "plugins/weegloo",
+      "description": "Weegloo MCP (entity CRUD, WebHosting), rules, and skills for Weegloo workflows.",
+      "homepage": "https://github.com/weeglooapi/weegloo-mcp-plugin",
+      "repository": "https://github.com/weeglooapi/weegloo-mcp-plugin",
+      "license": "MIT",
+      "keywords": ["weegloo", "mcp", "cms", "cda", "cma", "web-hosting", "skills", "rules"]
+    }
+  ]
+}

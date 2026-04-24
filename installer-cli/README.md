@@ -23,7 +23,7 @@ Skills and Rules files are downloaded in real time from the GitHub branch or tag
 |---|---|---|
 | `npx weegloo@latest` | `"latest"` | branch `latest` |
 | `npx weegloo@beta` | `"beta"` | branch `beta` |
-| `npx weegloo@0.1.0` | `"v0.1.0"` | tag `v0.1.0` |
+| `npx weegloo@1.0.0` | `"v1.0.0"` | tag `v1.0.0` |
 
 To fetch from a specific branch directly:
 

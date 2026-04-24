@@ -3,7 +3,13 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
-import { downloadFile, getPluginRef, fetchMcpConfig, SKILL_FILES } from './github.js';
+import {
+  downloadFile,
+  getPluginRef,
+  fetchMcpConfig,
+  SKILL_FILES,
+  PLUGIN_PACKAGE_ROOT,
+} from './github.js';
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -83,7 +89,7 @@ export async function installClaude({ token, pluginRef, mcpGroup, skills, rules,
         skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
         const destDir = path.join(skillsDir, skill);
         for (const file of SKILL_FILES) {
-          await downloadFile(ref, `skills/${skill}/${file}`, path.join(destDir, file));
+          await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/skills/${skill}/${file}`, path.join(destDir, file));
         }
       }
       skillsSpinner.succeed(
@@ -106,7 +112,7 @@ export async function installClaude({ token, pluginRef, mcpGroup, skills, rules,
       for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
         rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-        await downloadFile(ref, `rules/${rule}.mdc`, path.join(rulesDir, `${rule}.md`));
+        await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/rules/${rule}.mdc`, path.join(rulesDir, `${rule}.md`));
       }
       rulesSpinner.succeed(
         `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesDir}`)}`
@@ -118,17 +124,25 @@ export async function installClaude({ token, pluginRef, mcpGroup, skills, rules,
 
   // ── Next steps ──────────────────────────────────────────────
   console.log();
-  console.log(chalk.dim('  💡 To activate the Claude Code plugin, run:'));
+  console.log(chalk.dim('  💡 Claude Code: add marketplace, then install the plugin:'));
   console.log();
+  console.log(
+    '     ' +
+    chalk.cyan('claude plugin marketplace add') +
+    ' ' +
+    chalk.white('https://github.com/weeglooapi/weegloo-mcp-plugin')
+  );
+  console.log(
+    '     ' + chalk.cyan('claude plugin install') + ' ' + chalk.white('weegloo@weegloo-plugins')
+  );
+  console.log();
+  console.log(chalk.dim('  Or MCP-only from a local clone (plugin root):'));
+  console.log();
+  console.log('     ' + chalk.cyan('git clone https://github.com/weeglooapi/weegloo-mcp-plugin.git'));
   console.log(
     '     ' +
     chalk.cyan('claude mcp add-from-claude-plugin') +
     ' ' +
-    chalk.white('https://github.com/weeglooapi/weegloo-mcp-plugin')
+    chalk.white('./weegloo-mcp-plugin/plugins/weegloo')
   );
-  console.log();
-  console.log(chalk.dim('  Or clone locally first:'));
-  console.log();
-  console.log('     ' + chalk.cyan('git clone https://github.com/weeglooapi/weegloo-mcp-plugin.git'));
-  console.log('     ' + chalk.cyan('claude mcp add-from-claude-plugin ./weegloo-mcp-plugin'));
 }

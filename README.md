@@ -2,6 +2,8 @@
 
 This repository contains the configuration needed to integrate Weegloo with Cursor IDE and Claude Code. The plugin enables your agents to interact directly with your Weegloo, allowing you to view, create, update, and delete resources, as well as perform nearly all actions available in the console—entirely through natural language.
 
+**One plugin bundle** (`plugins/weegloo/`) is shared by both ecosystems: `skills/`, `rules/`, and `mcp.json` live only there. Claude reads `plugins/weegloo/.claude-plugin/plugin.json`; Cursor reads `plugins/weegloo/.cursor-plugin/plugin.json`. Each marketplace catalog at the repo root only lists that path (see [Cursor multi-plugin repos](https://cursor.com/docs/reference/plugins.md#multi-plugin-repositories) and [Claude marketplaces](https://code.claude.com/docs/ko/plugin-marketplaces)).
+
 ## Features
 
 The Weegloo MCP server provides the following capabilities:
@@ -23,23 +25,23 @@ Choose the installation method for your IDE:
 
 ### Claude Code
 
-If you're using Claude Code CLI, you can install this as a plugin:
+This repository is a [plugin marketplace](https://code.claude.com/docs/ko/plugin-marketplaces): add the marketplace, then install the `weegloo` plugin (MCP + skills ship inside `plugins/weegloo/`).
 
 ```bash
-claude mcp add-from-claude-plugin /path/to/weegloo-mcp-plugin
+claude plugin marketplace add https://github.com/weeglooapi/weegloo-mcp-plugin
+claude plugin install weegloo@weegloo-plugins
 ```
 
-Or clone the repo and install locally:
+For MCP only from a local clone, point at the plugin root (not the repo root):
 
 ```bash
 git clone https://github.com/weeglooapi/weegloo-mcp-plugin.git
-cd weegloo-mcp-plugin
-claude mcp add-from-claude-plugin .
+claude mcp add-from-claude-plugin ./weegloo-mcp-plugin/plugins/weegloo
 ```
 
 The Weegloo MCP server will be automatically configured when the plugin loads.
 
-The Claude plugin uses the following MCP configuration (`.mcp.json`):
+The plugin’s MCP configuration lives at `plugins/weegloo/.mcp.json` (repo root `.mcp.json` matches it for Cursor and other tools):
 
 ```json
 {
@@ -64,7 +66,9 @@ After completing the plugin setup, you must replace the `AUTH_BEARER_TOKEN` envi
 
 ### Cursor
 
-Follow these steps to manually configure the Weegloo MCP server in Cursor:
+**Cursor plugin (rules, skills, MCP):** the installable unit is `plugins/weegloo/`, per [Cursor Plugins](https://cursor.com/docs/plugins). This repo includes `.cursor-plugin/marketplace.json` at the root for team marketplaces or multi-plugin layouts. To try the plugin locally before publishing, symlink the bundle as [documented](https://cursor.com/docs/plugins#test-plugins-locally) (example: `weegloo` → `…/weegloo-mcp-plugin/plugins/weegloo`), then reload the window.
+
+**Manual MCP only:** follow these steps if you want MCP in settings without installing the plugin bundle:
 
 #### Step 1: Open Cursor Settings
 

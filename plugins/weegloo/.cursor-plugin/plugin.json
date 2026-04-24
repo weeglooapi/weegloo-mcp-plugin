@@ -1,0 +1,23 @@
+{
+  "name": "weegloo",
+  "displayName": "Weegloo",
+  "version": "0.1.0",
+  "description": "Weegloo MCP server and companion rules/skills. Create and manage content, WebHosting, and more through natural language.",
+  "author": {
+    "name": "Weegloo",
+    "email": "support@weegloo.com"
+  },
+  "homepage": "https://weegloo.com",
+  "repository": "https://github.com/weeglooapi/weegloo-mcp-plugin",
+  "license": "MIT",
+  "keywords": [
+    "weegloo",
+    "mcp",
+    "cms",
+    "cda",
+    "cma",
+    "web-hosting",
+    "skills",
+    "rules"
+  ]
+}

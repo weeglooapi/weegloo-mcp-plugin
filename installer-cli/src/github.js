@@ -14,6 +14,9 @@ const GITHUB_API_CONTENTS = `https://api.github.com/repos/${REPO}/contents`;
 
 export const SKILL_FILES = ['SKILL.md', 'metadata.json'];
 
+/** Plugin package root within this repo (Claude marketplace layout). */
+export const PLUGIN_PACKAGE_ROOT = 'plugins/weegloo';
+
 /**
  * Fetches branch names from the plugin GitHub repo (public API, no auth).
  * @returns {Promise<string[]>} Branch names, or [] on error.
@@ -65,9 +68,11 @@ const DEFAULT_UPLOAD_API_URL = 'https://upload.weegloo.com/v1';
  * @returns {Promise<{ weeglooUrl: string, uploadApiUrl: string }>} URLs from branch, or defaults
  */
 export async function fetchMcpConfig(ref) {
-  const url = `${RAW_BASE}/${ref}/.mcp.json`;
+  const primary = `${RAW_BASE}/${ref}/${PLUGIN_PACKAGE_ROOT}/.mcp.json`;
+  const legacy = `${RAW_BASE}/${ref}/.mcp.json`;
   try {
-    const res = await fetch(url);
+    let res = await fetch(primary);
+    if (!res.ok) res = await fetch(legacy);
     if (!res.ok) return { weeglooUrl: DEFAULT_MCP_URL, uploadApiUrl: DEFAULT_UPLOAD_API_URL };
     const data = await res.json();
     const servers = data?.mcpServers ?? {};
@@ -89,18 +94,20 @@ export const DEFAULT_SKILL_IDS = ['weegloo-create-content-type', 'weegloo-web-ho
 export const DEFAULT_RULE_IDS = ['weegloo-global-rules', 'weegloo-web-hosting-rules'];
 
 /**
- * Fetches the list of skills (dirs under skills/) and rules (.mdc files under rules/) for the given ref.
+ * Fetches the list of skills and rules from the plugin package directory for the given ref.
  * All resources are taken from the selected branch.
  * @param {string} ref Branch or tag name
  * @returns {Promise<{ skills: string[], rules: string[] }>} Lists from branch, or defaults on error
  */
 export async function fetchResourceLists(ref) {
   try {
+    const skillsPath = `${PLUGIN_PACKAGE_ROOT}/skills`;
+    const rulesPath = `${PLUGIN_PACKAGE_ROOT}/rules`;
     const [skillsRes, rulesRes] = await Promise.all([
-      fetch(`${GITHUB_API_CONTENTS}/skills?ref=${encodeURIComponent(ref)}`, {
+      fetch(`${GITHUB_API_CONTENTS}/${skillsPath}?ref=${encodeURIComponent(ref)}`, {
         headers: { Accept: 'application/vnd.github.v3+json' },
       }),
-      fetch(`${GITHUB_API_CONTENTS}/rules?ref=${encodeURIComponent(ref)}`, {
+      fetch(`${GITHUB_API_CONTENTS}/${rulesPath}?ref=${encodeURIComponent(ref)}`, {
         headers: { Accept: 'application/vnd.github.v3+json' },
       }),
     ]);
