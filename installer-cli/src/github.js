@@ -14,8 +14,37 @@ const GITHUB_API_CONTENTS = `https://api.github.com/repos/${REPO}/contents`;
 
 export const SKILL_FILES = ['SKILL.md', 'metadata.json'];
 
-/** Plugin package root within this repo (Claude marketplace layout). */
+/** Plugin package root within this repo (Claude / Cursor marketplace layout). */
 export const PLUGIN_PACKAGE_ROOT = 'plugins/weegloo';
+
+/**
+ * @param {string} repoContentPrefix  '' = legacy repo-root skills/rules; else e.g. {@link PLUGIN_PACKAGE_ROOT}
+ * @param {string} relativePath  path under repo root, e.g. skills/foo/SKILL.md
+ */
+export function repoContentPath(repoContentPrefix, relativePath) {
+  const rel = String(relativePath).replace(/^\/+/, '');
+  if (!repoContentPrefix) return rel;
+  return `${repoContentPrefix.replace(/\/+$/, '')}/${rel}`;
+}
+
+/**
+ * @param {string} ref
+ * @param {string} contentsApiPath  path under /contents/ (no leading slash)
+ * @returns {Promise<object[] | null>}
+ */
+async function fetchContentsJson(ref, contentsApiPath) {
+  const res = await fetch(
+    `${GITHUB_API_CONTENTS}/${contentsApiPath}?ref=${encodeURIComponent(ref)}`,
+    { headers: { Accept: 'application/vnd.github.v3+json' } }
+  );
+  if (!res.ok) return null;
+  try {
+    const data = await res.json();
+    return Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Fetches branch names from the plugin GitHub repo (public API, no auth).
@@ -45,7 +74,7 @@ export async function fetchBranches() {
  * Convention mapping npm dist-tags to GitHub branches/tags:
  *   npx weegloo@latest  →  pluginRef: "latest"  → GitHub branch: latest
  *   npx weegloo@beta    →  pluginRef: "beta"    → GitHub branch: beta
- *   npx weegloo@0.1.0   →  pluginRef: "v0.1.0"  → GitHub tag:   v0.1.0
+ *   npx weegloo@1.0.0   →  pluginRef: "v1.0.0"  → GitHub tag:   v1.0.0
  */
 export function getPluginRef() {
   const argIdx = process.argv.indexOf('--ref');
@@ -94,45 +123,65 @@ export const DEFAULT_SKILL_IDS = ['weegloo-create-content-type', 'weegloo-web-ho
 export const DEFAULT_RULE_IDS = ['weegloo-global-rules', 'weegloo-web-hosting-rules'];
 
 /**
- * Fetches the list of skills and rules from the plugin package directory for the given ref.
- * All resources are taken from the selected branch.
+ * Lists skill directory names from a GitHub contents path.
+ * @param {string} ref
+ * @param {string} skillsContentsPath  e.g. plugins/weegloo/skills or skills
+ */
+async function listSkillIdsFromContents(ref, skillsContentsPath) {
+  const data = await fetchContentsJson(ref, skillsContentsPath);
+  if (!data) return [];
+  return data
+    .filter((e) => e.type === 'dir')
+    .map((e) => e.name)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Lists rule base names (without .mdc) from a GitHub contents path.
+ * @param {string} ref
+ * @param {string} rulesContentsPath  e.g. plugins/weegloo/rules or rules
+ */
+async function listRuleIdsFromContents(ref, rulesContentsPath) {
+  const data = await fetchContentsJson(ref, rulesContentsPath);
+  if (!data) return [];
+  return data
+    .filter((e) => e.type === 'file' && e.name.endsWith('.mdc'))
+    .map((e) => e.name.replace(/\.mdc$/, ''))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Fetches skill/rule ids and which repo layout the ref uses (nested plugin vs legacy repo root).
  * @param {string} ref Branch or tag name
- * @returns {Promise<{ skills: string[], rules: string[] }>} Lists from branch, or defaults on error
+ * @returns {Promise<{ skills: string[], rules: string[], repoContentPrefix: string }>}
  */
 export async function fetchResourceLists(ref) {
   try {
-    const skillsPath = `${PLUGIN_PACKAGE_ROOT}/skills`;
-    const rulesPath = `${PLUGIN_PACKAGE_ROOT}/rules`;
-    const [skillsRes, rulesRes] = await Promise.all([
-      fetch(`${GITHUB_API_CONTENTS}/${skillsPath}?ref=${encodeURIComponent(ref)}`, {
-        headers: { Accept: 'application/vnd.github.v3+json' },
-      }),
-      fetch(`${GITHUB_API_CONTENTS}/${rulesPath}?ref=${encodeURIComponent(ref)}`, {
-        headers: { Accept: 'application/vnd.github.v3+json' },
-      }),
-    ]);
-    let skills = DEFAULT_SKILL_IDS;
-    let rules = DEFAULT_RULE_IDS;
-    if (skillsRes.ok) {
-      const data = await skillsRes.json();
-      if (Array.isArray(data)) {
-        const list = data.filter((e) => e.type === 'dir').map((e) => e.name).filter(Boolean);
-        if (list.length > 0) skills = list.sort((a, b) => a.localeCompare(b));
-      }
+    const nestedSkills = await listSkillIdsFromContents(ref, `${PLUGIN_PACKAGE_ROOT}/skills`);
+    if (nestedSkills.length > 0) {
+      const nestedRules = await listRuleIdsFromContents(ref, `${PLUGIN_PACKAGE_ROOT}/rules`);
+      return {
+        skills: nestedSkills,
+        rules: nestedRules.length > 0 ? nestedRules : DEFAULT_RULE_IDS,
+        repoContentPrefix: PLUGIN_PACKAGE_ROOT,
+      };
     }
-    if (rulesRes.ok) {
-      const data = await rulesRes.json();
-      if (Array.isArray(data)) {
-        const list = data
-          .filter((e) => e.type === 'file' && e.name.endsWith('.mdc'))
-          .map((e) => e.name.replace(/\.mdc$/, ''))
-          .filter(Boolean);
-        if (list.length > 0) rules = list.sort((a, b) => a.localeCompare(b));
-      }
-    }
-    return { skills, rules };
+
+    const legacySkills = await listSkillIdsFromContents(ref, 'skills');
+    const legacyRules = await listRuleIdsFromContents(ref, 'rules');
+    return {
+      skills: legacySkills.length > 0 ? legacySkills : DEFAULT_SKILL_IDS,
+      rules: legacyRules.length > 0 ? legacyRules : DEFAULT_RULE_IDS,
+      repoContentPrefix: '',
+    };
   } catch {
-    return { skills: DEFAULT_SKILL_IDS, rules: DEFAULT_RULE_IDS };
+    return {
+      skills: DEFAULT_SKILL_IDS,
+      rules: DEFAULT_RULE_IDS,
+      repoContentPrefix: '',
+    };
   }
 }
 

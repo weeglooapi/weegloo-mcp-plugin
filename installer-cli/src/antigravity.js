@@ -8,7 +8,7 @@ import {
   getPluginRef,
   fetchMcpConfig,
   SKILL_FILES,
-  PLUGIN_PACKAGE_ROOT,
+  repoContentPath,
 } from './github.js';
 
 const ANTIGRAVITY_HOME = path.join(os.homedir(), '.gemini', 'antigravity');
@@ -52,7 +52,17 @@ function appendToGeminiMd(ruleName, content) {
   fs.appendFileSync(GEMINI_MD_PATH, section, 'utf-8');
 }
 
-export async function installAntigravity({ token, pluginRef, mcpGroup, skills, rules, scope, installMcp, installSkillsRules }) {
+export async function installAntigravity({
+  token,
+  pluginRef,
+  mcpGroup,
+  skills,
+  rules,
+  repoContentPrefix = '',
+  scope,
+  installMcp,
+  installSkillsRules,
+}) {
   const ref = pluginRef ?? getPluginRef();
   const skillsDir = scope === 'global'
     ? path.join(ANTIGRAVITY_HOME, 'skills')
@@ -107,7 +117,11 @@ export async function installAntigravity({ token, pluginRef, mcpGroup, skills, r
         skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
         const destDir = path.join(skillsDir, skill);
         for (const file of SKILL_FILES) {
-          await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/skills/${skill}/${file}`, path.join(destDir, file));
+          await downloadFile(
+            ref,
+            repoContentPath(repoContentPrefix, `skills/${skill}/${file}`),
+            path.join(destDir, file)
+          );
         }
       }
       skillsSpinner.succeed(
@@ -133,7 +147,7 @@ export async function installAntigravity({ token, pluginRef, mcpGroup, skills, r
           const rule = rules[i];
           rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
           const tmpPath = path.join(os.tmpdir(), `weegloo-${rule}.md`);
-          await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/rules/${rule}.mdc`, tmpPath);
+          await downloadFile(ref, repoContentPath(repoContentPrefix, `rules/${rule}.mdc`), tmpPath);
           const content = fs.readFileSync(tmpPath, 'utf-8');
           appendToGeminiMd(rule, content);
         }
@@ -147,7 +161,11 @@ export async function installAntigravity({ token, pluginRef, mcpGroup, skills, r
         for (let i = 0; i < rules.length; i++) {
           const rule = rules[i];
           rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-          await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/rules/${rule}.mdc`, path.join(rulesDir, `${rule}.md`));
+          await downloadFile(
+            ref,
+            repoContentPath(repoContentPrefix, `rules/${rule}.mdc`),
+            path.join(rulesDir, `${rule}.md`)
+          );
         }
         rulesSpinner.succeed(
           `  Rules installed    ${chalk.dim(`(${rules.length})  → ${path.join(process.cwd(), '.agent', 'rules')}`)}`

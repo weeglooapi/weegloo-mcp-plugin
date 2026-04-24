@@ -132,6 +132,8 @@ async function main() {
   let scope = 'project';
   let skills = [];
   let rules = [];
+  /** '' = legacy repo root; 'plugins/weegloo' = nested marketplace layout */
+  let repoContentPrefix = '';
 
   if (installMcp) {
     token = await password({
@@ -172,7 +174,9 @@ async function main() {
     });
 
     const resourceSpinner = ora({ text: '  Fetching skills and rules from branch...', indent: 0 }).start();
-    const { skills: skillIds, rules: ruleIds } = await fetchResourceLists(pluginRef);
+    const { skills: skillIds, rules: ruleIds, repoContentPrefix: layoutPrefix } =
+      await fetchResourceLists(pluginRef);
+    repoContentPrefix = layoutPrefix;
     resourceSpinner.stop();
 
     const skillChoices = skillIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
@@ -197,6 +201,7 @@ async function main() {
     mcpGroup,
     skills,
     rules,
+    repoContentPrefix,
     scope,
     installMcp,
     installSkillsRules,

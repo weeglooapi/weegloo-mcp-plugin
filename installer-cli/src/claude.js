@@ -8,7 +8,7 @@ import {
   getPluginRef,
   fetchMcpConfig,
   SKILL_FILES,
-  PLUGIN_PACKAGE_ROOT,
+  repoContentPath,
 } from './github.js';
 
 function ensureDir(dirPath) {
@@ -32,7 +32,17 @@ function buildMcpUrlWithGroup(baseUrl, group) {
   return `${baseUrl}${sep}group=${encodeURIComponent(group)}`;
 }
 
-export async function installClaude({ token, pluginRef, mcpGroup, skills, rules, scope, installMcp, installSkillsRules }) {
+export async function installClaude({
+  token,
+  pluginRef,
+  mcpGroup,
+  skills,
+  rules,
+  repoContentPrefix = '',
+  scope,
+  installMcp,
+  installSkillsRules,
+}) {
   const ref = pluginRef ?? getPluginRef();
   const claudeHome = path.join(os.homedir(), '.claude');
   const baseDir = scope === 'global' ? claudeHome : path.join(process.cwd(), '.claude');
@@ -89,7 +99,11 @@ export async function installClaude({ token, pluginRef, mcpGroup, skills, rules,
         skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
         const destDir = path.join(skillsDir, skill);
         for (const file of SKILL_FILES) {
-          await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/skills/${skill}/${file}`, path.join(destDir, file));
+          await downloadFile(
+            ref,
+            repoContentPath(repoContentPrefix, `skills/${skill}/${file}`),
+            path.join(destDir, file)
+          );
         }
       }
       skillsSpinner.succeed(
@@ -112,7 +126,11 @@ export async function installClaude({ token, pluginRef, mcpGroup, skills, rules,
       for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
         rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-        await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/rules/${rule}.mdc`, path.join(rulesDir, `${rule}.md`));
+        await downloadFile(
+          ref,
+          repoContentPath(repoContentPrefix, `rules/${rule}.mdc`),
+          path.join(rulesDir, `${rule}.md`)
+        );
       }
       rulesSpinner.succeed(
         `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesDir}`)}`

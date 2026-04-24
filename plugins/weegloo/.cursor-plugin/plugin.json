@@ -1,7 +1,7 @@
 {
   "name": "weegloo",
   "displayName": "Weegloo",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Weegloo MCP server and companion rules/skills. Create and manage content, WebHosting, and more through natural language.",
   "author": {
     "name": "Weegloo",

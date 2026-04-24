@@ -8,7 +8,7 @@ import {
   getPluginRef,
   fetchMcpConfig,
   SKILL_FILES,
-  PLUGIN_PACKAGE_ROOT,
+  repoContentPath,
 } from './github.js';
 
 const CURSOR_HOME = path.join(os.homedir(), '.cursor');
@@ -35,7 +35,17 @@ function buildMcpUrlWithGroup(baseUrl, group) {
   return `${baseUrl}${sep}group=${encodeURIComponent(group)}`;
 }
 
-export async function installCursor({ token, pluginRef, mcpGroup, skills, rules, scope, installMcp, installSkillsRules }) {
+export async function installCursor({
+  token,
+  pluginRef,
+  mcpGroup,
+  skills,
+  rules,
+  repoContentPrefix = '',
+  scope,
+  installMcp,
+  installSkillsRules,
+}) {
   const ref = pluginRef ?? getPluginRef();
   const baseDir = scope === 'global' ? CURSOR_HOME : path.join(process.cwd(), '.cursor');
   const skillsDir = path.join(baseDir, 'skills');
@@ -91,7 +101,11 @@ export async function installCursor({ token, pluginRef, mcpGroup, skills, rules,
         skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
         const destDir = path.join(skillsDir, skill);
         for (const file of SKILL_FILES) {
-          await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/skills/${skill}/${file}`, path.join(destDir, file));
+          await downloadFile(
+            ref,
+            repoContentPath(repoContentPrefix, `skills/${skill}/${file}`),
+            path.join(destDir, file)
+          );
         }
       }
       skillsSpinner.succeed(
@@ -114,7 +128,11 @@ export async function installCursor({ token, pluginRef, mcpGroup, skills, rules,
       for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
         rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-        await downloadFile(ref, `${PLUGIN_PACKAGE_ROOT}/rules/${rule}.mdc`, path.join(rulesDir, `${rule}.mdc`));
+        await downloadFile(
+          ref,
+          repoContentPath(repoContentPrefix, `rules/${rule}.mdc`),
+          path.join(rulesDir, `${rule}.mdc`)
+        );
       }
       rulesSpinner.succeed(
         `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesDir}`)}`
