@@ -225,7 +225,7 @@ async function main() {
     console.log();
   }
   console.log(
-    '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/#ai-mcp/mcp-overview')
+    '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/ai/tools/mcp')
   );
   console.log();
 }
