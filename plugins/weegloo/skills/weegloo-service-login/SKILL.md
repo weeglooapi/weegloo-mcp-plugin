@@ -34,6 +34,8 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 4. The product stores the token (typically in browser storage for static sites; see **`weegloo-web-hosting-fe-login`** for storage and origin-check patterns — the same browser security rules apply to this token).
 5. The product calls **ACMA** / **ACDA** with **`Authorization: Bearer <token>`**.
 
+**Implementation:** the wire protocol on `auth.weegloo.com` (login redirect, `exchangeToken` POST exchange, refresh, logout), the official **`weegloo-service-user`** npm SDK, and the browser-specific gotchas (entry URL vs Google redirect URI, GET-with-body limitation, `exchangeToken` URL stripping) live in the **`weegloo-service-login-sdk`** skill. Use that skill — and the SDK — instead of re-deriving the protocol when wiring a browser app.
+
 ## Token capability — ACMA / ACDA only
 
 A Bearer Token issued by ServiceLogin **may only** be used with:
@@ -106,6 +108,7 @@ When wiring ServiceLogin for a product:
 
 ## Related
 
+- **Wire protocol + official browser SDK (`weegloo-service-user`):** **`weegloo-service-login-sdk`** skill.
 - **Base URLs / Accept header / API docs:** **`weegloo-api-endpoints`** rule.
 - **Picking the API combo per service type:** **`weegloo-service-architecture`** skill.
 - **Weegloo console login for admin (CMA) on a static site:** **`weegloo-web-hosting-fe-login`** skill.

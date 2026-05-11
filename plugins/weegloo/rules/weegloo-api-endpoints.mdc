@@ -3,11 +3,12 @@ id: weegloo-api-endpoints
 type: rule
 title: Weegloo API Base URLs (for development code)
 description: >
-  CMA, CDA, Upload, ACMA, ACDA base URLs, API-Docs links, vendor JSON media type / Accept header rules,
-  CDA published-only semantics (create/update/unpublish/delete), Media list mimeGroup query filters,
-  ServiceLogin Bearer Token scope (ACMA/ACDA only), ACMA ownership + `isAdmin`, ACDA per-member
-  read scope with `ServiceUser.roleOverride`, service-type → API selection pointer, and MCP vs
-  direct API usage. Follow when calling Weegloo APIs from application code.
+  CMA, CDA, Upload, ACMA, ACDA, and Auth (auth.weegloo.com — ServiceLogin OAuth) base URLs,
+  API-Docs links, vendor JSON media type / Accept header rules, CDA published-only semantics
+  (create/update/unpublish/delete), Media list mimeGroup query filters, ServiceLogin Bearer
+  Token scope (ACMA/ACDA only), ACMA ownership + `isAdmin`, ACDA per-member read scope with
+  `ServiceUser.roleOverride`, service-type → API selection pointer, and MCP vs direct API
+  usage. Follow when calling Weegloo APIs from application code.
 ---
 
 rules:
@@ -25,6 +26,7 @@ rules:
       - **Upload**: File uploads. Base URL: `https://upload.weegloo.com`
       - **ACMA** (App Content Management API): Use when the app uses **its own member management** instead of Weegloo’s default model. In that case use **ACMA instead of CMA** for the relevant operations. Base URL: `https://acma.weegloo.com`
       - **ACDA** (App Content Delivery API): Same scenario—**app-managed members**. Use **ACDA instead of CDA** for delivery/read paths that map to that model. Base URL: `https://acda.weegloo.com`
+      - **Auth** (ServiceLogin OAuth): Sign-in entry, token exchange, refresh, and logout for app-managed members (`ServiceUser`). Base URL: `https://auth.weegloo.com`. **Endpoint mechanics, exact paths, request/response shapes, and the official browser SDK live in the `weegloo-service-login-sdk` skill** — do not re-derive them ad hoc.
       - API paths typically use `/v1/...`, e.g. `https://cda.weegloo.com/v1` for CDA.
 
   - section: Accept header and JSON media type (mandatory for HTTP clients)
@@ -141,3 +143,4 @@ rules:
       - Upload: `https://upload.weegloo.com`
       - ACMA: `https://acma.weegloo.com`
       - ACDA: `https://acda.weegloo.com`
+      - Auth (ServiceLogin OAuth): `https://auth.weegloo.com` — see **`weegloo-service-login-sdk`** skill for endpoint paths and the official browser SDK
