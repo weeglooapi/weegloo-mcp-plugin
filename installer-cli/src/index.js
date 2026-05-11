@@ -6,6 +6,8 @@ import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
 
+const PAT_GENERATION_URL = 'https://console.weegloo.com/account/profile/personal-access-tokens';
+
 const MCP_GROUP_CHOICES = [
   {
     name: `${chalk.bold('default')}   ${chalk.dim('Basic tool set (recommended)')}`,
@@ -136,6 +138,10 @@ async function main() {
   let repoContentPrefix = '';
 
   if (installMcp) {
+    console.log(
+      chalk.dim('  Generate one at: ') +
+      chalk.cyan(PAT_GENERATION_URL)
+    );
     token = await password({
       message: 'Enter your Weegloo Personal Access Token:',
       mask: '*',
@@ -145,7 +151,7 @@ async function main() {
       console.log(chalk.red('  ✖  Personal Access Token is required for MCP server.'));
       console.log(
         chalk.dim('     Generate one from the Weegloo console: ') +
-        chalk.cyan('https://console.weegloo.com')
+        chalk.cyan(PAT_GENERATION_URL)
       );
       console.log();
       process.exit(1);
