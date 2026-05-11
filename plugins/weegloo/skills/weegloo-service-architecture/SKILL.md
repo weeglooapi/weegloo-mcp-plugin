@@ -36,7 +36,7 @@ Pick the row that matches the product. Each recipe lists the **client-side** API
 > "Marketing site, public blog index, public catalog — every visitor sees the same content."
 
 - **Client reads:** **CDA**.
-- **Token:** one **DeliveryAccessToken** bound to a **least-privilege `SpaceRole`** for the relevant published `ContentType`s. Ship it in `env.js` (`DELIVERY_ACCESS_TOKEN`).
+- **Token:** one **DeliveryAccessToken** bound to a **least-privilege `SpaceRole`** for the relevant published `ContentType`s. Expose it to the browser per your build or client config (e.g. `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`); document the pattern in the project README.
 - **Writes:** done in the **Weegloo console** by the team — **no** client-side write path.
 - **ServiceLogin:** **not required**.
 

@@ -3,7 +3,7 @@ id: weegloo-web-hosting-rules
 type: rule
 title: Weegloo WebHosting Rules
 description: >
-  WebHosting deployment and updates via MCP: static-only (no SSR), max 100 files per ZIP, env.js,
+  WebHosting deployment and updates via MCP: static-only (no SSR), max 100 files per ZIP,
   packaging, and MCP-only deploy constraints.
 ---
 
@@ -20,26 +20,12 @@ rules:
   - section: Build Output Requirements
     items:
       - The web project must be built using `index.html` as the entry point.
-      - The `env.js` file must remain as a separate file and must not be bundled, transformed, or compressed.
 
-  - section: Next.js `.env` vs Weegloo `env.js` (LLM mental model)
+  - section: Static export and configuration (LLM mental model)
     items:
-      - **`.env.local` / `.env.example` / `NEXT_PUBLIC_*`** are for **developer machines and CI at build time**. Next injects `NEXT_PUBLIC_*` into the client bundle when you run `next build`. They are **not** files the end user’s browser reads on Weegloo Hosting.
-      - **Weegloo WebHosting** serves a **static ZIP** (e.g. Next `output: 'export'` → `out/`). There is **no Node process** reading `.env` per request. **Runtime** configuration for the browser must live in **`./env.js`**, which sets **`window.__ENV__`** and is loaded with a **synchronous** `<script>` **before** the app bundle.
-      - **Implement apps** so the browser reads **`window.__ENV__` first**, then falls back to **`process.env.NEXT_PUBLIC_*`** for local dev. Prefer **functions** that resolve config **when issuing fetches** (not only at module import time), so `env.js` always runs first.
-      - **Name mapping (typical Weegloo CDA apps):** `NEXT_PUBLIC_WEEGLOO_CDA_BASE_URL` → `WEEGLOO_CDA_BASE_URL`; `NEXT_PUBLIC_WEEGLOO_SPACE_ID` → `WEEGLOO_SPACE_ID`; `NEXT_PUBLIC_WEEGLOO_LOCALE` → `WEEGLOO_LOCALE`; `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN` → **`DELIVERY_ACCESS_TOKEN`**. Document this table in **`.env.example`** and/or README so operators know what to copy into `env.js`.
-      - **One build, many installs:** If every Space used only inlined `NEXT_PUBLIC_*`, you would need a **separate build per Space**. Using **`env.js`** lets the **same** static assets work for different Spaces when operators only change **`env.js`** (or WebHosting `environments`).
-
-  - section: Runtime env.js (LLM checklist)
-    items:
-      - Path on the hosted site must be **`./env.js`** (same directory as `index.html` in the ZIP / export root). The HTML must load it with a **synchronous** script early in `<head>` (e.g. `<script src="/env.js"></script>` or `<script src="./env.js"></script>`) **before** application bundles so `window.__ENV__` exists when the app runs.
-      - Required JavaScript shape (plain script, no modules): **`window.__ENV__ = { "KEY": "value", ... };`** with **string** values only.
-      - **Market / template apps:** Users install from a **service template** into their own Space, then **replace values in `env.js`**. On the **hosted** site, the app must obtain those values from **`window.__ENV__`** at runtime — not from `.env.local` (which does not exist in the browser).
-      - **Build-time pitfall:** Copying a **template** `public/env.js` to `out/env.js` without filling values ships **placeholders** and CDA fails. Mitigations: (1) operators edit **`out/env.js`** (or hosted `env.js`) before/after upload with real values; (2) a **post-build script** generates `out/env.js` from `.env.local` / CI env vars before zipping.
-      - **Weegloo Delivery Access Token** is **not treated as a secret** for this class of app; it **must** appear in `env.js` under **`DELIVERY_ACCESS_TOKEN`** (alongside Space-scoped settings). It is normal for the committed template to include placeholder strings (e.g. `YOUR_DELIVERY_ACCESS_TOKEN`) that installers replace.
-      - **Keys in `window.__ENV__` are unrestricted** (no Weegloo whitelist). Skill **samples** show **syntax and one CDA-style convention only**—LLMs must **not** treat them as “only these keys allowed.” Add, omit, or rename keys per user/product; document the real set in each project’s README / `.env.example`.
-      - Do not import `env.js` from webpack/Turbopack; keep it as a **static asset** copied to export root (e.g. Next **`public/env.js`** → **`out/env.js`**).
-      - **Next.js App Router:** use **`next/script`** with **`strategy="beforeInteractive"`** and **`src="/env.js"`** in the root layout so `/env.js` runs before async framework bundles. A raw `<script>` in `<head>` is often reordered **after** async chunks—avoid relying on “first child” alone. Fallback: **post-build HTML patch** inserting a synchronous `./env.js` at the top of `<head>`.
+      - **Weegloo WebHosting** serves a **static ZIP** (e.g. Next `output: 'export'` → `out/`). There is **no Node process** reading `.env` per request at runtime on Weegloo.
+      - **`.env.local` / `.env.example` / `NEXT_PUBLIC_*`** (and similar) apply at **build time** on the developer or CI machine when values are inlined into the client bundle. Document the project’s real variable names in **`.env.example`** and README.
+      - How Space-specific or deploy-specific values reach the browser is **project-defined** (separate builds per Space, build args, or other patterns). Do **not** assume a platform-provided runtime env file on WebHosting.
 
   - section: Packaging Requirements
     items:
@@ -76,13 +62,6 @@ rules:
       - To redeploy an updated build to an existing subdomain, follow this sequence. 1) Build and ZIP the new output. 2) Create a new `Upload` resource. 3) Retrieve the existing `WebHosting` resource using `GetOneWebHosting` to obtain the current `sys.version`. 4) Call `UpdateOneWebHosting` with the new `Upload` reference and the current `sys.version` in the `X-Weegloo-Version` header.
       - "`UpdateOneWebHosting` is a full replacement (PUT). All required fields (`name`, `upload`, etc.) must be included in the request, not just the changed fields."
       - There is no need to delete and recreate the `WebHosting` resource. Use the update tool instead.
-
-  - section: Update Rules (env.js Only)
-    items:
-      - If only the `env.js` file is changed, the website must not be fully redeployed.
-      - In the case of an `env.js`-only change, update the existing `WebHosting` resource using the MCP tool.
-      - When updating environment values, the `env.js` file may be parsed into key-value pairs and applied as `environments` in the `WebHosting` resource.
-      - When parsing `env.js` for MCP, expect the pattern **`window.__ENV__ = { ... };`** (object literal with string keys/values). Strip comments if present before parsing.
 
   - section: Validation Requirements
     items:

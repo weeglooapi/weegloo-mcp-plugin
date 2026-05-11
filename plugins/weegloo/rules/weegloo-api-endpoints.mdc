@@ -108,9 +108,7 @@ rules:
       - CDA requires a **Delivery Access Token** (and ACDA its equivalent when using that API—follow **API docs** and env conventions for the project).
       - When **creating** a `DeliveryAccessToken` via CMA (`cma_CreateDeliveryAccessToken`), follow the **`weegloo-delivery-access-token`** skill: **never** bind **Administrator** `SpaceRole`; prefer a **read-only** role for required `ContentType`s only, or **ask the user** to pick a role after listing `SpaceRole`s.
       - **Local Next.js development:** use **`.env.local`** with **`NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`** (and other `NEXT_PUBLIC_WEEGLOO_*` vars) — see `.env.example`.
-      - **Weegloo WebHosting (static export):** the browser loads **`./env.js`**, which assigns **`window.__ENV__`**. Use **`DELIVERY_ACCESS_TOKEN`** there (same token role as `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`, different key name). Also set **`WEEGLOO_CDA_BASE_URL`**, **`WEEGLOO_SPACE_ID`**, **`WEEGLOO_LOCALE`** as strings. This is **not** a “hidden secret” in this pattern—installers swap values in `env.js` after copying a template.
-      - **Mapping:** `NEXT_PUBLIC_WEEGLOO_CDA_BASE_URL` → `WEEGLOO_CDA_BASE_URL`; `NEXT_PUBLIC_WEEGLOO_SPACE_ID` → `WEEGLOO_SPACE_ID`; `NEXT_PUBLIC_WEEGLOO_LOCALE` → `WEEGLOO_LOCALE`; `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN` → **`DELIVERY_ACCESS_TOKEN`**.
-      - Application code should read **`window.__ENV__` first** when present, then fall back to **`process.env.NEXT_PUBLIC_*`** for local dev (see `weegloo-web-hosting-rules`).
+      - **Weegloo WebHosting (static export):** there is **no server-side `.env`** at request time—CDA and related settings reach the browser via **your build** (for example `NEXT_PUBLIC_*` inlined at build time) or other **project-defined** client config. Document the chosen pattern in the app’s README.
 
   - section: CMA / ACMA document updates (PATCH, PUT)
     items:

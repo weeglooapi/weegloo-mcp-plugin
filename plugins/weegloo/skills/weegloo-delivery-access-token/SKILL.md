@@ -8,7 +8,7 @@ description: Create Weegloo DeliveryAccessToken (CDA) via CMA—bind role.sys.id
 ## When to use
 
 - When creating a **`DeliveryAccessToken`** for the **CDA API** (browser or server read-only clients), via MCP **`cma_CreateDeliveryAccessToken`** or equivalent CMA flow.
-- When the user asks for a “CDA token”, “delivery token”, or **`env.js` / `DELIVERY_ACCESS_TOKEN`** provisioning backed by a new token.
+- When the user asks for a “CDA token”, “delivery token”, or browser-exposed **`DELIVERY_ACCESS_TOKEN`** / `NEXT_PUBLIC_*`-style provisioning backed by a new token.
 
 ## Why this skill exists
 
@@ -49,7 +49,7 @@ If **`cma_CreateDeliveryAccessToken`** fails with an ownership / permission erro
 - **Do not** fall back to **Administrator**.
 - **Do:** explain; options include creating the token in the **Weegloo console** with the same **`SpaceRole`**, or using a CMA principal that may assign that role.
 
-Do **not** treat Administrator as an acceptable workaround for public **`env.js`** tokens.
+Do **not** treat Administrator as an acceptable workaround for **public, browser-exposed** delivery tokens.
 
 ---
 
@@ -78,5 +78,5 @@ Schema: **`weegloo-api-endpoints`** → CMA OpenAPI (**`CreateDeliveryAccessToke
 ## Important
 
 - Use **MCP** for CMA per project rules where applicable.
-- **`env.js`** tokens are **public**—least privilege is mandatory.
+- Tokens shipped to the **browser** are **public**—least privilege is mandatory.
 - Administrator-backed delivery tokens are **not** acceptable for typical **public, browser-exposed** CDA clients.

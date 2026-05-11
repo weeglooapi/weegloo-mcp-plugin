@@ -56,7 +56,7 @@ const popup = window.open(
 
 - **`name`** (`"weegloo-login"`) — reuse the same name so repeated clicks target the same window where appropriate.
 - **`origin`** query param — must be the **exact** origin of the static app (scheme + host + port), matching **`location.origin`**.
-- If the product supports **multiple console bases** (dev vs prod), read the FE base from **`window.__ENV__`** / **`NEXT_PUBLIC_*`** and build  
+- If the product supports **multiple console bases** (dev vs prod), read the FE base from **`NEXT_PUBLIC_*`** or your app’s runtime config and build  
   `{feOrigin}/login?origin=${encodeURIComponent(location.origin)}`.
 
 ---
@@ -97,7 +97,7 @@ If the response is **200 OK** and the body is usable, the token is **valid for C
 
 A valid **`/me`** token is **not** enough for a **space-scoped** app. The user must have a **Space membership** for the **Space** this site manages.
 
-1. Determine **`SPACE_ID`** for this deploy (from **`window.__ENV__`**, build-time env, or product config).
+1. Determine **`SPACE_ID`** for this deploy (from build-time env, runtime config, or product config).
 2. Call **`GET {CMA_BASE}/v1/me/space-memberships`** with **`Authorization: Bearer`** and filter so the result includes membership for **`SPACE_ID`** (query params or client-side filter per CMA docs — e.g. filter by space id if supported).
 3. If **no membership** exists for that **Space**: the user must **not** be treated as admin for this service — **clear **`sessionStorage`** `access_token`** (logout) and show an appropriate message.
 
@@ -139,6 +139,6 @@ No server-side session to revoke unless the product also calls a CMA revoke endp
 
 ## Related
 
-- **Deploy ZIP / env.js:** **`weegloo-web-hosting`** skill.
+- **Deploy ZIP (WebHosting):** **`weegloo-web-hosting`** skill.
 - **HTTP bases / Accept / OpenAPI links:** **`weegloo-api-endpoints`** rule.
 - **MCP** is for **management** (deploy, CMA from agents); **this flow runs in the end user’s browser** against **CMA** with the stored token.
