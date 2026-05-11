@@ -25,6 +25,16 @@ rules:
       - **`localized: false`** fields have a single stored slot (default locale only); there is no per-locale map to fall back within the same field.
       - Fallback is **read-time** behavior for **localized** fields; it does **not** remove the requirement to store a **default locale** value when **`localized: true`**.
 
+  - section: CDA list — `locale` URL parameter (Content and Media)
+    items:
+      - **Applies to** CDA list endpoints **`GET /v1/spaces/{spaceId}/contents`**, **`GET /v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**, and **`GET /v1/spaces/{spaceId}/medias`** (same semantics for Content and Media).
+      - **Omit `locale`** → server uses the **space default locale**. Response uses a **flat scalar** per field, e.g. **`fields.title = "Hello, World"`**.
+      - **`?locale={code}`** (e.g. **`?locale=en-US`**) → returns values for **that single locale only**, with the space’s **fallback** chain (typically to the **default locale**). Response shape is still a **flat scalar** per field.
+      - **`?locale=*`** → returns **all locales** for **`localized: true`** fields as a **per-locale map**, e.g. **`fields.title = { "en-US": "Hello World", "ko-KR": "안녕, 세상!" }`**. **No fallback** is applied—missing locales are simply **absent** from the map.
+      - **Field shape changes** with mode: code reading **`fields.<id>`** as a string must use **option 1 or 2**; code that wants **all locales** in one call must use **`?locale=*`** and read **`fields.<id>[<localeCode>]`** (handling missing keys).
+      - **`localized: false`** fields are stored under the **default locale only**; do not expect a per-locale map for them under **`?locale=*`** — follow the API contract.
+      - Keep **`locale`** consistent across **`links.next`** pagination so response shape does not change mid-iteration (**`weegloo-list-pagination`**); combine with **`select`** as needed (**`weegloo-api-query-optimization`**).
+
   - section: Write rules (mandatory)
     items:
       - **Content create:** when **creating** Content, **every field** you include in the create payload must have a value under the **space default locale** (e.g. if default is **`en-US`**, each **`localized: true`** field must have an **`en-US`** entry; **`localized: false`** fields use only that default-locale slot). Do not submit creates that populate only non-default locales.

@@ -1,6 +1,6 @@
 ---
 name: weegloo-default-locale
-description: Weegloo default locale, localized vs localized-false fields, per-locale buckets, read fallback, and mandatory default-locale values on every field for Content create. Use when creating ContentTypes, creating Content, or reviewing CMA/CDA locale usage.
+description: Weegloo default locale, localized vs localized-false fields, per-locale buckets, read fallback, mandatory default-locale values on every field for Content create, and the CDA list `locale` URL parameter (omit / specific / `*`) response shapes. Use when creating ContentTypes, creating Content, or reviewing CMA/CDA locale usage.
 ---
 
 # Weegloo — default locale and localized fields
@@ -38,6 +38,58 @@ Use this when the stored value **never differs by locale**—same logical value 
 - **Meaning for Content writes:** the field is **not** a multi-locale map. CMA only allows a value in the **default locale** bucket for that field. You **cannot** set `fields.myField["fr-FR"]` etc.; non-default locale keys are invalid for that field.
 - **Contrast:** **`localized: true`** = per-locale copy (titles, bios); default locale still **required** when you populate the field, plus optional other locales.
 - **CareerResume hindsight:** **`profileImage`** (and similar single global assets) would fit **`localized: false`** on the **resumeProfile** ContentType so editors are not pushed to duplicate the same Media refer across every locale bucket—see **`weegloo-create-content-type`** for where to set the flag in the schema.
+
+## CDA list endpoints — `locale` URL parameter (read shape)
+
+CDA **list** endpoints accept a **`locale`** query parameter that controls **which locale(s)** appear in `fields` **and** the **shape** of `fields` in the response. This applies to **both** Content and Media list endpoints:
+
+- **Content lists:**
+  - **`GET /v1/spaces/{spaceId}/contents`**
+  - **`GET /v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**
+- **Media list:**
+  - **`GET /v1/spaces/{spaceId}/medias`**
+
+Three modes, with **the same semantics** for Content and Media:
+
+### 1. `locale` omitted — space **default locale**
+
+The server resolves to the **space default locale** and returns a **flat scalar** per field (no locale map):
+
+```json
+"fields": {
+  "title": "Hello, World"
+}
+```
+
+### 2. `locale={code}` — single locale, **with fallback**
+
+Example: **`?locale=en-US`**. The server returns the value **for that locale**, applying the space’s **fallback chain** (typically falling back to the **default locale** when a `localized: true` field has no entry for the requested locale—see *Read path and fallback*). The shape is still a **flat scalar** per field:
+
+```json
+"fields": {
+  "title": "Hello, World"
+}
+```
+
+### 3. `locale=*` — **all locales**, **no fallback**
+
+Example: **`?locale=*`**. The server returns **every locale’s** stored value for `localized: true` fields as a **per-locale map**. **No fallback** is applied—locales without a stored value are **absent** from the map:
+
+```json
+"fields": {
+  "title": {
+    "en-US": "Hello World",
+    "ko-KR": "안녕, 세상!"
+  }
+}
+```
+
+### Picking the mode
+
+- **Single-language UI / SSG export:** use **option 1 or 2**. Code can read **`fields.<id>`** as a scalar without a locale lookup.
+- **Multi-language UI on one page** (language switcher with no extra fetch, locale picker, admin previews): use **`?locale=*`** and read **`fields.<id>[<localeCode>]`**. Be ready for **missing entries** (no fallback).
+- **`localized: false` fields:** there is no per-locale split to expand—those fields are stored under the **default locale only** (see *`localized: false`* section). Treat the response shape per the API contract; do not expect a multi-locale map for them under `locale=*`.
+- **Pagination, `select`, `order`:** the `locale` choice is **orthogonal**—keep `locale` consistent across `links.next` calls so the response shape does not change mid-iteration (see **`weegloo-list-pagination`** and **`weegloo-api-query-optimization`**).
 
 ## Why “fallback” does not relax writes
 
