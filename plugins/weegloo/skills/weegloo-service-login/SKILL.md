@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login
-description: Weegloo ServiceLogin (app-managed members) — per-Space self-hosted member directory separate from Weegloo accounts; ServiceUserRole + ServiceUser (roleOverride, isAdmin); Bearer Token usable ONLY against ACMA / ACDA (never CMA / CDA). Use when designing member sign-up/sign-in for a Space's own product (e.g. members-only board, paid content), wiring OAuth providers for end users, or reasoning about per-user permissions on app-owned resources.
+description: Weegloo ServiceLogin (app-managed members) — per-Space self-hosted member directory separate from Weegloo accounts; ServiceUserRole + ServiceUser (roleOverride, isAdmin); Bearer Token usable ONLY against ACMA / ACDA (never CMA / CDA); current ServiceUser via ACMA GET https://acma.weegloo.com/v1/me (not .../spaces/{spaceId}/me). Use when designing member sign-up/sign-in for a Space's own product (e.g. members-only board, paid content), wiring OAuth providers for end users, or reasoning about per-user permissions on app-owned resources.
 ---
 
 # Weegloo — ServiceLogin (app-managed members)
@@ -49,6 +49,14 @@ It **must not** be used against:
 - **CDA** (`https://cda.weegloo.com`) — that requires a **DeliveryAccessToken** referencing a `SpaceRole`.
 
 Base URLs and Accept-header rules: **`weegloo-api-endpoints`** rule.
+
+## Current ServiceUser — ACMA **`GET /v1/me`**
+
+To fetch the **`ServiceUser`** for the active ServiceLogin session (profile, `roleOverride`, `isAdmin`, etc.):
+
+- **Correct:** **`GET https://acma.weegloo.com/v1/me`** with **`Authorization: Bearer`** and the ServiceLogin access token.
+
+**Wrong (do not use):** **`GET https://acma.weegloo.com/v1/spaces/{spaceId}/me`**. ACMA does **not** expose the current member at a space-prefix path. **`auth.weegloo.com`** correctly uses **`/v1/spaces/{spaceId}/...`** for OAuth, which invites the mistaken pattern—but on **ACMA** the identity endpoint is **`/v1/me`** only.
 
 ## Permission resolution per ServiceUser
 

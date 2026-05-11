@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-sdk
-description: How to add Weegloo ServiceLogin (Google OAuth 2.0) sign-in to a browser app — the official npm SDK `weegloo-service-user` (vanilla JS, 0 deps) and the underlying `auth.weegloo.com` HTTP wire protocol (login redirect, exchangeToken POST, refresh, logout). Covers the entry-URL vs Google redirect-URI confusion, the browser GET-with-body limitation, and the `exchangeToken` URL-stripping security pattern. Use when wiring sign-in for a Weegloo Space's product, debugging the OAuth callback flow, or implementing the protocol where the JS SDK cannot run (server-side, native mobile, scripts).
+description: How to add Weegloo ServiceLogin (Google OAuth 2.0) sign-in to a browser app — the official npm SDK `weegloo-service-user` (vanilla JS, 0 deps) and the underlying `auth.weegloo.com` HTTP wire protocol (login redirect, exchangeToken POST, refresh, logout). Covers the entry-URL vs Google redirect-URI confusion, ACMA current user at GET https://acma.weegloo.com/v1/me (not /spaces/{spaceId}/me), the browser GET-with-body limitation, and the `exchangeToken` URL-stripping security pattern. Use when wiring sign-in for a Weegloo Space's product, debugging the OAuth callback flow, or implementing the protocol where the JS SDK cannot run (server-side, native mobile, scripts).
 ---
 
 # Weegloo — ServiceLogin SDK / OAuth wire protocol
@@ -147,6 +147,16 @@ The official SDK does this strip **synchronously, before** issuing `POST /oauth/
 ### E. Refresh strategy = lazy, not timer-based
 
 `setTimeout`/`setInterval` are unreliable in suspended/throttled tabs. Refresh on demand (when `getAccessToken()` is called and `Date.now() + leeway >= expiresAt`), not on a wall-clock schedule. The SDK uses a 60-second leeway by default.
+
+### F. Current member on ACMA — **`GET /v1/me`**, not **`/spaces/{spaceId}/me`**
+
+After sign-in, to load the signed-in **`ServiceUser`** (same role as **CMA** **`GET /v1/me`** for console users, but on **ACMA**):
+
+- **Correct:** **`GET https://acma.weegloo.com/v1/me`** with the ServiceLogin Bearer Token (e.g. `auth.fetch('https://acma.weegloo.com/v1/me')` if using the SDK).
+
+**Wrong:** **`GET https://acma.weegloo.com/v1/spaces/{spaceId}/me`**. That path is **not** the ACMA identity endpoint. **`auth.weegloo.com`** uses **`/v1/spaces/{spaceId}/...`** everywhere; **ACMA** does **not** mirror that for **`/me`**—do not interpolate `spaceId` into the URL.
+
+Detail: **`weegloo-service-login`** skill and **`weegloo-api-endpoints`** rule.
 
 ## Configuration responsibilities (Google Cloud + Weegloo Console)
 

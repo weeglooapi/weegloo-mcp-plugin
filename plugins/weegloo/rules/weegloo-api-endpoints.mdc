@@ -5,8 +5,10 @@ title: Weegloo API Base URLs (for development code)
 description: >
   CMA, CDA, Upload, ACMA, ACDA, and Auth (auth.weegloo.com — ServiceLogin OAuth) base URLs,
   API-Docs links, vendor JSON media type / Accept header rules, CDA published-only semantics
-  (create/update/unpublish/delete), Media list mimeGroup query filters, ServiceLogin Bearer
-  Token scope (ACMA/ACDA only), ACMA ownership + `isAdmin`, ACDA per-member read scope with
+  (create/update/unpublish/delete), ACMA auto-publish on create and implicit unpublish on delete
+  (no separate publish/unpublish vs CMA), Media list mimeGroup query filters, ServiceLogin Bearer
+  Token scope (ACMA/ACDA only), ACMA `GET /v1/me` for current ServiceUser (not `/spaces/{spaceId}/me`),
+  ACMA ownership + `isAdmin`, ACDA per-member read scope with
   `ServiceUser.roleOverride`, service-type → API selection pointer, and MCP vs direct API
   usage. Follow when calling Weegloo APIs from application code.
 ---
@@ -70,7 +72,9 @@ rules:
       - Do not confuse CMA/ACMA and CDA/ACDA. Use CDA/ACDA for read-only, CMA/ACMA for management operations.
       - When the product uses **app-owned member management** (not the default Weegloo member flow), **do not use CMA/CDA** for those features—use **ACMA** and **ACDA** as documented in **API docs** and product docs.
       - **ACMA** replaces **CMA** for that integration style; **ACDA** replaces **CDA** for the corresponding delivery/read usage.
+      - **ACMA publish / delete vs CMA:** On **ACMA**, **Create** **automatically publishes**—do **not** rely on a separate **Publish** call after create (contrast **CMA**, where delivery generally requires **Publish** after create/update). On **ACMA**, **Delete** **automatically unpublishes**—do **not** call **Unpublish** before delete. Narrative: **`weegloo-cda-publish`** skill.
       - **Caller identity (mandatory):** ACMA and ACDA accept **only** a **Bearer Token issued by `ServiceLogin`** (the app-managed member sign-in flow). They do **not** accept Weegloo console / CMA tokens, Personal Access Tokens, or DeliveryAccessTokens. Detail: **`weegloo-service-login`** skill.
+      - **Current `ServiceUser` (ServiceLogin session):** **`GET https://acma.weegloo.com/v1/me`** with that Bearer Token. **Do not** call **`GET .../v1/spaces/{spaceId}/me`** on ACMA — that URL is **incorrect** for the current member profile. **`auth.weegloo.com`** uses **`/v1/spaces/{spaceId}/...`** for OAuth; **ACMA**’s **`/me`** endpoint is **not** under **`/spaces/{spaceId}`**. Narrative: **`weegloo-service-login`** skill.
 
   - section: ACMA — ownership and `isAdmin` (app-managed member CRUD scope)
     items:
