@@ -1,14 +1,28 @@
 ---
 name: weegloo-service-login
-description: Weegloo ServiceLogin (app-managed members) — per-Space self-hosted member directory separate from Weegloo accounts; ServiceUserRole + ServiceUser (roleOverride, isAdmin); Bearer Token usable ONLY against ACMA / ACDA (never CMA / CDA); current ServiceUser via ACMA GET https://acma.weegloo.com/v1/me (not .../spaces/{spaceId}/me). Use when designing member sign-up/sign-in for a Space's own product (e.g. members-only board, paid content), wiring OAuth providers for end users, or reasoning about per-user permissions on app-owned resources.
+description: ServiceLogin — the Space's own end-user sign-up/sign-in system, separate from Weegloo platform accounts. The product (the Space) runs its own member directory and ANYONE may sign up; this is NOT the Weegloo admin login (that is `weegloo-user-login`). Covers ServiceLogin + ServiceUserRole + ServiceUser (roleOverride, isAdmin); Bearer Token usable ONLY against ACMA / ACDA (never CMA / CDA / Upload — those need a Weegloo User token); current ServiceUser via ACMA GET https://acma.weegloo.com/v1/me (not .../spaces/{spaceId}/me). Use when designing member sign-up/sign-in for a Space's own product (members-only board, paid content, community, etc.), wiring OAuth providers for end users, or reasoning about per-user permissions on app-owned resources.
 ---
 
-# Weegloo — ServiceLogin (app-managed members)
+# Weegloo — ServiceLogin (end-user sign-up for the product)
+
+## Where this skill sits — two login models in Weegloo
+
+Weegloo has **two completely separate identity systems**. This skill is about model #2.
+
+|  | **Weegloo User login** (`weegloo-user-login`) | **Service User login — this skill** |
+|---|---|---|
+| Who is the identity? | A **Weegloo platform account** — the human who owns or was **invited** to a Space. | An **end-user of the product** the Space ships. |
+| User directory runs on… | **Weegloo**. | The **Space itself** (one ServiceLogin per Space, separate from Weegloo accounts). |
+| Self sign-up? | **No** — invitation only; not for the general public. | **Yes** — anyone may sign up via the configured OAuth provider(s). This is the whole point. |
+| Perspective | **Admin / staff** of the product. | **Member / customer / reader** of the product. |
+| Token grants access to… | **CMA**, **Upload**, **CDA**. | **ACMA** and **ACDA** **only**. Never CMA / CDA / Upload. |
+
+If you are wiring the **product owner's** admin tooling — they already have a Weegloo account on this Space — stop reading and go to **`weegloo-user-login`**. This skill is for the **end-users** the product accepts via sign-up.
 
 ## When to use
 
-- A product needs **its own end-user membership** inside a **Space** — separate from the Weegloo console accounts that own the Space (e.g. a members-only board, a paid-content portal, a community where readers must sign in).
-- You need a **Bearer Token** that calls **ACMA** / **ACDA** as a specific app-managed member, not as a Weegloo console user.
+- A product needs **its own end-user membership** inside a **Space** — separate from the Weegloo platform accounts that own the Space (e.g. a members-only board, a paid-content portal, a community where readers must sign in).
+- You need a **Bearer Token** that calls **ACMA** / **ACDA** as a specific app-managed member, not as a Weegloo User.
 - Choosing between **per-member default permissions** (`sys.defaultRole`) vs **per-individual overrides** (`roleOverride`), or granting cross-member **delete** rights via `isAdmin`.
 
 ## Resource model
@@ -23,15 +37,15 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 
 **Important:** these are **not** the same as Weegloo's built-in account model.
 
-- **Weegloo console accounts + `SpaceRole`** → manage **the Space itself** (CMA, console FE login via **`weegloo-web-hosting-fe-login`**). DeliveryAccessToken for **CDA** also references **`SpaceRole`** (see **`weegloo-delivery-access-token`**).
+- **Weegloo platform accounts + `SpaceRole`** → manage **the Space itself** (CMA / Upload / CDA). The Weegloo User login mechanisms (PAT and console FE login popup) are documented in **`weegloo-user-login`**. DeliveryAccessToken for **CDA** also references **`SpaceRole`** (see **`weegloo-delivery-access-token`**).
 - **`ServiceUser` + `ServiceUserRole`** → end-users **of the product the Space ships**. Their tokens only reach **ACMA** / **ACDA**, never the management plane.
 
 ## Sign-in flow (e.g. Google OAuth 2.0)
 
 1. The Space enables **ServiceLogin** with one or more providers (Google, etc.) in the console.
-2. The end user signs in through the configured provider in the product UI.
+2. The end user signs up / signs in through the configured provider in the product UI. Sign-up is open — anyone who reaches the screen can become a `ServiceUser` of this Space, subject to the provider's own checks.
 3. Weegloo returns a **Bearer Token** that identifies the member as the corresponding **`ServiceUser`** in that Space.
-4. The product stores the token (typically in browser storage for static sites; see **`weegloo-web-hosting-fe-login`** for storage and origin-check patterns — the same browser security rules apply to this token).
+4. The product stores the token (typically in browser storage for static sites; the same browser-security guidance — origin checks, prefer `sessionStorage` over `localStorage`, never log tokens — applies as in **`weegloo-user-login`**).
 5. The product calls **ACMA** / **ACDA** with **`Authorization: Bearer <token>`**.
 
 **Implementation:** the wire protocol on `auth.weegloo.com` (login redirect, `exchangeToken` POST exchange, refresh, logout), the official **`weegloo-service-user`** npm SDK, and the browser-specific gotchas (entry URL vs Google redirect URI, GET-with-body limitation, `exchangeToken` URL stripping) live in the **`weegloo-service-login-sdk`** skill. Use that skill — and the SDK — instead of re-deriving the protocol when wiring a browser app.
@@ -45,8 +59,9 @@ A Bearer Token issued by ServiceLogin **may only** be used with:
 
 It **must not** be used against:
 
-- **CMA** (`https://cma.weegloo.com`) — that requires a Weegloo console session (PAT or OAuth via console FE login).
-- **CDA** (`https://cda.weegloo.com`) — that requires a **DeliveryAccessToken** referencing a `SpaceRole`.
+- **CMA** (`https://cma.weegloo.com`) — that requires a **Weegloo User** session (PAT or console FE login). See **`weegloo-user-login`**.
+- **Upload** (`https://upload.weegloo.com`) — same as CMA; requires a Weegloo User token.
+- **CDA** (`https://cda.weegloo.com`) — public delivery uses a **`DeliveryAccessToken`** referencing a `SpaceRole` (a Weegloo User token also works on CDA but is over-privileged for browser distribution — see **`weegloo-delivery-access-token`**).
 
 Base URLs and Accept-header rules: **`weegloo-api-endpoints`** rule.
 
@@ -91,8 +106,8 @@ Publish semantics still apply: ACDA only returns **published** snapshots — see
 
 | Need | Use |
 |------|-----|
-| End-users sign in to the product itself and create/read app data | **ServiceLogin** + **ACMA** / **ACDA** |
-| Space owner / staff edit content through a static admin UI | Weegloo console FE login → **CMA** (**`weegloo-web-hosting-fe-login`**) |
+| End-users sign up to the product itself and create/read app data | **ServiceLogin** + **ACMA** / **ACDA** (this skill) |
+| Space owner / invited staff edit content through a custom admin UI | **Weegloo User login** → **CMA** / **Upload** (**`weegloo-user-login`**) |
 | Anyone may read public content with no sign-in | **DeliveryAccessToken** + **CDA** (**`weegloo-delivery-access-token`**) |
 
 A product may combine all three — see **`weegloo-service-architecture`** for service-type recipes.
@@ -112,13 +127,13 @@ When wiring ServiceLogin for a product:
 - The Bearer Token represents a **specific app-managed member**. Treat it like any other user session token: short-lived where possible, scoped per device/tab, never logged in production builds.
 - `ServiceUserRole`s used for **read** access must still be **least-privilege**: ACDA exposes whatever the role allows, just narrowed by per-member assignment.
 - `isAdmin: true` is a sharp tool — grant only to product moderators; revoke when the role no longer applies.
-- Browser storage and origin checks for the token follow the same rules as the console token in **`weegloo-web-hosting-fe-login`** (origin allowlist on `postMessage`, prefer `sessionStorage`).
+- Browser storage and origin checks for the token follow the same rules as the Weegloo User console token in **`weegloo-user-login`** (origin allowlist on `postMessage`, prefer `sessionStorage`).
 
 ## Related
 
 - **Wire protocol + official browser SDK (`weegloo-service-user`):** **`weegloo-service-login-sdk`** skill.
 - **Base URLs / Accept header / API docs:** **`weegloo-api-endpoints`** rule.
 - **Picking the API combo per service type:** **`weegloo-service-architecture`** skill.
-- **Weegloo console login for admin (CMA) on a static site:** **`weegloo-web-hosting-fe-login`** skill.
+- **Weegloo User login (admin / platform account — CMA, Upload, CDA):** **`weegloo-user-login`** skill.
 - **Public read tokens for CDA:** **`weegloo-delivery-access-token`** skill.
 - **Published-only delivery model:** **`weegloo-cda-publish`** skill.

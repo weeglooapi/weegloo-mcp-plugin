@@ -185,5 +185,5 @@ If a server, CLI, or native app needs to exchange tokens, follow the wire protoc
 - **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser, permission rules):** **`weegloo-service-login`** skill.
 - **Base URLs and Accept-header rules:** **`weegloo-api-endpoints`** rule.
 - **Picking the right API per service type:** **`weegloo-service-architecture`** skill.
-- **Console FE login (CMA admin, different identity model):** **`weegloo-web-hosting-fe-login`** skill.
+- **Weegloo User login (admin / platform account — the *other* login model in Weegloo; CMA / Upload / CDA):** **`weegloo-user-login`** skill.
 - **Public read tokens (CDA, no member sign-in):** **`weegloo-delivery-access-token`** skill.

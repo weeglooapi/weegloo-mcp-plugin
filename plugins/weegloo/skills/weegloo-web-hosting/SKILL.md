@@ -63,4 +63,4 @@ Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https
 
 ## Related skills
 
-- **Browser admin login** (console popup, `postMessage`, `sessionStorage`, CMA `/me` + space membership): **`weegloo-web-hosting-fe-login`**.
+- **Weegloo User login** — admin sign-in (PAT for servers, console FE popup → `postMessage` → `sessionStorage` + CMA `/me` + Space-membership check for browsers): **`weegloo-user-login`**.
