@@ -18,14 +18,14 @@ Base URLs, Accept headers, and OpenAPI links live in **`weegloo-api-endpoints`**
 Every API choice below depends on **which of the two Weegloo identities** is calling.
 
 - **Weegloo User** — a Weegloo platform account; Space owner or **invited** staff; **no self-signup**. Token (PAT or console FE login) hits **CMA / Upload / CDA**. Details: **`weegloo-user-login`** skill.
-- **Service User** — an end-user of the product the Space ships; **anyone may sign up** through a ServiceLogin OAuth provider. Token (issued via `auth.weegloo.com`) hits **ACMA / ACDA only**. Details: **`weegloo-service-login`** skill.
+- **Service User** — an end-user of the product the Space ships; **anyone may sign up** through a ServiceLogin OAuth provider. Token (issued via `auth.weegloo.com`) hits **ACMA / ACDA**, plus **Upload** for member-contributed media (followed by **ACMA** Media create — never CMA Media). Details: **`weegloo-service-login`** skill.
 
-These identity systems are **completely separate**: a Service User is **not** a Weegloo platform account and cannot reach CMA / Upload; a Weegloo User is **not** a Service User of the product and is not the right identity for end-user features.
+These identity systems are **completely separate**: a Service User is **not** a Weegloo platform account and cannot reach **CMA / CDA**; a Weegloo User is **not** a Service User of the product and is not the right identity for end-user features. **Upload** is the one shared surface — both Bearers are accepted there; the follow-up Media create stays on the matching plane (CMA for Weegloo Users, ACMA for Service Users).
 
 ## Mental model (one sentence per API)
 
 - **CMA** — full CRUD as a **Weegloo User**. Bearer from console FE login (or a Personal Access Token).
-- **Upload** — file uploads as a **Weegloo User**. Same Bearer as CMA. Usually followed by a CMA call to attach the resulting Media.
+- **Upload** — file uploads. Accepts both a **Weegloo User** Bearer (followed by **CMA** Media create) and a **Service User** Bearer (followed by **ACMA** Media create). Same upload endpoint, two follow-up planes that match the caller's identity.
 - **CDA** — public, cache-friendly **reads** of **published** resources. Production sites use a **DeliveryAccessToken** bound to a least-privilege `SpaceRole`; a Weegloo User Bearer also authorizes CDA but is over-privileged for browser distribution.
 - **ACMA** — CRUD as a **Service User**; scoped to **the member's own** resources. Requires a **Bearer Token from ServiceLogin**.
 - **ACDA** — **reads** for a Service User; scoped to **resources assigned to that member**, customizable per-member via `ServiceUser.roleOverride`. Requires a **Bearer Token from ServiceLogin**.
@@ -81,6 +81,7 @@ Pitfalls: don't bind the token to **Administrator** or any write-capable role - 
 
 - **Sign-in:** **ServiceLogin**.
 - **Member writes:** **ACMA** - each `ServiceUser` may CRUD **their own** resources only. Promote moderators with **`ServiceUser.isAdmin: true`** so they can also **delete** other members' posts within their role's scope. `isAdmin` is **delete-only** for others' resources; it does not grant cross-member update or read. See **`weegloo-service-login`**.
+- **Member media uploads:** **Upload** with the ServiceLogin Bearer, then **ACMA** Media create with the same Bearer (the Media is owned by that ServiceUser). Do **not** route member media through CMA Media — that is Weegloo-User-only.
 - **Member reads:** **ACDA** for resources scoped to the member.
 - **Mixed-visibility resources:**
   - For content that **everyone** (members and non-members) may read, expose it via **CDA** with a **DeliveryAccessToken** - same constraints as recipe 1.
@@ -112,9 +113,10 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 │ Anonymous visitor reading published data    │ CDA   + DeliveryAccessToken (SpaceRole)       │
 │ Service User reading their data             │ ACDA  + ServiceLogin Bearer Token             │
 │ Service User writing their data             │ ACMA  + ServiceLogin Bearer Token             │
+│ Service User uploading Media (member-owned) │ Upload + ServiceLogin Bearer → ACMA Media     │
 │ Service User moderator deleting others'     │ ACMA  + ServiceUser.isAdmin = true (delete)   │
 │ Weegloo User editing in a custom admin UI   │ CMA   + console FE login token (Space mbr.)   │
-│ Weegloo User uploading Media (admin UI)     │ Upload + same Weegloo User Bearer Token       │
+│ Weegloo User uploading Media (admin UI)     │ Upload + Weegloo User Bearer → CMA Media      │
 │ Backend / CI / scripts (developer)          │ CMA   + Personal Access Token (server only)   │
 └─────────────────────────────────────────────┴───────────────────────────────────────────────┘
 ```
@@ -126,7 +128,7 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 - **Reusing one DeliveryAccessToken for member-private reads.** CDA tokens are public; never bind them to anything more than the least-privilege public read scope. Use **ACDA** for per-member content.
 - **Granting Administrator (or any broad write) on a CDA DeliveryAccessToken** — strictly forbidden per **`weegloo-delivery-access-token`**.
 - **Letting end-users sign up as Weegloo Users.** Weegloo platform accounts are invitation-only Space members; end-user sign-up belongs to **ServiceLogin**. If you find yourself inviting every product user to the Space, you are using the wrong identity model.
-- **Routing Service User writes through CMA + Weegloo User login.** That makes every writing member a Weegloo platform account on the Space — the wrong identity model. Use ACMA via ServiceLogin.
+- **Routing Service User writes through CMA + Weegloo User login.** That makes every writing member a Weegloo platform account on the Space — the wrong identity model. Use ACMA via ServiceLogin. (Member-contributed media is the same story: **Upload → ACMA** Media create with the ServiceLogin Bearer, never CMA Media.)
 - **Treating `isAdmin` as Weegloo-admin.** It only adds **delete** of other members' resources on ACMA — within what the `ServiceUserRole` already permits. It never elevates the member to manage the Space itself.
 - **Treating `isAdmin` as cross-member edit/read.** `isAdmin` does **not** grant **update** or **read-for-write** on other members' resources — only **delete**. For full cross-member editing, use a Weegloo User via CMA, not ACMA + `isAdmin`.
 
@@ -139,6 +141,7 @@ When planning an architecture, answer these in order:
 3. **Per-end-user accounts in the product itself (open sign-up)?** → enable **ServiceLogin**, define `ServiceUserRole`(s), set `ServiceLogin.sys.defaultRole`. See **`weegloo-service-login`**.
 4. **Service User writes?** → ACMA with Bearer Token. Moderators get `isAdmin: true` so they may additionally **delete** other members' resources within the role's scope (delete only — no cross-member update/read).
 5. **Service User reads of personal/assigned content?** → ACDA with the same Bearer Token.
+6. **Service User uploads media (avatar, attachment, etc.)?** → **Upload** with the ServiceLogin Bearer, then **ACMA** Media create with the same Bearer. Never route member media through CMA.
 
 If the product covers more than one row, ship all matching paths - they coexist (recipe 5).
 

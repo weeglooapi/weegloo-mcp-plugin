@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login
-description: ServiceLogin — the Space's own end-user sign-up/sign-in system, separate from Weegloo platform accounts. The product (the Space) runs its own member directory and ANYONE may sign up; this is NOT the Weegloo admin login (that is `weegloo-user-login`). Covers ServiceLogin + ServiceUserRole + ServiceUser (roleOverride, isAdmin); Bearer Token usable ONLY against ACMA / ACDA (never CMA / CDA / Upload — those need a Weegloo User token); current ServiceUser via ACMA GET https://acma.weegloo.com/v1/me (not .../spaces/{spaceId}/me). Use when designing member sign-up/sign-in for a Space's own product (members-only board, paid content, community, etc.), wiring OAuth providers for end users, or reasoning about per-user permissions on app-owned resources.
+description: ServiceLogin — the Space's own end-user sign-up/sign-in system, separate from Weegloo platform accounts. The product (the Space) runs its own member directory and ANYONE may sign up; this is NOT the Weegloo admin login (that is `weegloo-user-login`). Covers ServiceLogin + ServiceUserRole + ServiceUser (roleOverride, isAdmin); Bearer Token usable against ACMA / ACDA / Upload (never CMA / CDA — those need a Weegloo User token); members upload media via Upload → ACMA Media create with the same Bearer; current ServiceUser via ACMA GET https://acma.weegloo.com/v1/me (not .../spaces/{spaceId}/me). Use when designing member sign-up/sign-in for a Space's own product (members-only board, paid content, community, etc.), wiring OAuth providers for end users, member-contributed media flows, or reasoning about per-user permissions on app-owned resources.
 ---
 
 # Weegloo — ServiceLogin (end-user sign-up for the product)
@@ -15,7 +15,7 @@ Weegloo has **two completely separate identity systems**. This skill is about mo
 | User directory runs on… | **Weegloo**. | The **Space itself** (one ServiceLogin per Space, separate from Weegloo accounts). |
 | Self sign-up? | **No** — invitation only; not for the general public. | **Yes** — anyone may sign up via the configured OAuth provider(s). This is the whole point. |
 | Perspective | **Admin / staff** of the product. | **Member / customer / reader** of the product. |
-| Token grants access to… | **CMA**, **Upload**, **CDA**. | **ACMA** and **ACDA** **only**. Never CMA / CDA / Upload. |
+| Token grants access to… | **CMA**, **Upload**, **CDA**. | **ACMA**, **ACDA**, and **Upload**. Never CMA / CDA. Media uploads land via **Upload → ACMA** Media create. |
 
 If you are wiring the **product owner's** admin tooling — they already have a Weegloo account on this Space — stop reading and go to **`weegloo-user-login`**. This skill is for the **end-users** the product accepts via sign-up.
 
@@ -38,7 +38,7 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 **Important:** these are **not** the same as Weegloo's built-in account model.
 
 - **Weegloo platform accounts + `SpaceRole`** → manage **the Space itself** (CMA / Upload / CDA). The Weegloo User login mechanisms (PAT and console FE login popup) are documented in **`weegloo-user-login`**. DeliveryAccessToken for **CDA** also references **`SpaceRole`** (see **`weegloo-delivery-access-token`**).
-- **`ServiceUser` + `ServiceUserRole`** → end-users **of the product the Space ships**. Their tokens only reach **ACMA** / **ACDA**, never the management plane.
+- **`ServiceUser` + `ServiceUserRole`** → end-users **of the product the Space ships**. Their tokens reach **ACMA** / **ACDA** (and **Upload**, for member-contributed media — see below), never the Weegloo-side management plane (**CMA** / **CDA**).
 
 ## Sign-in flow (e.g. Google OAuth 2.0)
 
@@ -50,18 +50,27 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 
 **Implementation:** the wire protocol on `auth.weegloo.com` (login redirect, `exchangeToken` POST exchange, refresh, logout), the official **`weegloo-service-user`** npm SDK, and the browser-specific gotchas (entry URL vs Google redirect URI, GET-with-body limitation, `exchangeToken` URL stripping) live in the **`weegloo-service-login-sdk`** skill. Use that skill - and the SDK - instead of re-deriving the protocol when wiring a browser app.
 
-## Token capability - ACMA / ACDA only
+## Token capability - ACMA / ACDA / Upload
 
-A Bearer Token issued by ServiceLogin **may only** be used with:
+A Bearer Token issued by ServiceLogin may be used with:
 
 - **ACMA** (`https://acma.weegloo.com`) - app-managed members' content management.
 - **ACDA** (`https://acda.weegloo.com`) - app-managed members' delivery (read).
+- **Upload** (`https://upload.weegloo.com`) - file uploads as the member. Follow with an **ACMA** Media create call to attach the resulting asset (see *Member-contributed media* below). **CMA** Media create is still off-limits for this token.
 
 It **must not** be used against:
 
-- **CMA** (`https://cma.weegloo.com`) — that requires a **Weegloo User** session (PAT or console FE login). See **`weegloo-user-login`**.
-- **Upload** (`https://upload.weegloo.com`) — same as CMA; requires a Weegloo User token.
+- **CMA** (`https://cma.weegloo.com`) — that requires a **Weegloo User** session (PAT or console FE login). See **`weegloo-user-login`**. This includes **CMA Media** create / update / delete; member-uploaded media must be created via **ACMA**.
 - **CDA** (`https://cda.weegloo.com`) — public delivery uses a **`DeliveryAccessToken`** referencing a `SpaceRole` (a Weegloo User token also works on CDA but is over-privileged for browser distribution — see **`weegloo-delivery-access-token`**).
+
+## Member-contributed media — Upload → ACMA Media create
+
+When a ServiceUser uploads a file (avatar, attachment, forum image, etc.):
+
+1. Call **Upload** (`https://upload.weegloo.com`) with **`Authorization: Bearer <ServiceLogin token>`** to receive the upload reference for the file.
+2. Call **ACMA** Media create with the same Bearer, passing that upload reference, so the Media resource is owned by the calling ServiceUser. The own-resource CRUD and `isAdmin` rules below then apply to that Media.
+
+Do **not** create the Media via **CMA** — CMA is Weegloo-User-only and the member would need a Weegloo platform account, which is the wrong identity model. The Upload step is the only shared surface between the two identities; the Media resource itself stays partitioned (CMA Media for Weegloo Users, ACMA Media for ServiceUsers).
 
 Base URLs and Accept-header rules: **`weegloo-api-endpoints`** rule.
 

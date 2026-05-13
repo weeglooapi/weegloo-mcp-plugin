@@ -25,15 +25,15 @@ rules:
     items:
       - Weegloo has **two completely separate identity systems**. The API a caller may use is determined by which identity issued the token.
       - **Weegloo User** — a Weegloo **platform account** (Space owner or **invited** Space member). **No self-signup** — onboarding is by invitation only. Bearer Token (a **Personal Access Token** for server/CI, or the token returned by the **Weegloo Console FE login popup** for browser admin UIs) authorizes **CMA**, **Upload**, and **CDA**. Mechanics: **`weegloo-user-login`** skill.
-      - **Service User** — an end-user of the product the Space ships, signed in via **ServiceLogin** (e.g. Google OAuth). **Anyone may sign up**. Bearer Token (issued via `auth.weegloo.com`) authorizes **ACMA** and **ACDA** **only** — never CMA / CDA / Upload. Mechanics: **`weegloo-service-login`** skill (wire protocol + SDK: **`weegloo-service-login-sdk`**).
-      - **Tokens do not cross identity boundaries.** A Service User Bearer must never be sent to CMA / CDA / Upload; a Weegloo User Bearer is not a valid caller on ACMA / ACDA. Pick the API by the identity that owns the request.
+      - **Service User** — an end-user of the product the Space ships, signed in via **ServiceLogin** (e.g. Google OAuth). **Anyone may sign up**. Bearer Token (issued via `auth.weegloo.com`) authorizes **ACMA**, **ACDA**, and **Upload** — never CMA / CDA. The Upload path lets a member contribute media: **Upload** with the ServiceLogin Bearer, then **ACMA** Media create to attach the resulting asset (CMA Media is still Weegloo-User-only). Mechanics: **`weegloo-service-login`** skill (wire protocol + SDK: **`weegloo-service-login-sdk`**).
+      - **Tokens do not cross identity boundaries.** A Service User Bearer must never be sent to CMA / CDA; a Weegloo User Bearer is not a valid caller on ACMA / ACDA. **Upload** is the one shared surface — both Weegloo User and Service User Bearers are accepted; the Media resource that follows is created on **CMA** (Weegloo User) or **ACMA** (Service User), matching the identity that did the upload.
 
   - section: Base URL by API Type (never guess or infer)
     items:
       - Weegloo APIs include **CMA**, **CDA**, **Upload**, and when the product runs its own end-user (Service User) directory, **ACMA** and **ACDA** instead of CMA/CDA for those flows.
       - **CMA** (Content Management API): Read, create, update, delete as a **Weegloo User**. Base URL: `https://cma.weegloo.com`
       - **CDA** (Content Delivery API): Cache-based, read-only delivery of **published** resources. Base URL: `https://cda.weegloo.com`
-      - **Upload**: File uploads as a **Weegloo User**. Base URL: `https://upload.weegloo.com`
+      - **Upload**: File uploads. Accepts both a **Weegloo User** Bearer (followed by **CMA** Media create) and a **Service User** Bearer (followed by **ACMA** Media create). Base URL: `https://upload.weegloo.com`
       - **ACMA** (App Content Management API): Use when the product uses **its own end-user (Service User) directory** instead of having every writer be a Weegloo platform account. In that case use **ACMA instead of CMA** for those member-scoped operations. Base URL: `https://acma.weegloo.com`
       - **ACDA** (App Content Delivery API): Same scenario—**Service Users**. Use **ACDA instead of CDA** for delivery/read paths that map to that model. Base URL: `https://acda.weegloo.com`
       - **Auth** (ServiceLogin OAuth): Sign-in entry, token exchange, refresh, and logout for **Service Users** (`ServiceUser`). Base URL: `https://auth.weegloo.com`. **Endpoint mechanics, exact paths, request/response shapes, and the official browser SDK live in the `weegloo-service-login-sdk` skill** — do not re-derive them ad hoc.
