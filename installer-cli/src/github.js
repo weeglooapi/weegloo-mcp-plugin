@@ -47,7 +47,15 @@ async function fetchContentsJson(ref, contentsApiPath) {
 }
 
 /**
+ * Branch names that exist in the GitHub repo but must never appear in the
+ * installer's plugin-version picker (internal / non-distributable refs).
+ */
+const HIDDEN_BRANCHES = new Set(['develop']);
+
+/**
  * Fetches branch names from the plugin GitHub repo (public API, no auth).
+ * Internal branches listed in {@link HIDDEN_BRANCHES} are filtered out so
+ * they cannot be selected as a plugin version.
  * @returns {Promise<string[]>} Branch names, or [] on error.
  */
 export async function fetchBranches() {
@@ -57,7 +65,10 @@ export async function fetchBranches() {
     });
     if (!res.ok) return [];
     const data = await res.json();
-    return Array.isArray(data) ? data.map((b) => b.name).filter(Boolean) : [];
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((b) => b.name)
+      .filter((name) => Boolean(name) && !HIDDEN_BRANCHES.has(name));
   } catch {
     return [];
   }
