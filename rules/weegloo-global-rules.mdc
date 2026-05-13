@@ -54,3 +54,11 @@ rules:
       - Filter conditions are sent as direct query parameters, NOT wrapped in filter[].
       - Correct: name[prefix]=value. Wrong: filter[name[prefix]]=value.
       - Format: {fieldName}[{op}]={value}. Operators: eq, ne, prefix, match, gt, gte, lt, lte etc.
+
+  - section: Content Create Payload Shape
+    items:
+      - On CMA / ACMA Content create, every field value MUST be wrapped in a default-locale bucket - even for fields declared `localized: false` on the ContentType.
+      - Correct (default locale `en-US`)：`{ "fields": { "slug": { "en-US": "claude-code" } } }`. Wrong: `{ "fields": { "slug": "claude-code" } }` (yields `WGL400006 "required property 'slug' not found"`).
+      - Wrapping applies uniformly to ShortText, LongText, RichText, scalar types, and Refer fields.
+      - For `localized: true` fields you may add other locales (e.g. `{ "en-US": "...", "ko-KR": "..." }`), but the default-locale entry is mandatory when the field is populated.
+      - See the `weegloo-create-content-type` skill for a full create-payload JSON example covering localized and non-localized fields plus a Refer.
