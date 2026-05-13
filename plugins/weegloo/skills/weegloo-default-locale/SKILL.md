@@ -29,6 +29,15 @@ When **creating** **Content** (CMA / MCP), **each field** in the payload must in
 - **`localized: false`** fields still store **only** under the default locale in CMA-there is no separate “other locale” slot; the same **default-locale** rule applies as a **single** bucket.
 - This is **stricter than “populate default when you touch a field”** in the abstract: **create** is where editors and integrations most often miss the default bucket-validate or merge so **default locale is always written** for each field in the create body.
 
+```jsonc
+// Wrong (bare scalar - returns WGL400006 "required property '<field>' not found")
+{ "fields": { "slug": "hello-world", "title": "Hello World" } }
+
+// Right (en-US default; same shape for localized: true AND false)
+{ "fields": { "slug":  { "en-US": "hello-world" },
+              "title": { "en-US": "Hello World" } } }
+```
+
 **CDA note:** delivery reads **published** snapshots only; see **`weegloo-cda-publish`** skill and **`weegloo-api-endpoints`** rule (CDA publish section).
 
 ## `localized: false` on the ContentType (locale-agnostic fields)
