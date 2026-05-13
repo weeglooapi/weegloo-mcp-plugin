@@ -54,11 +54,14 @@ const HIDDEN_BRANCHES = new Set(['develop']);
 
 /**
  * Fetches branch names from the plugin GitHub repo (public API, no auth).
- * Internal branches listed in {@link HIDDEN_BRANCHES} are filtered out so
- * they cannot be selected as a plugin version.
+ * By default, internal branches in {@link HIDDEN_BRANCHES} are omitted from
+ * the list. Pass `{ includeHidden: true }` to list every branch (e.g. CLI `-a`).
+ *
+ * @param {{ includeHidden?: boolean }} [options]
  * @returns {Promise<string[]>} Branch names, or [] on error.
  */
-export async function fetchBranches() {
+export async function fetchBranches(options = {}) {
+  const includeHidden = Boolean(options.includeHidden);
   try {
     const res = await fetch(GITHUB_API_BRANCHES, {
       headers: { Accept: 'application/vnd.github.v3+json' },
@@ -68,7 +71,11 @@ export async function fetchBranches() {
     if (!Array.isArray(data)) return [];
     return data
       .map((b) => b.name)
-      .filter((name) => Boolean(name) && !HIDDEN_BRANCHES.has(name));
+      .filter((name) => {
+        if (!name) return false;
+        if (includeHidden) return true;
+        return !HIDDEN_BRANCHES.has(name);
+      });
   } catch {
     return [];
   }

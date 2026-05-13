@@ -53,9 +53,11 @@ async function main() {
   // 1. Select plugin version (branch) - first
   let pluginRef = getPluginRef();
   const refFromEnvOrArg = process.argv.includes('--ref') || process.env.WEEGLOO_REF;
+  const showAllBranches =
+    process.argv.includes('-a') || process.argv.includes('--all-branches');
   if (!refFromEnvOrArg) {
     const branchSpinner = ora({ text: '  Fetching plugin versions...', indent: 0 }).start();
-    const branches = await fetchBranches();
+    const branches = await fetchBranches({ includeHidden: showAllBranches });
     branchSpinner.stop();
     if (branches.length > 0) {
       const parseVersion = (s) => {
