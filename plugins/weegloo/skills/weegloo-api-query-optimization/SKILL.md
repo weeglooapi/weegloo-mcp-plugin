@@ -1,9 +1,9 @@
 ---
 name: weegloo-api-query-optimization
-description: Weegloo list APIs — projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call.
+description: Weegloo list APIs - projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call.
 ---
 
-# Weegloo — query optimization for list APIs
+# Weegloo - query optimization for list APIs
 
 ## When to use
 
@@ -25,7 +25,7 @@ On **resource list** endpoints, use **`select`** to control which parts of each 
 Only the listed paths are returned:
 
 - Example: **`?select=sys.id,fields.title`**
-- Response items contain **`sys.id`** and **`fields.title`** (plus whatever the API always returns by contract—confirm in OpenAPI).
+- Response items contain **`sys.id`** and **`fields.title`** (plus whatever the API always returns by contract-confirm in OpenAPI).
 
 ### Exclude mode (blacklist)
 
@@ -46,13 +46,13 @@ Choose **either** all-inclusive paths **or** all-negative paths for a single req
 
 You may select whole nested objects when the API allows it, for example:
 
-- **`?select=sys`** — restrict or focus the **`sys`** object as a unit (exact semantics per endpoint; see Swagger).
+- **`?select=sys`** - restrict or focus the **`sys`** object as a unit (exact semantics per endpoint; see Swagger).
 
 ### Interaction with `order`
 
 If the request uses **`order`**, **every sort key** must still be **present** in the projected representation. Sorting relies on those values; **`select`** must not strip them out.
 
-- **Include mode:** list every path that appears in **`order`** (or select a **parent** path that still contains those leaf values—confirm behavior in OpenAPI).
+- **Include mode:** list every path that appears in **`order`** (or select a **parent** path that still contains those leaf values-confirm behavior in OpenAPI).
 - **Exclude mode:** do **not** prefix any **`order`** path with **`-`** (e.g. if **`?order=sys.id,fields.name`**, avoid **`-sys.id`** or **`-fields.name`** in **`select`**).
 
 Example: **`?order=sys.id,fields.name`** together with **`select`** → keep **`sys.id`** and **`fields.name`** reachable in the response.
@@ -76,7 +76,7 @@ Otherwise, **`include`** may undo optimization by enlarging the body with nested
 To get **one** item **with** projection:
 
 1. Call the **same list** endpoint used for collections.
-2. Filter to that id: **`?sys.id={resourceId}`** (exact parameter name and filter syntax per OpenAPI—**`sys.id`** is the typical filter for a single id).
+2. Filter to that id: **`?sys.id={resourceId}`** (exact parameter name and filter syntax per OpenAPI-**`sys.id`** is the typical filter for a single id).
 3. Add projection as needed, e.g. **`&select=sys.id`** (or any allowed **`select`** expression).
 
 Effectively this yields **one row** (or an empty list) with **controlled fields**, analogous to a **single fetch** optimized for payload.
@@ -92,7 +92,7 @@ To load **several** resources by id:
 
   **`?sys.id[in]=1,2,3,4,5`**
 
-(Use the **documented** delimiter, parameter name, and encoding from OpenAPI—**`sys.id[in]`** is the usual pattern for “any of these ids”.)
+(Use the **documented** delimiter, parameter name, and encoding from OpenAPI-**`sys.id[in]`** is the usual pattern for “any of these ids”.)
 
 This is generally **better for latency** (fewer requests) and **network usage** (one response envelope, optional **`select`** to cap size).
 
@@ -102,7 +102,7 @@ Combine with **`select`** from section 1 when you do not need full documents.
 
 ## 4. `sys.version` before `PATCH` or `PUT`
 
-Updates on **CMA** / **ACMA** (and similar) usually require the **current** **`sys.version`** so the server can enforce **optimistic concurrency** (e.g. via **`X-Weegloo-Version`** or the contract in OpenAPI—see **`weegloo-cma-json-patch`**). You only need **`sys.id`** and **`sys.version`** in the read phase; you do **not** need the **dedicated single-resource GET** for that.
+Updates on **CMA** / **ACMA** (and similar) usually require the **current** **`sys.version`** so the server can enforce **optimistic concurrency** (e.g. via **`X-Weegloo-Version`** or the contract in OpenAPI-see **`weegloo-cma-json-patch`**). You only need **`sys.id`** and **`sys.version`** in the read phase; you do **not** need the **dedicated single-resource GET** for that.
 
 **Prefer the list endpoint** with a **tight `select`:**
 
@@ -111,7 +111,7 @@ Updates on **CMA** / **ACMA** (and similar) usually require the **current** **`s
 | **One** resource | **`?sys.id={resourceId}&select=sys.id,sys.version`** |
 | **Several** resources (bulk follow-up patches) | **`?sys.id[in]=1,2,3,4,5&select=sys.id,sys.version`** |
 
-This matches the patterns in **§2** and **§3**: list + filter + projection. Response **`items`** give you each id with its **current version** in a **small** payload—**fewer round trips** and **less data** than **`N`** full **GET-by-id** responses.
+This matches the patterns in **§2** and **§3**: list + filter + projection. Response **`items`** give you each id with its **current version** in a **small** payload-**fewer round trips** and **less data** than **`N`** full **GET-by-id** responses.
 
 Filter syntax (**`sys.id`**, **`sys.id[in]`**, delimiters) is defined per API in **OpenAPI**.
 
@@ -119,9 +119,9 @@ Filter syntax (**`sys.id`**, **`sys.id[in]`**, delimiters) is defined per API in
 
 ## 5. Media list: filter by logical type (`mimeGroups`)
 
-On **CMA** **`GET .../spaces/{spaceId}/medias`**, add **`fields.file.{locale}.mimeGroups={MimeGroup}`** so the API returns only assets in that **category** (e.g. **`Image`**, **`Video`**, **`Audio`**, **`Code`**)—smaller **`items`** than an unfiltered list. Use the same **`{locale}`** you use for **`fields.file`** (often the space default locale).
+On **CMA** **`GET .../spaces/{spaceId}/medias`**, add **`fields.file.{locale}.mimeGroups={MimeGroup}`** so the API returns only assets in that **category** (e.g. **`Image`**, **`Video`**, **`Audio`**, **`Code`**)-smaller **`items`** than an unfiltered list. Use the same **`{locale}`** you use for **`fields.file`** (often the space default locale).
 
-**Allowed `MimeGroup` values** and full URL examples: **`weegloo-api-endpoints`** rule → *CMA Media list — filter by `mimeGroups`*.
+**Allowed `MimeGroup` values** and full URL examples: **`weegloo-api-endpoints`** rule → *CMA Media list - filter by `mimeGroups`*.
 
 ---
 

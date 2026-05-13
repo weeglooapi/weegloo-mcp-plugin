@@ -48,14 +48,14 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 4. The product stores the token (typically in browser storage for static sites; the same browser-security guidance — origin checks, prefer `sessionStorage` over `localStorage`, never log tokens — applies as in **`weegloo-user-login`**).
 5. The product calls **ACMA** / **ACDA** with **`Authorization: Bearer <token>`**.
 
-**Implementation:** the wire protocol on `auth.weegloo.com` (login redirect, `exchangeToken` POST exchange, refresh, logout), the official **`weegloo-service-user`** npm SDK, and the browser-specific gotchas (entry URL vs Google redirect URI, GET-with-body limitation, `exchangeToken` URL stripping) live in the **`weegloo-service-login-sdk`** skill. Use that skill — and the SDK — instead of re-deriving the protocol when wiring a browser app.
+**Implementation:** the wire protocol on `auth.weegloo.com` (login redirect, `exchangeToken` POST exchange, refresh, logout), the official **`weegloo-service-user`** npm SDK, and the browser-specific gotchas (entry URL vs Google redirect URI, GET-with-body limitation, `exchangeToken` URL stripping) live in the **`weegloo-service-login-sdk`** skill. Use that skill - and the SDK - instead of re-deriving the protocol when wiring a browser app.
 
-## Token capability — ACMA / ACDA only
+## Token capability - ACMA / ACDA only
 
 A Bearer Token issued by ServiceLogin **may only** be used with:
 
-- **ACMA** (`https://acma.weegloo.com`) — app-managed members' content management.
-- **ACDA** (`https://acda.weegloo.com`) — app-managed members' delivery (read).
+- **ACMA** (`https://acma.weegloo.com`) - app-managed members' content management.
+- **ACDA** (`https://acda.weegloo.com`) - app-managed members' delivery (read).
 
 It **must not** be used against:
 
@@ -80,29 +80,29 @@ For any ACMA / ACDA request, the effective role of the calling member is resolve
 1. If **`ServiceUser.roleOverride`** is set → use **that** `ServiceUserRole`.
 2. Otherwise → use **`ServiceLogin.sys.defaultRole`**.
 
-`isAdmin` is an **additional, narrow** flag on top of the resolved role; it does not replace the role. On **ACMA**, it adds **delete** of other members' resources within the role's permitted operations — nothing more. It does **not** grant cross-member **update** or **read-for-write**, and it does **not** widen ACDA's per-member read assignment.
+`isAdmin` is an **additional, narrow** flag on top of the resolved role; it does not replace the role. On **ACMA**, it adds **delete** of other members' resources within the role's permitted operations - nothing more. It does **not** grant cross-member **update** or **read-for-write**, and it does **not** widen ACDA's per-member read assignment.
 
-## ACMA — what an app-managed member may do
+## ACMA - what an app-managed member may do
 
-ACMA accepts read, create, update, delete from a ServiceUser — but **scoped to that member's own data**:
+ACMA accepts read, create, update, delete from a ServiceUser - but **scoped to that member's own data**:
 
-- **Default behavior:** a `ServiceUser` may **only** CRUD **resources they created**. Resources created by other ServiceUsers are out of reach for update or delete — regardless of what the assigned `ServiceUserRole` permits in general.
-- **Cross-member delete (`isAdmin: true`):** a ServiceUser whose **`isAdmin`** is **`true`** may **additionally delete** resources created by **other** ServiceUsers, **within** what their `ServiceUserRole` permits. This is **delete only** — `isAdmin` does **not** also grant cross-member **update** or **read-for-write**. The member keeps their full own-resource CRUD; `isAdmin` simply **adds** delete-of-others on top.
+- **Default behavior:** a `ServiceUser` may **only** CRUD **resources they created**. Resources created by other ServiceUsers are out of reach for update or delete - regardless of what the assigned `ServiceUserRole` permits in general.
+- **Cross-member delete (`isAdmin: true`):** a ServiceUser whose **`isAdmin`** is **`true`** may **additionally delete** resources created by **other** ServiceUsers, **within** what their `ServiceUserRole` permits. This is **delete only** - `isAdmin` does **not** also grant cross-member **update** or **read-for-write**. The member keeps their full own-resource CRUD; `isAdmin` simply **adds** delete-of-others on top.
 - **`isAdmin` is narrow.** Think of it as a moderation flag: *"this member may take down content posted by other members."* It does not turn the member into a content editor for others, and it does not elevate them to Weegloo console / CMA admin.
 
 Compare to **CMA**, where a Weegloo console user with a sufficiently broad `SpaceRole` can act on every resource in the Space.
 
-## ACDA — what an app-managed member may read
+## ACDA - what an app-managed member may read
 
 ACDA returns published resources, but restricted to **what the calling member is permitted to see**:
 
 - Only resources **assigned to** that `ServiceUser` (per product logic and role rules) are returned.
-- Per-member customization: a different `ServiceUserRole` can be assigned via **`ServiceUser.roleOverride`** so different members see different subsets — useful for tiers (free vs paid), entitlements, beta cohorts, etc.
+- Per-member customization: a different `ServiceUserRole` can be assigned via **`ServiceUser.roleOverride`** so different members see different subsets - useful for tiers (free vs paid), entitlements, beta cohorts, etc.
 - This differs from **CDA**, where every visitor with the **DeliveryAccessToken** sees the **same** set of published resources allowed by the token's `SpaceRole`.
 
-Publish semantics still apply: ACDA only returns **published** snapshots — see **`weegloo-cda-publish`** skill.
+Publish semantics still apply: ACDA only returns **published** snapshots - see **`weegloo-cda-publish`** skill.
 
-## Decision aid — which login model fits
+## Decision aid - which login model fits
 
 | Need | Use |
 |------|-----|
@@ -110,7 +110,7 @@ Publish semantics still apply: ACDA only returns **published** snapshots — see
 | Space owner / invited staff edit content through a custom admin UI | **Weegloo User login** → **CMA** / **Upload** (**`weegloo-user-login`**) |
 | Anyone may read public content with no sign-in | **DeliveryAccessToken** + **CDA** (**`weegloo-delivery-access-token`**) |
 
-A product may combine all three — see **`weegloo-service-architecture`** for service-type recipes.
+A product may combine all three - see **`weegloo-service-architecture`** for service-type recipes.
 
 ## Configuration responsibilities (LLM checklist)
 
@@ -120,7 +120,7 @@ When wiring ServiceLogin for a product:
 2. Pick the **default** role and set **`ServiceLogin.sys.defaultRole`** to its `Refer`.
 3. Configure the OAuth provider(s) and the product origin(s) so callbacks reach the app.
 4. In product code, on successful provider sign-in, capture the **Bearer Token** and call **ACMA** / **ACDA** with it.
-5. For tier upgrades or moderation, update the member's **`ServiceUser.roleOverride`** (set/clear) or **`ServiceUser.isAdmin`** — do **not** mutate `ServiceLogin.sys.defaultRole` to change one member's access.
+5. For tier upgrades or moderation, update the member's **`ServiceUser.roleOverride`** (set/clear) or **`ServiceUser.isAdmin`** - do **not** mutate `ServiceLogin.sys.defaultRole` to change one member's access.
 
 ## Security notes
 

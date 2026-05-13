@@ -1,15 +1,15 @@
 ---
 name: weegloo-service-architecture
-description: Picks the right Weegloo API + login + role combination for a product based on service type — public site, public site with admin editing, members-only read, members read/write, and composite layouts. Use when planning a new app on Weegloo, deciding between CMA/CDA vs ACMA/ACDA, sizing DeliveryAccessToken vs ServiceLogin, or auditing an existing architecture.
+description: Picks the right Weegloo API + login + role combination for a product based on service type - public site, public site with admin editing, members-only read, members read/write, and composite layouts. Use when planning a new app on Weegloo, deciding between CMA/CDA vs ACMA/ACDA, sizing DeliveryAccessToken vs ServiceLogin, or auditing an existing architecture.
 ---
 
-# Weegloo — service architecture (API + login per service type)
+# Weegloo - service architecture (API + login per service type)
 
 ## When to use
 
 - Starting a new product on Weegloo and deciding which APIs to call from the **client** and (if any) from an **admin** path.
 - Reviewing an existing app to confirm it uses the **right combination** of APIs, tokens, and roles for its access model.
-- Disambiguating **CDA vs ACDA**, **CMA vs ACMA**, and when **ServiceLogin** is — or is not — required.
+- Disambiguating **CDA vs ACDA**, **CMA vs ACMA**, and when **ServiceLogin** is - or is not - required.
 
 Base URLs, Accept headers, and OpenAPI links live in **`weegloo-api-endpoints`** (do not duplicate URLs here).
 
@@ -43,14 +43,14 @@ Pick the row that matches the product. Each recipe lists the **client-side** API
 
 ### 1. Fully public service (read-only site)
 
-> "Marketing site, public blog index, public catalog — every visitor sees the same content."
+> "Marketing site, public blog index, public catalog - every visitor sees the same content."
 
 - **Client reads:** **CDA**.
 - **Token:** one **DeliveryAccessToken** bound to a **least-privilege `SpaceRole`** for the relevant published `ContentType`s. Expose it to the browser per your build or client config (e.g. `NEXT_PUBLIC_WEEGLOO_DELIVERY_ACCESS_TOKEN`); document the pattern in the project README.
 - **Writes:** done in the **Weegloo console** by the team — **no** client-side write path.
 - **ServiceLogin:** **not required**.
 
-Pitfalls: don't bind the token to **Administrator** or any write-capable role — see **`weegloo-delivery-access-token`**.
+Pitfalls: don't bind the token to **Administrator** or any write-capable role - see **`weegloo-delivery-access-token`**.
 
 ### 2. Public service with an admin editing page
 
@@ -65,7 +65,7 @@ Pitfalls: don't bind the token to **Administrator** or any write-capable role �
 
 ### 3. Members-only **read** service
 
-> "Paid newsletter, course library, members-only article archive — visitors must sign in to see content."
+> "Paid newsletter, course library, members-only article archive - visitors must sign in to see content."
 
 - **Sign-in:** **ServiceLogin** (e.g. Google OAuth).
 - **Client reads:** **ACDA** with the member's **Bearer Token**. Each member sees only what their `ServiceUserRole` (and any per-member assignment) allows.
@@ -80,20 +80,20 @@ Pitfalls: don't bind the token to **Administrator** or any write-capable role �
 > "Members-only forum or board where members write posts, edit their own, and read each other's."
 
 - **Sign-in:** **ServiceLogin**.
-- **Member writes:** **ACMA** — each `ServiceUser` may CRUD **their own** resources only. Promote moderators with **`ServiceUser.isAdmin: true`** so they can also **delete** other members' posts within their role's scope. `isAdmin` is **delete-only** for others' resources; it does not grant cross-member update or read. See **`weegloo-service-login`**.
+- **Member writes:** **ACMA** - each `ServiceUser` may CRUD **their own** resources only. Promote moderators with **`ServiceUser.isAdmin: true`** so they can also **delete** other members' posts within their role's scope. `isAdmin` is **delete-only** for others' resources; it does not grant cross-member update or read. See **`weegloo-service-login`**.
 - **Member reads:** **ACDA** for resources scoped to the member.
 - **Mixed-visibility resources:**
-  - For content that **everyone** (members and non-members) may read, expose it via **CDA** with a **DeliveryAccessToken** — same constraints as recipe 1.
+  - For content that **everyone** (members and non-members) may read, expose it via **CDA** with a **DeliveryAccessToken** - same constraints as recipe 1.
 - **Required role configuration:**
-  - **`SpaceRole`** for the **DeliveryAccessToken** (read-only, scoped) — for any CDA path.
-  - **`ServiceUserRole`** for the default member, plus overrides for tiered/moderator members — for ACMA / ACDA.
+  - **`SpaceRole`** for the **DeliveryAccessToken** (read-only, scoped) - for any CDA path.
+  - **`ServiceUserRole`** for the default member, plus overrides for tiered/moderator members - for ACMA / ACDA.
 - **Anti-pattern:** do **not** route member writes through CMA from the browser; CMA writes from clients require a Weegloo **console** session, not a member token.
 
 ### 5. Composite / multi-tier service
 
 > "Public landing pages and catalog, plus a logged-in member area with personal content and writeable posts, plus a small admin surface."
 
-Combine recipes — every path uses the API that matches the **caller's identity** for that path:
+Combine recipes - every path uses the API that matches the **caller's identity** for that path:
 
 - **Anonymous visitor reads (public pages):** **CDA** + DeliveryAccessToken with a **public, read-only `SpaceRole`**.
 - **Service User reads (private/personal content):** **ACDA** with **ServiceLogin** Bearer Token.
@@ -140,7 +140,7 @@ When planning an architecture, answer these in order:
 4. **Service User writes?** → ACMA with Bearer Token. Moderators get `isAdmin: true` so they may additionally **delete** other members' resources within the role's scope (delete only — no cross-member update/read).
 5. **Service User reads of personal/assigned content?** → ACDA with the same Bearer Token.
 
-If the product covers more than one row, ship all matching paths — they coexist (recipe 5).
+If the product covers more than one row, ship all matching paths - they coexist (recipe 5).
 
 ## Related
 

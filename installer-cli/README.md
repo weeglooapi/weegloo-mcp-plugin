@@ -39,12 +39,12 @@ WEEGLOO_REF=some-branch npx weegloo@latest
 
 The CLI asks the following questions in order:
 
-1. **Install location** — Global (`~/.cursor/`) or current project (`.cursor/`)
-2. **IDE** — Cursor / Claude Code / Both
-3. **Personal Access Token** — Generate from the Weegloo console
-4. **MCP server group** — `default` / `core` / `extra` / `all`
-5. **Skills** — Select skills to install (multi-select)
-6. **Rules** — Select rules to install (multi-select)
+1. **Install location** - Global (`~/.cursor/`) or current project (`.cursor/`)
+2. **IDE** - Cursor / Claude Code / Both
+3. **Personal Access Token** - Generate from the Weegloo console
+4. **MCP server group** - `default` / `core` / `extra` / `all`
+5. **Skills** - Select skills to install (multi-select)
+6. **Rules** - Select rules to install (multi-select)
 
 ## What Gets Installed
 
@@ -64,13 +64,13 @@ The CLI asks the following questions in order:
 
 ## Available Skills
 
-- **weegloo-create-content-type** — Guide for creating ContentType resources
-- **weegloo-web-hosting** — Guide for deploying and hosting web projects
+- **weegloo-create-content-type** - Guide for creating ContentType resources
+- **weegloo-web-hosting** - Guide for deploying and hosting web projects
 
 ## Available Rules
 
-- **weegloo-global-rules** — Global MCP rules (applied to all MCP operations)
-- **weegloo-web-hosting-rules** — Web hosting specific rules
+- **weegloo-global-rules** - Global MCP rules (applied to all MCP operations)
+- **weegloo-web-hosting-rules** - Web hosting specific rules
 
 ## Requirements
 

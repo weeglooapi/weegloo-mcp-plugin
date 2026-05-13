@@ -195,7 +195,7 @@ export async function downloadFile(ref, remotePath, localPath) {
   try {
     res = await fetch(url);
   } catch (err) {
-    throw new Error(`Network error — ${url}\n  ${err.message}`);
+    throw new Error(`Network error - ${url}\n  ${err.message}`);
   }
 
   if (!res.ok) {

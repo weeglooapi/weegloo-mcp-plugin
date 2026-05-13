@@ -1,6 +1,6 @@
 # Weegloo Plugin
 
-This repository contains the configuration needed to integrate Weegloo with Cursor IDE and Claude Code. The plugin enables your agents to interact directly with your Weegloo, allowing you to view, create, update, and delete resources, as well as perform nearly all actions available in the console—entirely through natural language.
+This repository contains the configuration needed to integrate Weegloo with Cursor IDE and Claude Code. The plugin enables your agents to interact directly with your Weegloo, allowing you to view, create, update, and delete resources, as well as perform nearly all actions available in the console-entirely through natural language.
 
 **One plugin bundle** (`plugins/weegloo/`) is shared by both ecosystems: `skills/`, `rules/`, and `mcp.json` live only there. Claude reads `plugins/weegloo/.claude-plugin/plugin.json`; Cursor reads `plugins/weegloo/.cursor-plugin/plugin.json`. Each marketplace catalog at the repo root only lists that path (see [Cursor multi-plugin repos](https://cursor.com/docs/reference/plugins.md#multi-plugin-repositories) and [Claude marketplaces](https://code.claude.com/docs/ko/plugin-marketplaces)).
 

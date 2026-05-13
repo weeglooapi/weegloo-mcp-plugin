@@ -50,7 +50,7 @@ function printBanner() {
 async function main() {
   printBanner();
 
-  // 1. Select plugin version (branch) — first
+  // 1. Select plugin version (branch) - first
   let pluginRef = getPluginRef();
   const refFromEnvOrArg = process.argv.includes('--ref') || process.env.WEEGLOO_REF;
   if (!refFromEnvOrArg) {

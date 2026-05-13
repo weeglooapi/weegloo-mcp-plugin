@@ -1,6 +1,6 @@
 ---
 name: weegloo-delivery-access-token
-description: Create Weegloo DeliveryAccessToken (CDA) via CMA—bind role.sys.id to the intended least-privilege SpaceRole only; never Administrator or first list item; handle WGL422001 without fallback. Skill text in English only.
+description: Create Weegloo DeliveryAccessToken (CDA) via CMA-bind role.sys.id to the intended least-privilege SpaceRole only; never Administrator or first list item; handle WGL422001 without fallback. Skill text in English only.
 ---
 
 # Weegloo Delivery Access Token (CDA)
@@ -12,7 +12,7 @@ description: Create Weegloo DeliveryAccessToken (CDA) via CMA—bind role.sys.id
 
 ## Why this skill exists
 
-**`cma_CreateDeliveryAccessToken`** requires a **`role`**: a **`Refer`** to a **`SpaceRole`**. Agents often pass the **wrong** role—typically the **first** entry from **`cma_GetListSpaceRoles`** (**Administrator**)—or **replace** the intended least-privilege role after an error. Tokens used in browsers must be **least-privilege** only.
+**`cma_CreateDeliveryAccessToken`** requires a **`role`**: a **`Refer`** to a **`SpaceRole`**. Agents often pass the **wrong** role-typically the **first** entry from **`cma_GetListSpaceRoles`** (**Administrator**)-or **replace** the intended least-privilege role after an error. Tokens used in browsers must be **least-privilege** only.
 
 ---
 
@@ -58,7 +58,7 @@ Do **not** treat Administrator as an acceptable workaround for **public, browser
 1. Identify **published `ContentType`s** CDA must read.
 2. **`cma_CreateSpaceRole`** with read-only rules and a clear **`name`** (product-specific; chosen by the team).
 3. **`sys.id`** from the **create response** → pass into **`cma_CreateDeliveryAccessToken`** as **`role.sys.id`**.
-4. If step 3 fails with **`WGL422001`**: follow the section above—**no** Administrator fallback.
+4. If step 3 fails with **`WGL422001`**: follow the section above-**no** Administrator fallback.
 
 ---
 

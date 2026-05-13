@@ -11,7 +11,7 @@ rules:
   - section: HTTP JSON media type (when calling Weegloo APIs from code)
     items:
       - Weegloo APIs respond with **`application/vnd.com.weegloo.v1+json;charset=UTF-8`**, not plain `application/json`.
-      - Application code (**fetch**, axios, etc.) must **not** send **`Accept: application/json`**; **omit `Accept`** or use the vendor type (see `weegloo-api-endpoints`). Agents normally use **MCP**, not raw HTTP—this applies to **human-written** clients and scripts.
+      - Application code (**fetch**, axios, etc.) must **not** send **`Accept: application/json`**; **omit `Accept`** or use the vendor type (see `weegloo-api-endpoints`). Agents normally use **MCP**, not raw HTTP-this applies to **human-written** clients and scripts.
 
   - section: DeliveryAccessToken and SpaceRole (security)
     items:
@@ -60,8 +60,8 @@ rules:
 
   - section: WebHosting platform limits
     items:
-      - **Applies only to Weegloo WebHosting** as the deploy target—not to apps self-hosted on other platforms.
-      - **Static sites only:** no SSR or app server on the host—ship a **pre-built** static export (see `weegloo-web-hosting-rules`).
+      - **Applies only to Weegloo WebHosting** as the deploy target-not to apps self-hosted on other platforms.
+      - **Static sites only:** no SSR or app server on the host-ship a **pre-built** static export (see `weegloo-web-hosting-rules`).
       - **Weegloo REST from a WebHosted site:** the **browser** must call Weegloo REST APIs such as **CDA** (**`fetch` / AJAX**); there is no server on Weegloo to do it per request. Elsewhere-hosted apps may use SSR or server-side clients as they choose.
       - **At most 100 files** per deployment ZIP; prefer **web fonts** from CDNs (see `weegloo-web-hosting-rules`).
 

@@ -3,26 +3,40 @@ name: weegloo-service-login-sdk
 description: How to add Weegloo ServiceLogin (Google OAuth 2.0) sign-in to a browser app — the official npm SDK `weegloo-service-user` (vanilla JS, 0 deps) and the underlying `auth.weegloo.com` HTTP wire protocol (login redirect, exchangeToken POST, refresh, logout). Covers the entry-URL vs Google redirect-URI confusion, ACMA current user at GET https://acma.weegloo.com/v1/me (not /spaces/{spaceId}/me), the browser GET-with-body limitation, and the `exchangeToken` URL-stripping security pattern. Use when wiring sign-in for a Weegloo Space's product, debugging the OAuth callback flow, or implementing the protocol where the JS SDK cannot run (server-side, native mobile, scripts).
 ---
 
-# Weegloo — ServiceLogin SDK / OAuth wire protocol
+# Weegloo - ServiceLogin SDK / OAuth wire protocol
 
 This skill covers the **implementation layer** of Weegloo ServiceLogin: the official browser SDK, the exact HTTP endpoints on `auth.weegloo.com`, and the browser-specific gotchas that bite first-time integrators.
 
-For the **conceptual model** — what `ServiceLogin` / `ServiceUserRole` / `ServiceUser` are, how `roleOverride` and `isAdmin` work, ACMA/ACDA scope rules — see the **`weegloo-service-login`** skill.
+For the **conceptual model** - what `ServiceLogin` / `ServiceUserRole` / `ServiceUser` are, how `roleOverride` and `isAdmin` work, ACMA/ACDA scope rules - see the **`weegloo-service-login`** skill.
 
-For Weegloo base-URL conventions and the vendor JSON media type — see the **`weegloo-api-endpoints`** rule.
+For Weegloo base-URL conventions and the vendor JSON media type - see the **`weegloo-api-endpoints`** rule.
 
 ## Recommended path: use the official SDK
 
-Browser apps (static sites, Weegloo WebHosting, SPAs, Next.js, etc.) should use the **`weegloo-service-user`** npm package. It encapsulates every step described below — login redirect, callback handling, token storage, auto-refresh, ACMA/ACDA `Authorization` injection, and the `exchangeToken` security stripping.
+Browser apps (static sites, Weegloo WebHosting, SPAs, Next.js, etc.) should use the **`weegloo-service-user`** npm package. It encapsulates every step described below - login redirect, callback handling, token storage, auto-refresh, ACMA/ACDA `Authorization` injection, and the `exchangeToken` security stripping.
 
 - npm: `https://www.npmjs.com/package/weegloo-service-user`
-- jsDelivr (script tag): `https://cdn.jsdelivr.net/npm/weegloo-service-user@1/dist/weegloo-service-login.min.js`
+- CDN (Weegloo-hosted, served from `https://weegloo-media.com/static/libs/service-login/`):
+  - **Latest aliases** - always serve the newest build; convenient for prototyping:
+    - `service-login.js` (UMD)
+    - `service-login.esm.js` (ESM)
+    - `service-login.min.js` (UMD, minified)
+  - **Pinned (hashed) builds** - recommended for **production**, immune to silent upgrades:
+    - `service-login.<hash>.js` / `service-login.<hash>.esm.js` / `service-login.<hash>.min.js`
+    - Example for v1.1.0:
+      - `service-login.4ba25e91.js`
+      - `service-login.51817f08.esm.js`
+      - `service-login.7f47bcb0.min.js`
+  - **Version manifest** (current hashes per version): `https://weegloo-media.com/static/libs/service-login/manifiest.json`
+    - Look up the hash for the version you want to pin, then load the matching `.<hash>.js` URL above.
 - Source: vanilla JavaScript, zero runtime dependencies, ships UMD + ESM + minified
 
-Minimal usage:
+> **Production guidance:** prefer a **pinned hashed** URL so a CDN refresh cannot ship a new SDK build into a deployed product without your release. Use the latest alias only in development / prototypes. The previous `cdn.jsdelivr.net/npm/weegloo-service-user@1/...` URL has been retired - migrate to the URLs above.
+
+Minimal usage (latest alias - dev / prototype):
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/weegloo-service-user@1/dist/weegloo-service-login.min.js"></script>
+<script src="https://weegloo-media.com/static/libs/service-login/service-login.min.js"></script>
 <script>
   const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID' });
 
@@ -36,6 +50,12 @@ Minimal usage:
   document.querySelector('#logout').onclick = () => auth.logout();
   // auth.fetch() injects Authorization: Bearer <accessToken> automatically
   const res = await auth.fetch(`https://acda.weegloo.com/v1/spaces/${spaceId}/contents`);
+```
+
+Pinned version (production - replace `<hash>` with the value from `manifiest.json`):
+
+```html
+<script src="https://weegloo-media.com/static/libs/service-login/service-login.<hash>.min.js"></script>
 ```
 
 ESM / bundler:
@@ -54,17 +74,17 @@ const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID' });
 
 All paths are under `/v1/spaces/{spaceId}/...`. All bodies and responses are JSON.
 
-### 1. Login entry — browser navigates here
+### 1. Login entry - browser navigates here
 
 ```
 GET https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/{provider}
 ```
 
 - `{provider}` is `google` (and any other future provider Weegloo adds).
-- This is a **navigation** target, not an XHR/fetch call — assign it to `window.location` so the browser follows the OAuth redirect chain.
+- This is a **navigation** target, not an XHR/fetch call - assign it to `window.location` so the browser follows the OAuth redirect chain.
 - After provider sign-in, Weegloo redirects the browser to the `callbackUrl` registered on the `ServiceLogin` resource, appending `?exchangeToken=<one-time-code>`.
 
-### 2. Token exchange — first thing on the callback page
+### 2. Token exchange - first thing on the callback page
 
 ```
 POST https://auth.weegloo.com/v1/spaces/{spaceId}/oauth/token
@@ -87,9 +107,9 @@ Successful response:
 }
 ```
 
-The `accessToken` is the Bearer Token usable against ACMA / ACDA — **not** CMA / CDA (see **`weegloo-service-login`** for the scope rule).
+The `accessToken` is the Bearer Token usable against ACMA / ACDA - **not** CMA / CDA (see **`weegloo-service-login`** for the scope rule).
 
-### 3. Refresh — before `expiresAt`
+### 3. Refresh - before `expiresAt`
 
 ```
 POST https://auth.weegloo.com/v1/spaces/{spaceId}/oauth/refresh
@@ -98,7 +118,7 @@ Content-Type: application/json
 { "refreshToken": "..." }
 ```
 
-Returns the same shape as the exchange response. Some refresh responses may omit `refreshToken` — preserve the previously stored one in that case.
+Returns the same shape as the exchange response. Some refresh responses may omit `refreshToken` - preserve the previously stored one in that case.
 
 ### 4. Logout
 
@@ -119,16 +139,16 @@ These two URLs differ by one path segment and are routinely confused:
 
 | URL | Who calls it | Where it is configured |
 |---|---|---|
-| `…/login/oauth2/{provider}` | The end user's **browser** (the SDK's `auth.login()` navigates here) | — |
+| `…/login/oauth2/{provider}` | The end user's **browser** (the SDK's `auth.login()` navigates here) | - |
 | `…/login/oauth2/code/{provider}` | **Google → Weegloo** as the OAuth code callback | Google Cloud Console → "Authorized redirect URIs" |
 
 If you put `/code/` in the user-facing entry URL, Google rejects the request as an unrecognised origin and the user never reaches a sign-in screen.
 
 ### B. The token-exchange endpoint must be called via POST, not GET
 
-Older docs call this `[GET] /oauth/token` with a JSON body. **Browsers cannot send a body on GET or HEAD requests** — the Fetch spec throws `TypeError` synchronously, and the XHR spec mandates that `send(body)` set `body` to `null` for `GET`/`HEAD`. Use `POST` with `Content-Type: application/json` and the JSON body as shown in step 2.
+Older docs call this `[GET] /oauth/token` with a JSON body. **Browsers cannot send a body on GET or HEAD requests** - the Fetch spec throws `TypeError` synchronously, and the XHR spec mandates that `send(body)` set `body` to `null` for `GET`/`HEAD`. Use `POST` with `Content-Type: application/json` and the JSON body as shown in step 2.
 
-If a non-browser client (server, CLI, native app) really must use GET, it can — but the canonical browser-safe call is POST.
+If a non-browser client (server, CLI, native app) really must use GET, it can - but the canonical browser-safe call is POST.
 
 ### C. Strip `exchangeToken` from the address bar BEFORE the network call
 
@@ -138,11 +158,11 @@ The `exchangeToken` is a one-time secret that should never linger anywhere. Remo
 - the back/forward history (so a user navigating back hits the exchange URL again with the now-used token),
 - the `Referer` header of any subsequent outgoing request from the page (analytics pixels, third-party widgets, etc.).
 
-The official SDK does this strip **synchronously, before** issuing `POST /oauth/token`, regardless of whether the exchange ultimately succeeds or fails. Manual implementations must do the same — `history.replaceState(null, '', urlWithoutExchangeToken)` immediately after parsing the value, then perform the network call.
+The official SDK does this strip **synchronously, before** issuing `POST /oauth/token`, regardless of whether the exchange ultimately succeeds or fails. Manual implementations must do the same - `history.replaceState(null, '', urlWithoutExchangeToken)` immediately after parsing the value, then perform the network call.
 
 ### D. Token storage default = `sessionStorage`
 
-`sessionStorage` discards tokens when the tab closes — the right default for an authenticated session. Use `localStorage` only when "stay signed in across tab close" is a deliberate UX choice, and understand the wider exposure surface.
+`sessionStorage` discards tokens when the tab closes - the right default for an authenticated session. Use `localStorage` only when "stay signed in across tab close" is a deliberate UX choice, and understand the wider exposure surface.
 
 ### E. Refresh strategy = lazy, not timer-based
 
@@ -164,7 +184,7 @@ When wiring up a new `ServiceLogin` for a Space, an integrator must:
 
 1. **Google Cloud Console → OAuth client:**
    - Authorized JavaScript origin: `https://auth.weegloo.com`
-   - Authorized redirect URI: `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` (note the `/code/` segment — this URI is hit by Google → Weegloo, not by the browser).
+   - Authorized redirect URI: `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` (note the `/code/` segment - this URI is hit by Google → Weegloo, not by the browser).
 2. **Weegloo Console → ServiceLogin:**
    - `clientId` / `clientSecret` from the Google OAuth client above.
    - `defaultRole` → `Refer` to a least-privilege `ServiceUserRole` (create it first).
@@ -178,7 +198,7 @@ If a server, CLI, or native app needs to exchange tokens, follow the wire protoc
 - Do not log raw `accessToken` / `refreshToken` / `exchangeToken` in production.
 - Refresh ahead of `expiresAt` with leeway.
 - On logout, send the `refreshToken` so it is revoked server-side.
-- Treat the Bearer Token as ACMA/ACDA-only — never send it to CMA, CDA, or Upload.
+- Treat the Bearer Token as ACMA/ACDA-only - never send it to CMA, CDA, or Upload.
 
 ## Related
 
