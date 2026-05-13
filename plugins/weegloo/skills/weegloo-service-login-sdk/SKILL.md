@@ -198,7 +198,7 @@ If a server, CLI, or native app needs to exchange tokens, follow the wire protoc
 - Do not log raw `accessToken` / `refreshToken` / `exchangeToken` in production.
 - Refresh ahead of `expiresAt` with leeway.
 - On logout, send the `refreshToken` so it is revoked server-side.
-- Treat the Bearer Token as ACMA/ACDA-only - never send it to CMA, CDA, or Upload.
+- Treat the Bearer Token as ACMA / ACDA / Upload only - never send it to CMA or CDA. Member-contributed media goes through Upload then ACMA Media create (see **`weegloo-service-login`**).
 
 ## Related
 

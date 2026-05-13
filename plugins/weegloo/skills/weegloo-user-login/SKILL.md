@@ -1,6 +1,6 @@
 ---
 name: weegloo-user-login
-description: Weegloo User login — authenticate a Weegloo platform account (Space owner or invited user) so the caller can hit CMA, Upload, and CDA as an admin. NOT for the public; there is no self-signup — identity is provisioned by Weegloo via Space-membership invitations. Two mechanisms produce a Weegloo User Bearer Token, Personal Access Token (PAT) for server-side / CI / scripts, and the Weegloo Console FE login popup (origin-checked postMessage → sessionStorage) for browser apps including static sites on Weegloo WebHosting. Use when building an API-driven custom admin UI, a Weegloo-User-only "internal" product, or wiring CMA-authenticated editing from a static site. Contrast with `weegloo-service-login`, which is end-user sign-up for the product itself and whose token is ACMA/ACDA-only.
+description: Weegloo User login — authenticate a Weegloo platform account (Space owner or invited user) so the caller can hit CMA, Upload, and CDA as an admin. NOT for the public; there is no self-signup — identity is provisioned by Weegloo via Space-membership invitations. Two mechanisms produce a Weegloo User Bearer Token, Personal Access Token (PAT) for server-side / CI / scripts, and the Weegloo Console FE login popup (origin-checked postMessage → sessionStorage) for browser apps including static sites on Weegloo WebHosting. Use when building an API-driven custom admin UI, a Weegloo-User-only "internal" product, or wiring CMA-authenticated editing from a static site. Contrast with `weegloo-service-login`, which is end-user sign-up for the product itself and whose token is scoped to ACMA / ACDA / Upload (never CMA / CDA).
 ---
 
 # Weegloo — User login (admin / platform account)
@@ -15,7 +15,7 @@ Weegloo has **two completely separate identity systems**. The rest of this skill
 | Who runs the user directory? | **Weegloo** itself. One account, many Spaces (via memberships). | The **Space**. One directory per Space, **separate** from Weegloo accounts. |
 | Self sign-up? | **No.** Onboarding is by **Space invitation** (or by being a Space owner). The general public cannot get in. | **Yes.** Anyone can sign up through the product — that is the entire point. |
 | Perspective in the product | **Admin / staff** of the product. | **Member / customer / reader** of the product. |
-| Token authorises which APIs? | **CMA**, **Upload**, **CDA**. (Management plane + uploads + delivery.) | **ACMA** and **ACDA** **only**. Never CMA / CDA / Upload. |
+| Token authorises which APIs? | **CMA**, **Upload**, **CDA**. (Management plane + uploads + delivery.) | **ACMA**, **ACDA**, and **Upload**. Never CMA / CDA. Member media flow is Upload → ACMA Media create. |
 | Documented in | **`weegloo-user-login`** (this skill). | **`weegloo-service-login`** + **`weegloo-service-login-sdk`** skills. |
 
 **Quick disambiguation:** if the identity in front of you was **invited** to a Space and edits content there, it is a **Weegloo User**. If the identity **signed up through the product** (typically via the Space's OAuth providers) it is a **Service User** — stop reading this skill and go to **`weegloo-service-login`**.
