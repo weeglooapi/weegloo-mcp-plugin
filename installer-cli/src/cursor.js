@@ -12,7 +12,31 @@ import {
 } from './github.js';
 
 const CURSOR_HOME = path.join(os.homedir(), '.cursor');
-const CURSOR_MCP_PATH = path.join(CURSOR_HOME, 'mcp.json');
+
+/**
+ * Cursor global MCP path (official app data location per OS).
+ * @returns {string}
+ */
+export function getCursorGlobalMcpPath() {
+  const home = os.homedir();
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Application Support', 'Cursor', 'mcp.json');
+  }
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+    return path.join(appData, 'Cursor', 'mcp.json');
+  }
+  return path.join(home, '.config', 'Cursor', 'mcp.json');
+}
+
+/**
+ * @param {'global' | 'project'} scope
+ * @returns {string}
+ */
+export function getCursorMcpPath(scope = 'project') {
+  if (scope === 'global') return getCursorGlobalMcpPath();
+  return path.join(process.cwd(), '.cursor', 'mcp.json');
+}
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -50,6 +74,7 @@ export async function installCursor({
   const baseDir = scope === 'global' ? CURSOR_HOME : path.join(process.cwd(), '.cursor');
   const skillsDir = path.join(baseDir, 'skills');
   const rulesDir = path.join(baseDir, 'rules');
+  const mcpPath = getCursorMcpPath(scope);
 
   console.log(chalk.bold('  ▶  Installing for Cursor...'));
   console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
@@ -59,8 +84,8 @@ export async function installCursor({
     const { weeglooUrl, uploadApiUrl } = await fetchMcpConfig(ref);
     const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
     try {
-      ensureDir(CURSOR_HOME);
-      const config = readJsonSafe(CURSOR_MCP_PATH);
+      ensureDir(path.dirname(mcpPath));
+      const config = readJsonSafe(mcpPath);
       if (!config.mcpServers) config.mcpServers = {};
 
       config.mcpServers['weegloo'] = {
@@ -76,9 +101,9 @@ export async function installCursor({
         },
       };
 
-      fs.writeFileSync(CURSOR_MCP_PATH, JSON.stringify(config, null, 2), 'utf-8');
+      fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2), 'utf-8');
       mcpSpinner.succeed(
-        `  MCP servers configured  ${chalk.dim('→ ' + CURSOR_MCP_PATH)}`
+        `  MCP servers configured  ${chalk.dim('→ ' + mcpPath)}`
       );
     } catch (err) {
       mcpSpinner.fail(`  Failed to configure MCP servers: ${err.message}`);
