@@ -5,6 +5,7 @@ import { getPluginRef, fetchBranches, fetchResourceLists } from './github.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
+import { installCodex, handleCodexMcpLogin } from './codex.js';
 
 const PAT_GENERATION_URL = 'https://console.weegloo.com/account/profile/personal-access-tokens';
 
@@ -101,6 +102,7 @@ async function main() {
       { name: 'Cursor', value: 'cursor' },
       { name: 'Claude Code', value: 'claude' },
       { name: 'Antigravity', value: 'antigravity' },
+      { name: 'Codex', value: 'codex' },
     ],
   });
 
@@ -165,22 +167,48 @@ async function main() {
     });
   }
 
-  if (installSkillsRules) {
+  const needsScopePrompt =
+    installSkillsRules ||
+    ((ide === 'codex' || ide === 'cursor' || ide === 'claude') && installMcp);
+  if (needsScopePrompt) {
+    const scopeMessages = {
+      codex: 'Where would you like to install Codex configuration (MCP / skills / rules)?',
+      cursor: 'Where would you like to install Cursor configuration (MCP / skills / rules)?',
+      claude: 'Where would you like to install Claude Code configuration (MCP / skills / rules)?',
+    };
+    const projectHints = {
+      codex: '(./.codex/ in current folder)',
+      cursor: '(./.cursor/ in current folder)',
+      claude: '(./.mcp.json and ./.claude/ in current folder)',
+    };
+    const globalHints = {
+      codex: '(~/.codex/)',
+      cursor: '(Cursor app data mcp.json)',
+      claude: '(~/.claude.json)',
+    };
+    const ideKey = ide === 'codex' || ide === 'cursor' || ide === 'claude' ? ide : null;
+
     scope = await select({
-      message: 'Where would you like to install Skills / Rules?',
+      message: ideKey ? scopeMessages[ideKey] : 'Where would you like to install Skills / Rules?',
       default: 'project',
       choices: [
         {
-          name: `Project  ${chalk.dim('(applies to this project only)')}`,
+          name: ideKey
+            ? `Project  ${chalk.dim(projectHints[ideKey])}`
+            : `Project  ${chalk.dim('(applies to this project only)')}`,
           value: 'project',
         },
         {
-          name: `Global  ${chalk.dim('(applies to all projects)')}`,
+          name: ideKey
+            ? `Global  ${chalk.dim(globalHints[ideKey])}`
+            : `Global  ${chalk.dim('(applies to all projects)')}`,
           value: 'global',
         },
       ],
     });
+  }
 
+  if (installSkillsRules) {
     const resourceSpinner = ora({ text: '  Fetching skills and rules from branch...', indent: 0 }).start();
     const { skills: skillIds, rules: ruleIds, repoContentPrefix: layoutPrefix } =
       await fetchResourceLists(pluginRef);
@@ -221,12 +249,14 @@ async function main() {
     await installClaude(answers);
   } else if (ide === 'antigravity') {
     await installAntigravity(answers);
+  } else if (ide === 'codex') {
+    await installCodex(answers);
   }
 
   console.log();
   console.log(chalk.bold.green('  ✔  Installation complete!'));
   console.log();
-  if (installMcp) {
+  if (installMcp && ide !== 'codex') {
     console.log(chalk.bgYellow.black.bold('  ⚠  IMPORTANT  '));
     console.log(
       chalk.yellow.bold('  The weegloo MCP server requires login/authentication.')
@@ -237,6 +267,8 @@ async function main() {
       chalk.yellow(' button in your IDE\'s MCP settings to sign in.')
     );
     console.log();
+  } else if (installMcp && ide === 'codex') {
+    await handleCodexMcpLogin();
   }
   console.log(
     '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/ai/tools/mcp')

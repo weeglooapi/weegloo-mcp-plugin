@@ -32,6 +32,17 @@ function buildMcpUrlWithGroup(baseUrl, group) {
   return `${baseUrl}${sep}group=${encodeURIComponent(group)}`;
 }
 
+/**
+ * @param {'global' | 'project'} scope
+ * @returns {string}
+ */
+export function getClaudeMcpPath(scope = 'project') {
+  if (scope === 'global') {
+    return path.join(os.homedir(), '.claude.json');
+  }
+  return path.join(process.cwd(), '.mcp.json');
+}
+
 export async function installClaude({
   token,
   pluginRef,
@@ -48,6 +59,7 @@ export async function installClaude({
   const baseDir = scope === 'global' ? claudeHome : path.join(process.cwd(), '.claude');
   const skillsDir = path.join(baseDir, 'skills');
   const rulesDir = path.join(baseDir, 'rules');
+  const mcpPath = getClaudeMcpPath(scope);
 
   console.log(chalk.bold('  ▶  Installing for Claude Code...'));
   console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
@@ -56,8 +68,8 @@ export async function installClaude({
   if (installMcp) {
     const { weeglooUrl, uploadApiUrl } = await fetchMcpConfig(ref);
     const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
-    const mcpPath = path.join(process.cwd(), '.mcp.json');
     try {
+      ensureDir(path.dirname(mcpPath));
       const config = readJsonSafe(mcpPath);
       if (!config.mcpServers) config.mcpServers = {};
 

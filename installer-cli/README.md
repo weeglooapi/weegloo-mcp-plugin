@@ -1,6 +1,6 @@
 # weegloo
 
-An interactive CLI to set up the Weegloo MCP plugin for Cursor IDE and Claude Code.
+An interactive CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Antigravity, and Codex.
 
 ## Usage
 
@@ -40,7 +40,7 @@ WEEGLOO_REF=some-branch npx weegloo@latest
 The CLI asks the following questions in order:
 
 1. **Install location** - Global (`~/.cursor/`) or current project (`.cursor/`)
-2. **IDE** - Cursor / Claude Code / Both
+2. **IDE** - Cursor / Claude Code / Antigravity / Codex
 3. **Personal Access Token** - Generate from the Weegloo console
 4. **MCP server group** - `default` / `core` / `extra` / `all`
 5. **Skills** - Select skills to install (multi-select)
@@ -51,16 +51,25 @@ The CLI asks the following questions in order:
 ### Cursor
 | Item | Path (Global) | Path (Project) |
 |------|---------------|----------------|
-| MCP config | `~/.cursor/mcp.json` | `~/.cursor/mcp.json` |
+| MCP config | macOS: `~/Library/Application Support/Cursor/mcp.json` · Windows: `%APPDATA%\Cursor\mcp.json` · Linux: `~/.config/Cursor/mcp.json` | `.cursor/mcp.json` |
 | Skills | `~/.cursor/skills/<skill-name>/` | `.cursor/skills/<skill-name>/` |
 | Rules | `~/.cursor/rules/<rule-name>.mdc` | `.cursor/rules/<rule-name>.mdc` |
 
 ### Claude Code
 | Item | Path (Global) | Path (Project) |
 |------|---------------|----------------|
-| MCP config | `.mcp.json` (current directory) | `.mcp.json` (current directory) |
+| MCP config | `~/.claude.json` | `.mcp.json` (project root) |
 | Skills | `~/.claude/skills/<skill-name>/` | `.claude/skills/<skill-name>/` |
-| Rules | `~/.claude/rules/<rule-name>.mdc` | `.claude/rules/<rule-name>.mdc` |
+| Rules | `~/.claude/rules/<rule-name>.md` | `.claude/rules/<rule-name>.md` |
+
+### Codex
+| Item | Path (Global) | Path (Project) |
+|------|---------------|----------------|
+| MCP config | `~/.codex/config.toml` | `.codex/config.toml` |
+| Skills | `~/.codex/skills/<skill-name>/` | `.codex/skills/<skill-name>/` |
+| Rules | `~/.codex/rules.md` | `.codex/rules.md` |
+
+Codex writes `mcp_servers.weegloo` (HTTP URL) and `mcp_servers.weegloo-upload` (npx + env with your Personal Access Token). Multiple rules are merged into a single `rules.md` (re-runs update sections by rule id).
 
 ## Available Skills
 
