@@ -6,6 +6,9 @@
   "bin": {
     "weegloo": "./bin.js"
   },
+  "scripts": {
+    "test": "node --test"
+  },
   "pluginRef": "latest",
   "files": [
     "bin.js",
