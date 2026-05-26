@@ -7,7 +7,7 @@ description: Creates a ContentType in Weegloo. Covers localized vs localized-fal
 
 ## When to use
 
-- When creating a new `ContentType` in Weegloo (via MCP `cma_CreateContentType`, then publish).
+- When creating a new `ContentType` in Weegloo (via MCP `cma_CreateContentType` — auto-publishes on create).
 - When deciding **`localized: true` vs `false`** per field (and how that affects **Content** payloads).
 
 ## Why validations were often missing before
@@ -25,7 +25,7 @@ description: Creates a ContentType in Weegloo. Covers localized vs localized-fal
 2. For **each field**, decide **`localized: true` vs `false`** (see **`localized` flag** section next)-before types and validations.
 3. **Assign `ShortText` / `LongText` / `RichText` using the search-semantics section below** - not by gut feel from the words “short”, “long”, or “rich”.
 4. **Design fields → add `validations` only where it clearly helps** (see soft guidance below + `FieldValidation` reference).
-5. Publish the `ContentType` (`cma_PublishOneContentType`) before creating `Content`.
+5. `cma_CreateContentType` / `cma_UpdateOneContentType` / `cma_PatchOneContentType` all **auto-publish on success** — no separate `cma_PublishOneContentType` call needed in the standard create/edit flow. Call `cma_PublishOneContentType` directly only when the ContentType is in a non-Published state — typically after an explicit `Unpublish`, or to recover a Draft left over from a create/edit whose chained publish step failed.
 
 ---
 
@@ -197,7 +197,7 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 ## Important
 
 - **Locale model** (default locale, fallback, `localized: false` writes): **`weegloo-default-locale`** rule and skill.
-- A `ContentType` must be **published** before creating `Content`.
+- A `ContentType` must be **published** before creating `Content`; `cma_CreateContentType` already publishes on success.
 - **Updates** are **full replacement** (`cma_UpdateOneContentType`): preserve **field `id`s** and send **all** fields when editing.
 - Stricter validations may break **existing** entries on next save - warn when migrating live data.
 - Changing **`LongText` ↔ `RichText`** (or other type changes) on a live field is a **schema migration**-plan content re-save and app typing, not a silent rename.
