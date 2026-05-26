@@ -66,10 +66,12 @@ The CLI asks the following questions in order:
 | Item | Path (Global) | Path (Project) |
 |------|---------------|----------------|
 | MCP config | `~/.codex/config.toml` | `.codex/config.toml` |
-| Skills | `~/.codex/skills/<skill-name>/` | `.codex/skills/<skill-name>/` |
-| Rules | `~/.codex/rules.md` | `.codex/rules.md` |
+| Skills | `~/.agents/skills/<skill-name>/` | `.agents/skills/<skill-name>/` |
+| Instructions | `~/.codex/AGENTS.md` | `AGENTS.md` |
 
-Codex writes `mcp_servers.weegloo` (HTTP URL) and `mcp_servers.weegloo-upload` (npx + env with your Personal Access Token). Multiple rules are merged into a single `rules.md` (re-runs update sections by rule id).
+Codex writes `mcp_servers.weegloo` (HTTP URL) and `mcp_servers.weegloo-upload` (npx + env with your Personal Access Token). Multiple Weegloo instruction rules are merged into `AGENTS.md` with stable markers (re-runs update sections by rule id). Codex's own `.rules` files are for command approval policy, not agent instructions.
+
+Codex path rationale: Codex discovers persistent instructions from `AGENTS.md` / `AGENTS.override.md` files ([docs](https://developers.openai.com/codex/guides/agents-md)), and discovers skills from `.agents/skills` and `~/.agents/skills` ([docs](https://developers.openai.com/codex/skills)). Codex `.rules` files control sandbox approval policy, so Weegloo behavioral rules are installed as `AGENTS.md` instructions instead ([docs](https://developers.openai.com/codex/rules)).
 
 ## Available Skills
 

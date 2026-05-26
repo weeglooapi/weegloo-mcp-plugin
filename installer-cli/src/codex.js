@@ -32,10 +32,12 @@ export function getCodexConfigPath(scope = 'project') {
 
 /**
  * @param {'global' | 'project'} scope
- * @returns {string} Absolute path to rules.md
+ * @returns {string} Absolute path to AGENTS.md
  */
-export function getCodexRulesPath(scope = 'project') {
-  return path.join(getCodexHome(scope), 'rules.md');
+export function getCodexInstructionsPath(scope = 'project') {
+  return scope === 'global'
+    ? path.join(getCodexHome('global'), 'AGENTS.md')
+    : path.join(process.cwd(), 'AGENTS.md');
 }
 
 /**
@@ -43,7 +45,9 @@ export function getCodexRulesPath(scope = 'project') {
  * @returns {string} Absolute path to the skills directory
  */
 export function getCodexSkillsDir(scope = 'project') {
-  return path.join(getCodexHome(scope), 'skills');
+  return scope === 'global'
+    ? path.join(os.homedir(), '.agents', 'skills')
+    : path.join(process.cwd(), '.agents', 'skills');
 }
 
 const WEEGLOO_MCP_SECTIONS = new Set([
@@ -122,14 +126,25 @@ export function mergeCodexConfig(existingToml, mcpConfig) {
 }
 
 /**
- * Appends or replaces a rule section in rules.md (marker per rule id).
+ * Backward-compatible alias for callers that still import the old helper name.
+ * Codex instruction rules are stored in AGENTS.md, not in Codex command .rules files.
+ *
+ * @param {'global' | 'project'} scope
+ * @returns {string} Absolute path to AGENTS.md
  */
-function upsertRuleInRulesMd(rulesPath, ruleName, content) {
+export function getCodexRulesPath(scope = 'project') {
+  return getCodexInstructionsPath(scope);
+}
+
+/**
+ * Appends or replaces a rule section in AGENTS.md (marker per rule id).
+ */
+export function upsertRuleInAgentsMd(agentsPath, ruleName, content) {
   const marker = `<!-- weegloo:${ruleName} -->`;
   const endMarker = `<!-- /weegloo:${ruleName} -->`;
   const section = `\n${marker}\n${content.trim()}\n${endMarker}\n`;
 
-  const existing = fs.existsSync(rulesPath) ? fs.readFileSync(rulesPath, 'utf-8') : '';
+  const existing = fs.existsSync(agentsPath) ? fs.readFileSync(agentsPath, 'utf-8') : '';
 
   if (existing.includes(marker)) {
     const start = existing.indexOf(marker);
@@ -138,13 +153,13 @@ function upsertRuleInRulesMd(rulesPath, ruleName, content) {
       const before = existing.slice(0, start).trimEnd();
       const after = existing.slice(end + endMarker.length).trimStart();
       const merged = [before, section.trim(), after].filter(Boolean).join('\n\n');
-      fs.writeFileSync(rulesPath, `${merged}\n`, 'utf-8');
+      fs.writeFileSync(agentsPath, `${merged}\n`, 'utf-8');
       return;
     }
   }
 
   const prefix = existing.trimEnd();
-  fs.writeFileSync(rulesPath, prefix ? `${prefix}\n${section}` : section.trimStart(), 'utf-8');
+  fs.writeFileSync(agentsPath, prefix ? `${prefix}\n${section}` : section.trimStart(), 'utf-8');
 }
 
 export async function installCodex({
@@ -159,10 +174,9 @@ export async function installCodex({
   installSkillsRules,
 }) {
   const ref = pluginRef ?? getPluginRef();
-  const codexHome = getCodexHome(scope);
   const configPath = getCodexConfigPath(scope);
   const skillsDir = getCodexSkillsDir(scope);
-  const rulesPath = getCodexRulesPath(scope);
+  const instructionsPath = getCodexInstructionsPath(scope);
 
   console.log(chalk.bold('  ▶  Installing for Codex...'));
   console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
@@ -226,7 +240,7 @@ export async function installCodex({
     } else {
       const rulesSpinner = ora({ text: `  Downloading rules (0/${rules.length})`, indent: 0 }).start();
       try {
-        ensureDir(codexHome);
+        ensureDir(path.dirname(instructionsPath));
         for (let i = 0; i < rules.length; i++) {
           const rule = rules[i];
           rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
@@ -237,10 +251,10 @@ export async function installCodex({
             tmpPath
           );
           const content = fs.readFileSync(tmpPath, 'utf-8');
-          upsertRuleInRulesMd(rulesPath, rule, content);
+          upsertRuleInAgentsMd(instructionsPath, rule, content);
         }
         rulesSpinner.succeed(
-          `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesPath}`)}`
+          `  Rules installed    ${chalk.dim(`(${rules.length})  → ${instructionsPath}`)}`
         );
       } catch (err) {
         rulesSpinner.fail(`  Failed to install rules: ${err.message}`);
