@@ -144,6 +144,7 @@ When planning an architecture, answer these in order:
 6. **Service User uploads media (avatar, attachment, etc.)?** → **Upload** with the ServiceLogin Bearer, then **ACMA** Media create with the same Bearer. Never route member media through CMA.
 
 If the product covers more than one row, ship all matching paths - they coexist (recipe 5).
+7. **TypeScript project reading from CDA / ACDA?** → generate typed response interfaces with `npx weegloo-codegen` (see **`weegloo-create-content-type`** skill for details).
 
 ## Related
 
