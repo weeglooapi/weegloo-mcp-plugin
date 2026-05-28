@@ -116,7 +116,7 @@ without need burns API capacity and forces re-migration.
 
 | Skill | Current trigger | Target | Add to description |
 |---|---|---|---|
-| `weegloo-default-locale` | 33% | 100% | "Use when creating or updating Content in any localized or multi-language scenario." (Korean triggers removed — semantic match, not keyword match) |
+| `weegloo-default-locale` | 33% | 100% | "Use when creating or updating Content in any localized or multi-language scenario." + **rule stub** (52→15 lines, critical invariants only + skill pointer). Description rewrite alone insufficient; rule-skill duplication caused "I already know" rationalization. Stub forces skill invocation. |
 | `weegloo-web-hosting` | 67% | 100% | "Use before any deploy to Weegloo WebHosting." |
 | `weegloo-service-login` | 67% | 100% | "Use BEFORE any general brainstorming for end-user sign-in features." |
 
@@ -171,7 +171,8 @@ C is server-side (not plugin), so the original α/β/γ options changed:
 | Phase | What | Where | Status |
 |-------|------|-------|--------|
 | **Phase 1** | B (skill body) + A (3 skill descriptions) + rubric v2 | plugin repo | ✅ Shipped |
-| **Measure** | P2 mini T1 (3 runs) | evals | Next |
+| **Measure** | P2 mini T1 (3 runs) | evals | ✅ P2: 5→8. LongText 0/3. |
+| **Phase 1b** | Rule stub experiment (default-locale 52→15 lines) | plugin repo | ✅ Shipped. Skill trigger confirmed. |
 | **Phase 2** | C (tool description traps) + E-lite (warn-mode) | weegloo-server | Needs backend PR |
 | **Measure** | Full T1 (8×3) | evals | After Phase 2 ships |
 

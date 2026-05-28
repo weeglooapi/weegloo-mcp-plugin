@@ -3,49 +3,17 @@ id: weegloo-default-locale
 type: rule
 title: Weegloo default locale and per-field locale buckets
 description: >
-  Space default locale, localized vs localized-false ContentType fields, per-locale buckets, read fallback,
-  and write rules. Apply when defining ContentTypes, creating Content/Media, or locale-aware APIs.
+  Locale handling for Content and Media. Before creating or updating localized content,
+  invoke the weegloo-default-locale skill for the full playbook.
 ---
 
 rules:
-  - section: Default locale (space-level)
+  - section: Critical invariants (always apply)
     items:
-      - Every Weegloo **Space** defines exactly one **default locale** (among configured locales). It is not optional for content semantics.
-      - **Localized** (`localized: true`) **Content** and **Media** fields store values in **per-locale buckets** (e.g. `fields.someField["en-US"]`). Paths and API parameters that reference `fields.*` must include the **locale code** where the API requires it.
+      - Every **Content create** payload must include the **space default locale** value for every populated field. Do not submit creates that populate only non-default locales.
+      - **`localized: false`** fields accept a value **only under the default locale** — no other locale buckets allowed.
+      - **Always** resolve which locale is the space **default** before authoring multi-locale payloads.
 
-  - section: Non-localized fields (`localized: false` on ContentType)
+  - section: Full guidance
     items:
-      - On **ContentType** definition, set **`localized: false`** for fields whose value is **the same for every locale** by design (stable IDs, codes, or a single global **Refer → Media** such as a profile thumbnail that does not vary by language).
-      - **`localized: false` means**: when creating or updating **Content**, that field accepts a value **only under the space default locale**-it is **not** a multi-locale map. You **cannot** persist values for that field under non-default locales.
-      - Do **not** use **`localized: true`** for such fields and then duplicate the identical value into every locale bucket; prefer **`localized: false`** and a single default-locale write. Field-level design details: **`weegloo-create-content-type`** skill.
-
-  - section: Read path and fallback (CDA / delivery)
-    items:
-      - For **`localized: true`** fields: when a client requests content for a **given locale**, if that locale has **no value**, the platform **falls back** to the **default locale** value for that field.
-      - **`localized: false`** fields have a single stored slot (default locale only); there is no per-locale map to fall back within the same field.
-      - Fallback is **read-time** behavior for **localized** fields; it does **not** remove the requirement to store a **default locale** value when **`localized: true`**.
-
-  - section: CDA list - `locale` URL parameter (Content and Media)
-    items:
-      - **Applies to** CDA list endpoints **`GET /v1/spaces/{spaceId}/contents`**, **`GET /v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**, and **`GET /v1/spaces/{spaceId}/medias`** (same semantics for Content and Media).
-      - **Omit `locale`** → server uses the **space default locale**. Response uses a **flat scalar** per field, e.g. **`fields.title = "Hello, World"`**.
-      - **`?locale={code}`** (e.g. **`?locale=en-US`**) → returns values for **that single locale only**, with the space’s **fallback** chain (typically to the **default locale**). Response shape is still a **flat scalar** per field.
-      - **`?locale=*`** → returns **all locales** for **`localized: true`** fields as a **per-locale map**, e.g. **`fields.title = { "en-US": "Hello World", "ko-KR": "안녕, 세상!" }`**. **No fallback** is applied-missing locales are simply **absent** from the map.
-      - **Field shape changes** with mode: code reading **`fields.<id>`** as a string must use **option 1 or 2**; code that wants **all locales** in one call must use **`?locale=*`** and read **`fields.<id>[<localeCode>]`** (handling missing keys).
-      - **`localized: false`** fields are stored under the **default locale only**; do not expect a per-locale map for them under **`?locale=*`** - follow the API contract.
-      - Keep **`locale`** consistent across **`links.next`** pagination so response shape does not change mid-iteration (**`weegloo-list-pagination`**); combine with **`select`** as needed (**`weegloo-api-query-optimization`**).
-
-  - section: Write rules (mandatory)
-    items:
-      - **Content create:** when **creating** Content, **every field** you include in the create payload must have a value under the **space default locale** (e.g. if default is **`en-US`**, each **`localized: true`** field must have an **`en-US`** entry; **`localized: false`** fields use only that default-locale slot). Do not submit creates that populate only non-default locales.
-      - For each localized field you intend to populate, the value for the **default locale** is **required**. The API / validation will not treat “only non-default locales filled” as a complete, valid state for that field.
-      - You **must not** plan workflows that set **only** non-default locale buckets while leaving the **default locale** empty for the same field-such writes are invalid or will fail validation.
-      - If the product needs **only one language** and does not care about separate locale-specific copy, store that single value **only in the default locale** bucket. Delivery for other requested locales will **reuse it via fallback** (see above).
-      - For **`localized: false`** fields, only the **default locale** slot exists for writes; there is nothing to “fallback” between locales on that field-still use **default locale** in CMA payloads.
-
-  - section: LLM operational summary
-    items:
-      - **Always** resolve which locale is the space **default** (e.g. CMA locales list, MCP, or app helpers such as `cmaResolveDefaultSpaceLocale`) before authoring multi-locale payloads.
-      - When mirroring a value into both **active** and **default** locale buckets in code, that pattern exists precisely to satisfy **“default locale must have a value”** (**`localized: true`**) while the user edits a non-default locale-do not drop the default bucket.
-      - Prefer **`localized: false`** on the **ContentType** for locale-agnostic fields (IDs, one global **Refer → Media** thumbnail) so Content writes use **default locale only** for that field-see **`weegloo-create-content-type`**.
-      - Deeper patterns and examples live in the **`weegloo-default-locale`** skill; **`weegloo-create-content-type`** covers **`localized`**, field types, and validations.
+      - For per-locale bucket semantics, CDA `locale` parameter shapes, read fallback behavior, and write rules, invoke the **`weegloo-default-locale`** skill. This rule is a safety-net summary, not a substitute.
