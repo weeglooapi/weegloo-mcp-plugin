@@ -6,7 +6,7 @@ Max: **64 points** (8 prompts × 8 points). Each prompt scored 3 times, median u
 
 | Date | Run label | Plugin SHA | Agent | Total / 64 | Notes |
 |------|-----------|------------|-------|------------|-------|
-| _–_  | _baseline-pending_ | _–_ | _–_ | _–_ | First run pending |
+| 2026-05-28 | baseline | `9168757` | Claude Code 2.1.153 | **62 / 64** | T0. P6 = 6/8 (default-locale skill 33% trigger). All other prompts at ceiling via median, but P2/P5/P8 hide partial failures masked by median rubric. See [run file](./runs/2026-05-28-baseline.md). |
 
 ## How to add a row
 
