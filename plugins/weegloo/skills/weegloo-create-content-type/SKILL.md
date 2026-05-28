@@ -216,6 +216,14 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 
 ---
 
+## Don't model what the platform provides
+
+- **Author / createdBy**: set `publishWithAuthor: true` on the ContentType. Published content exposes `sys.createdBy` automatically. Do not create a separate author field for this (e.g. a Comment ContentType does not need an `author` field).
+- **Timestamps**: `sys.createdAt`, `sys.updatedAt` are automatic. Create a separate Date field only for user-controlled dates (e.g. a publish date the author picks).
+- **ID**: `sys.id` is auto-generated. Do not create an id field.
+
+---
+
 ## Important
 
 - **Locale model** (default locale, fallback, `localized: false` writes): **`weegloo-default-locale`** rule and skill.
