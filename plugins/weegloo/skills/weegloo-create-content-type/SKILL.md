@@ -29,7 +29,7 @@ admin search, etc.).
 
 Do NOT pick LongText because:
 - the field stores long content
-- the field is called "body" / "description" / "article" / "본문"
+- the field is called "body" / "description" / "article"
 - "blogs usually need search"
 
 These rationalizations contradict the skill. If you are about to use one,
