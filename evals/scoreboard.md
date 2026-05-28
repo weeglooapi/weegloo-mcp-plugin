@@ -8,6 +8,7 @@ Max: **64 points** (8 prompts × 8 points). Each prompt scored 3 times; **mean-f
 |------|-----------|------------|-------|--------|------------|-------|
 | 2026-05-28 | baseline | `9168757` | Claude Code 2.1.153 | v1 (median) | **62 / 64** | T0. P6 = 6/8. Median masks P2/P5/P8 partials. |
 | 2026-05-28 | baseline (retro) | `9168757` | Claude Code 2.1.153 | v2 (mean-floor) | **57 / 64** | T0 retrocomputed. P1=8 P2=5 P3=8 P4=8 P5=7 P6=6 P7=8 P8=7. |
+| 2026-05-28 | phase1-mini | Phase 1 | Claude Code (Opus 4.6) | v2 (mean-floor) | P2=**8/8** | P2 only. LongText fire 0/3 (T0: 1/3). B fix validated. |
 
 ## How to add a row
 
