@@ -231,6 +231,22 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 
 ---
 
+## TypeScript codegen (CDA response types)
+
+For TypeScript projects consuming CDA, generate typed response interfaces from ContentType definitions with **`weegloo-codegen`**:
+
+```bash
+# Dump ContentTypes from CMA, then generate
+npx weegloo-codegen content-types.json -o ./generated
+```
+
+- Input: CMA ContentType list JSON (`{ items: [...] }`, bare array, or single CT).
+- Output: per-ContentType `.ts` files with single-locale and `?locale=*` response shapes.
+- Runtime primitives (`Refer`, `Media`, `LocaleWrap`, etc.) come from `weegloo-codegen/runtime`.
+- Suggest after ContentType creation or schema change. No need to hand-write CDA response types.
+
+---
+
 ## Important
 
 - **Locale model** (default locale, fallback, `localized: false` writes): **`weegloo-default-locale`** rule and skill.
