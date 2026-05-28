@@ -159,7 +159,7 @@ For each prompt:
 **Intent:** Media lifecycle — `sys.status` (Draft/Changed/Published/Archived) + `fields.file.{locale}.state` (PENDING/PROCESSING/FAILED). Wait until Published before referencing from Content.
 
 **Expected trajectory:**
-- Invoke `weegloo-media-lifecycle` skill (or apply its logic)
+- Apply `weegloo-media-lifecycle` rule (rule-only, no companion skill exists; D1 scores rule-based response as 2)
 - Check `sys.status` of the Media — likely not Published yet (processing in progress)
 - Check `fields.file.{locale}.state` — PENDING/PROCESSING means not ready; FAILED means processing failed
 - Suggest polling until `sys.status === Published` and file state is null/done
@@ -169,7 +169,7 @@ For each prompt:
 - Tells user to manually publish (auto-publish exists after processing)
 - Doesn't check `file.{locale}.state` at all
 - Suggests re-uploading without diagnosing
-- Skips the lifecycle skill entirely
+- Ignores the lifecycle rule entirely (no diagnostic from media states)
 
 ---
 

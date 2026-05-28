@@ -19,6 +19,28 @@ description: Creates a ContentType in Weegloo. Covers localized vs localized-fal
 
 ---
 
+## Default rule (read this first)
+
+**Default text field type: RichText.**
+
+Pick **LongText** only if the user has explicitly said the product will run
+CDA full-text search on this field in real features (site search, discovery,
+admin search, etc.).
+
+Do NOT pick LongText because:
+- the field stores long content
+- the field is called "body" / "description" / "article" / "본문"
+- "blogs usually need search"
+
+These rationalizations contradict the skill. If you are about to use one,
+stop and either ask the user "will you run CDA full-text search on this field?"
+or default to RichText.
+
+Migration RichText → LongText is possible later. Defaulting to LongText
+without need burns API capacity and forces re-migration.
+
+---
+
 ## Core workflow
 
 1. Before any `Content`, create the `ContentType`.

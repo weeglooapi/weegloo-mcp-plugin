@@ -44,7 +44,7 @@ Do not auto-convert rules to skills. Do not auto-delete rules when a skill exist
 
 ---
 
-### 2. B — Strengthen `weegloo-create-content-type` skill body  *(half day, plugin)*
+### 2. B — Strengthen `weegloo-create-content-type` skill body  *(half day, plugin)* ✅ DONE
 
 **Goal:** kill P2 R2-class failure where agent invokes skill, cites rule, then defaults to LongText anyway.
 
@@ -98,7 +98,7 @@ without need burns API capacity and forces re-migration.
 
 ---
 
-### 4. Rubric v2 — switch to mean-floor  *(30 min, evals only)*
+### 4. Rubric v2 — switch to mean-floor  *(30 min, evals only)* ✅ DONE
 
 **Goal:** surface partial failures currently hidden by median per dim.
 
@@ -108,7 +108,7 @@ without need burns API capacity and forces re-migration.
 
 ---
 
-### 5. A — Skill description rewrites, **only for demonstrated trigger misses**  *(half day, plugin)*
+### 5. A — Skill description rewrites, **only for demonstrated trigger misses**  *(half day, plugin)* ✅ DONE
 
 **NOT all 13.** Codex was explicit: batching all is churn.
 
@@ -116,9 +116,9 @@ without need burns API capacity and forces re-migration.
 
 | Skill | Current trigger | Target | Add to description |
 |---|---|---|---|
-| `weegloo-default-locale` | 33% | 100% | "Use when creating or updating Content in any localized scenario. Triggers: 다국어, 한국어/영어, locale, 번역, per-locale value, default locale, localized field." |
-| `weegloo-web-hosting` | 67% | 100% | "Use before any deploy to Weegloo. Triggers: 배포해줘, 정적 사이트, dist, subdomain, 호스팅, deploy static, ship the site." |
-| `weegloo-service-login` | 67% | 100% | "Use BEFORE any general brainstorming for end-user sign-in features. Triggers: Google 로그인, 회원 가입, 소셜 로그인, end-user sign-up, member auth." |
+| `weegloo-default-locale` | 33% | 100% | "Use when creating or updating Content in any localized or multi-language scenario." (Korean triggers removed — semantic match, not keyword match) |
+| `weegloo-web-hosting` | 67% | 100% | "Use before any deploy to Weegloo WebHosting." |
+| `weegloo-service-login` | 67% | 100% | "Use BEFORE any general brainstorming for end-user sign-in features." |
 
 Leave the other 10 alone unless T1 reveals new trigger misses.
 
@@ -157,17 +157,22 @@ Codex's order:
 - ❌ Ship broad server-side refuse across all anti-patterns (security-critical surface is already 0-hit)
 - ❌ Spend time tightening prompts that already 3/3 ceiling (P1, P3, P4, P7) without new evidence
 
-## Open decisions
+## Open decisions — RESOLVED 2026-05-28
 
-1. **Who edits MCP tool descriptions (#1 C)?** Are they in this plugin repo, or do they live server-side on `ai.weegloo.com/mcp`? If server-side: needs backend PR.
-2. **E-lite (#3) warn-mode vs refuse-mode** for first ship.
-3. **B mini T1 vs hold for full T1**: after B ships, run P2-only mini T1, or wait until B+C+E-lite all ship and do one full T1?
-4. **#5 A — should we widen if T1 shows new trigger misses?** Default: yes, but only for prompts that *also* showed output risk.
+1. **Who edits MCP tool descriptions (#1 C)?** ✅ **Server-side.** Descriptions live in CMA controllers (`@Operation` annotations in weegloo-server), fetched at runtime via OpenAPI → MCP conversion. C requires a weegloo-server backend PR, same as E-lite.
+2. **E-lite (#3) warn-mode vs refuse-mode:** ✅ **Warn-mode first.** Less disruptive; provides false-positive data on the heuristic; agent can self-correct from warning. Escalate to refuse-mode if agent ignores warnings in T1.
+3. **B mini T1 vs hold for full T1:** ✅ **P2 mini T1 after Phase 1 (B+A+rubric v2), then full T1 after Phase 2 (C+E-lite).** Mini T1 validates the highest-value plugin-side fix quickly.
+4. **#5 A — scope expansion:** ✅ **Yes, gated on output risk.** Widen only when T1 shows trigger miss + output quality degradation co-occurring. Trigger miss alone (ambient rule covers) = no action.
 
-## Sequencing options for the user
+## Sequencing — DECIDED: modified β
 
-- **Option α (fast micro-loop):** B → P2 mini T1 → adjust → C → mini T1 → E-lite → full T1 → A selective. Maximizes learning per intervention.
-- **Option β (one big batch):** B + C + rubric v2 ship together → full T1 → E-lite based on what T1 shows → A selective. Fewer measurement cycles, faster end-to-end.
-- **Option γ (E-lite first):** ship E-lite alone → measure → then B + C → measure. Tests codex's "enforcement is what matters" hypothesis directly.
+C is server-side (not plugin), so the original α/β/γ options changed:
 
-No recommendation yet — depends on backend availability for E-lite and how much measurement overhead is acceptable.
+| Phase | What | Where | Status |
+|-------|------|-------|--------|
+| **Phase 1** | B (skill body) + A (3 skill descriptions) + rubric v2 | plugin repo | ✅ Shipped |
+| **Measure** | P2 mini T1 (3 runs) | evals | Next |
+| **Phase 2** | C (tool description traps) + E-lite (warn-mode) | weegloo-server | Needs backend PR |
+| **Measure** | Full T1 (8×3) | evals | After Phase 2 ships |
+
+Rationale: maximizes immediate plugin-side throughput. C and E-lite both need server work, so batch them. If B alone kills P2 LongText trap, E-lite becomes defense-in-depth rather than critical path.

@@ -1,6 +1,6 @@
 ---
 name: weegloo-web-hosting
-description: Deploy on Weegloo WebHosting via MCP (static-only, max 100 files). Covers ZIP layout and MCP upload / WebHosting resource flow.
+description: Use before any deploy to Weegloo WebHosting. Static-only (max 100 files). Covers ZIP layout, MCP upload, and WebHosting resource flow.
 ---
 
 # Weegloo Deploy Website

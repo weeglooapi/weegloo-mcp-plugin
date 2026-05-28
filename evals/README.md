@@ -32,7 +32,7 @@ See [rubric.md](./rubric.md) for the scoring guide and [prompts.md](./prompts.md
    - Whether the user (you, the evaluator) had to correct it
    - Any anti-patterns triggered
 4. **Score against the rubric** and write to a new file in [runs/](./runs/) using the [template](./runs/_template.md).
-5. **Repeat 3 times per prompt** (LLM stochasticity). Record all 3 runs; use the median when computing totals.
+5. **Repeat 3 times per prompt** (LLM stochasticity). Record all 3 runs; use the **mean per dim, floored to integer** when computing totals (rubric v2).
 6. **Update [scoreboard.md](./scoreboard.md)** with the run label, date, and total.
 
 ## Conventions

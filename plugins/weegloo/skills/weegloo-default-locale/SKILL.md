@@ -1,6 +1,6 @@
 ---
 name: weegloo-default-locale
-description: Weegloo default locale, localized vs localized-false fields, per-locale buckets, read fallback, mandatory default-locale values on every field for Content create, and the CDA list `locale` URL parameter (omit / specific / `*`) response shapes. Use when creating ContentTypes, creating Content, or reviewing CMA/CDA locale usage.
+description: Use when creating or updating Content in any localized or multi-language scenario. Covers localized vs localized-false fields, per-locale buckets, read fallback, mandatory default-locale values on Content create, and the CDA `locale` URL parameter shapes.
 ---
 
 # Weegloo - default locale and localized fields

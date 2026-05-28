@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login
-description: ServiceLogin — the Space's own end-user sign-up/sign-in system, separate from Weegloo platform accounts. The product (the Space) runs its own member directory and ANYONE may sign up; this is NOT the Weegloo admin login (that is `weegloo-user-login`). Covers ServiceLogin + ServiceUserRole + ServiceUser (roleOverride, isAdmin); Bearer Token usable against ACMA / ACDA / Upload (never CMA / CDA — those need a Weegloo User token); members upload media via Upload → ACMA Media create with the same Bearer; current ServiceUser via ACMA GET https://acma.weegloo.com/v1/me (not .../spaces/{spaceId}/me). Use when designing member sign-up/sign-in for a Space's own product (members-only board, paid content, community, etc.), wiring OAuth providers for end users, member-contributed media flows, or reasoning about per-user permissions on app-owned resources.
+description: Use BEFORE any general brainstorming for end-user sign-in features. ServiceLogin — the Space's own end-user sign-up/sign-in system, separate from Weegloo platform accounts. Covers ServiceLogin + ServiceUserRole + ServiceUser (roleOverride, isAdmin); Bearer Token for ACMA / ACDA / Upload (never CMA / CDA); current ServiceUser via ACMA GET /v1/me.
 ---
 
 # Weegloo — ServiceLogin (end-user sign-up for the product)

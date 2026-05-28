@@ -16,7 +16,7 @@ Copy this file to `runs/YYYY-MM-DD-<label>.md` and fill in. Don't edit this temp
 
 ## Per-prompt scoring
 
-Each prompt: 3 runs (R1/R2/R3). Score each run on D1-D4. Take the **median** for the prompt total.
+Each prompt: 3 runs (R1/R2/R3). Score each run on D1-D4. Take the **mean per dim, floored to integer** for the prompt total (rubric v2).
 
 ### P1 — 회원제 게시판
 

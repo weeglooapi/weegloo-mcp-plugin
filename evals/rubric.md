@@ -1,4 +1,4 @@
-# Scoring Rubric (v1)
+# Scoring Rubric (v2)
 
 Each prompt is scored on 4 dimensions, 0/1/2 each. **Max 8 points per prompt, 64 per run.**
 
@@ -88,7 +88,7 @@ D1 (0-2) + D2 (0-2) + D3 (0-2) + D4 (0 or 2) = 0-8
 sum of 8 prompts = 0-64
 ```
 
-If running 3 times per prompt, use the **median** D1-D4 per prompt across the 3 runs, then sum.
+If running 3 times per prompt, use the **mean** D1-D4 per prompt across the 3 runs, **floored to integer**, then sum. (Changed from median in v1 — mean-floor surfaces partial failures that median masks, e.g. P2's bimodal LongText trap.)
 
 ## Recording
 
