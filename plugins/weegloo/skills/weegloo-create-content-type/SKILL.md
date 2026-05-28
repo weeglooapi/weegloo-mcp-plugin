@@ -201,7 +201,7 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 ## Field value formats (Content create/update)
 
 - **RichText**: value is a **string**. Any string content is accepted (plain text, markdown, HTML — depends on the product). Do NOT send a JSON object (e.g. `{ "type": "doc", "content": [...] }`).
-- **Date**: value is an **ISO 8601 datetime string** (e.g. `"2026-05-28T00:00:00.000Z"`). Do NOT send date-only strings (`"2026-05-28"`) or timestamps (`1716854400000`).
+- **Date**: value is an **ISO 8601 datetime string in UTC** (e.g. `"2026-05-28T00:00:00.000Z"`). Only UTC (`Z` suffix) is accepted. Do NOT send date-only strings (`"2026-05-28"`), timestamps (`1716854400000`), or non-UTC offsets (`+09:00`).
 
 ---
 
