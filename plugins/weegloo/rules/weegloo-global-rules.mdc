@@ -8,6 +8,12 @@ description: >
 ---
 
 rules:
+  - section: When unsure, read the docs first (do not guess)
+    items:
+      - If you are **not certain** how any Weegloo feature works or behaves — a query/filter parameter, `select`/`include` response shape, locale rules, an error code, publish/version semantics, role/permission scope, or any concept — **look it up in the docs before acting**. Do **not** rely on assumptions or memory.
+      - **Where to look:** the general Weegloo documentation at **`docs.weegloo.com`** (concepts, how-tos, per-resource references). The site is a SPA, so fetch the **agent-readable Markdown**: append **`.md`** to any page (e.g. **`https://docs.weegloo.com/api/reference/common/query-parameters.md`**). Start from the index at **`https://docs.weegloo.com/llms.txt`** to find the right page, then fetch its **`.md`**. Exact request/response schemas live in the **API Swagger specs** (see `weegloo-api-endpoints`).
+      - **Treat the docs as the source of truth** over guesses. After an unexpected error or empty result, re-check the relevant docs page before retrying.
+
   - section: HTTP JSON media type (when calling Weegloo APIs from code)
     items:
       - Weegloo APIs respond with **`application/vnd.com.weegloo.v1+json;charset=UTF-8`**, not plain `application/json`.
