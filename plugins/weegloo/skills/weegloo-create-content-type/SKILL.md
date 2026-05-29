@@ -19,6 +19,28 @@ description: Creates a ContentType in Weegloo. Covers localized vs localized-fal
 
 ---
 
+## Default rule (read this first)
+
+**Default text field type: RichText.**
+
+Pick **LongText** only if the user has explicitly said the product will run
+CDA full-text search on this field in real features (site search, discovery,
+admin search, etc.).
+
+Do NOT pick LongText because:
+- the field stores long content
+- the field is called "body" / "description" / "article"
+- "blogs usually need search"
+
+These rationalizations contradict the skill. If you are about to use one,
+stop and either ask the user "will you run CDA full-text search on this field?"
+or default to RichText.
+
+Migration RichText → LongText is possible later. Defaulting to LongText
+without need burns API capacity and forces re-migration.
+
+---
+
 ## Core workflow
 
 1. Before any `Content`, create the `ContentType`.
@@ -176,6 +198,13 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 
 ---
 
+## Field value formats (Content create/update)
+
+- **RichText**: value is a **string**. Any string content is accepted (plain text, markdown, HTML — depends on the product). Do NOT send a JSON object (e.g. `{ "type": "doc", "content": [...] }`).
+- **Date**: value is an **ISO 8601 datetime string in UTC** (e.g. `"2026-05-28T00:00:00.000Z"`). Only UTC (`Z` suffix) is accepted. Do NOT send date-only strings (`"2026-05-28"`), timestamps (`1716854400000`), or non-UTC offsets (`+09:00`).
+
+---
+
 ## Field types (reminder)
 
 - **Array**: Stores multiple values in an array format.
@@ -191,6 +220,31 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 - **Location**: Stored values support geographic searches such as `near` or `within`; suitable for storing latitude and longitude coordinates.
 
 **Mapping types → `validations`:** For **Array**, define element type under **`items`**; per-element rules go in **`items.validations`**. Prefer **`dateRange`** on **Date**, **`range`** on **Number** / **Long**, **`regexp` / `prohibitRegexp` / `size` / `in` / `unique`** on text-like fields, and on **Refer** use **`referContentType`** (→ Content), or **`mediaMimetypeGroup` / `mediaFileSize` / `mediaImageDimensions`** (→ Media) when the product requires it - see **`FieldValidation`** above and **`weegloo-api-endpoints`** for CMA schema links.
+
+---
+
+## Don't model what the platform provides
+
+- **Author / createdBy**: set `publishWithAuthor: true` on the ContentType. Published content exposes `sys.createdBy` automatically. Do not create a separate author field for this (e.g. a Comment ContentType does not need an `author` field).
+- **Timestamps**: `sys.createdAt`, `sys.updatedAt` are automatic. Create a separate Date field only for user-controlled dates (e.g. a publish date the author picks).
+- **ID**: `sys.id` is auto-generated. Do not create an id field.
+
+---
+
+## TypeScript codegen (CDA / ACDA response types)
+
+For TypeScript projects consuming CDA or ACDA, generate typed response interfaces from ContentType definitions with **`weegloo-codegen`**:
+
+```bash
+# 1. Export ContentTypes from CMA (MCP or REST), save the raw JSON response
+# 2. Generate types
+npx weegloo-codegen content-types.json -o ./generated
+```
+
+- **Input**: CMA ContentType list JSON (`{ items: [...] }`, bare array, or single CT). Get it by calling `cma_GetListContentTypes` (MCP) or `GET /v1/spaces/{spaceId}/content-types` (CMA REST) and saving the response body.
+- **Output**: per-ContentType `.ts` files with single-locale and `?locale=*` response shapes.
+- **Runtime**: `Refer`, `Media`, `LocaleWrap`, etc. come from `weegloo-codegen/runtime`.
+- **When to run**: after ContentType creation, schema change (field add/remove/type change, `localized` flag change), or when replacing hand-written CDA/ACDA response interfaces.
 
 ---
 

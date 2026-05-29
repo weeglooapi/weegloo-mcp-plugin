@@ -145,6 +145,8 @@ When planning an architecture, answer these in order:
 
 If the product covers more than one row, ship all matching paths - they coexist (recipe 5).
 
+**TypeScript projects:** if the app reads from CDA or ACDA, generate typed response interfaces with `npx weegloo-codegen` after ContentType setup. See **`weegloo-create-content-type`** skill for usage.
+
 ## Related
 
 - **`weegloo-api-endpoints`** — base URLs, Accept header, vendor JSON, OpenAPI links, ACMA/ACDA ownership invariants.
