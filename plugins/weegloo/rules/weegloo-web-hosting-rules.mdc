@@ -16,6 +16,7 @@ rules:
       - **MCP tools only** for deployment. No deploy scripts, no direct API calls.
       - **Subdomain must come from the user.** Never assume or infer.
       - **`CheckSubdomain` before `CreateWebHosting`.** Always.
+      - **MarketApp packaging:** if this WebHosting may *ever* ship as a MarketApp, inline the source Space's `sys.id`, `DeliveryAccessToken`, and referenced resource `sys.id`s into the build as **verbatim, intact literal strings** (no placeholders / env-var indirection / runtime concat / blanks). Consult **`weegloo-marketapp-packaging`** before writing build-time config. N/A for direct deploys.
 
   - section: Full workflow
     items:
