@@ -88,6 +88,10 @@ Pitfalls: don't bind the token to **Administrator** or any write-capable role - 
 - **Required role configuration:**
   - **`SpaceRole`** for the **DeliveryAccessToken** (read-only, scoped) - for any CDA path.
   - **`ServiceUserRole`** for the default member, plus overrides for tiered/moderator members - for ACMA / ACDA.
+- **Content modeling for a forum/board (verified end-to-end):**
+  - **Author:** set **`publishWithAuthor: true`** on the post/comment `ContentType`. The writing `ServiceUser` is preserved as **`sys.createdBy`** and delivered with the published snapshot on **ACDA / CDA** (resolve with `include=1` for the byline). Do **not** add a manual author field. Enable it **before** members start posting - it is applied at publish time and is **not** retroactive. See **`weegloo-create-content-type`**.
+  - **Relationships:** model reply → parent and comment → post as **`Refer`** fields (self-reference for reply chains), not id strings. Normalize by default; see **`weegloo-create-content-type`**.
+  - **Read + render:** ACDA returns the member's own/assigned posts; CDA serves any publicly readable ones. With `publishWithAuthor`, both carry `createdBy` for rendering the author.
 - **Anti-pattern:** do **not** route member writes through CMA from the browser; CMA writes from clients require a Weegloo **console** session, not a member token.
 
 ### 5. Composite / multi-tier service
