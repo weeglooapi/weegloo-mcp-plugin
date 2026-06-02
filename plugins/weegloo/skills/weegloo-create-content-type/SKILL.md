@@ -1,6 +1,6 @@
 ---
 name: weegloo-create-content-type
-description: Creates a ContentType in Weegloo. Covers localized vs localized-false fields, ShortText vs LongText vs RichText (search semantics), FieldValidation, and soft guidance. English only.
+description: Creates or designs a ContentType in Weegloo — content modeling, schema and field design, choosing a field's type. Covers localized vs localized-false fields, ShortText vs LongText vs RichText (search semantics), FieldValidation, publishWithAuthor, and Refer relationships, plus soft guidance. Use when modeling content for a new app, defining fields/schema, deciding ShortText/LongText/RichText for a field (e.g. a note/post body), or before proposing or finalizing ANY ContentType. English only.
 ---
 
 # Weegloo Create ContentType
@@ -223,9 +223,37 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 
 ---
 
+## Model relationships as Refer (normalize by default)
+
+When one entry relates to another - reply → parent, comment → post, post → author -
+model the link as a **`Refer` field**, not a `ShortText` that stores the other
+entry's id by hand. `Refer` is typed and first-class: restrict it with
+`referContentType`, resolve it server-side with `include`, and filter by target
+id. A `ShortText` id is an opaque string the platform cannot validate, resolve,
+or traverse. `Refer` supports **self-reference** (a ContentType referencing
+itself) for trees and threads - reply chains, category parents, nav menus.
+
+| Relationship | ✅ Refer | ❌ Anti-pattern |
+|--------------|---------|-----------------|
+| reply → parent comment | `parent` (Refer, self-ref) | `parentCommentId` (ShortText) |
+| comment → post | `post` (Refer) | `postId` (ShortText) |
+| post → many related | `Array` of `Refer` | comma-joined ids in a `ShortText` |
+
+**Denormalize only with a stated reason** - a deliberately frozen *snapshot at
+write time* (author name as it was, a cached count) or a performance-driven
+denormalized read. Default to the reference; make the snapshot the explicit
+exception, with the reason recorded. Don't reach for a flat id "because it's
+simpler" - that is the rationalization this section exists to stop.
+
+Full reference model (single / array / bidirectional / self / circular +
+`include` resolution) and the normalize principle live in the Weegloo docs:
+**Reference** and **Content modeling** core-concept pages
+(`docs.weegloo.com/getting-started/core-concepts/common/reference.md`,
+`docs.weegloo.com/getting-started/core-concepts/content-and-media/content-modeling.md`).
+
 ## Don't model what the platform provides
 
-- **Author / createdBy**: set `publishWithAuthor: true` on the ContentType. Published content exposes `sys.createdBy` automatically. Do not create a separate author field for this (e.g. a Comment ContentType does not need an `author` field).
+- **Author / createdBy**: set `publishWithAuthor: true` on the ContentType. Published content exposes `sys.createdBy` (and `sys.updatedBy`) automatically - do not create a separate author field (a Comment ContentType needs no `author` field). **Footgun:** `publishWithAuthor` is **`false` by default** and is applied **at publish time** (baked into the published snapshot), not as a read-time filter. **Enable it before the Content is authored/published** - turning it on later does **not** restore authors on already-published entries; you must **re-publish** each one (the CMA draft still holds `sys.createdBy`; verify before relying on it). Mechanism + recovery: Weegloo docs → *Content modeling* (Author exposure) and *System properties (sys)*.
 - **Timestamps**: `sys.createdAt`, `sys.updatedAt` are automatic. Create a separate Date field only for user-controlled dates (e.g. a publish date the author picks).
 - **ID**: `sys.id` is auto-generated. Do not create an id field.
 

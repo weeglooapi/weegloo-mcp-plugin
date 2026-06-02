@@ -88,6 +88,10 @@ Pitfalls: don't bind the token to **Administrator** or any write-capable role - 
 - **Required role configuration:**
   - **`SpaceRole`** for the **DeliveryAccessToken** (read-only, scoped) - for any CDA path.
   - **`ServiceUserRole`** for the default member, plus overrides for tiered/moderator members - for ACMA / ACDA.
+- **Content modeling for a forum/board (verified end-to-end):**
+  - **Author:** set **`publishWithAuthor: true`** on the post/comment `ContentType`. The writing `ServiceUser` is preserved as **`sys.createdBy`** and delivered with the published snapshot on **ACDA / CDA** (resolve with `include=1` for the byline). Do **not** add a manual author field. Enable it **before** members start posting - it is applied at publish time and is **not** retroactive. See **`weegloo-create-content-type`**.
+  - **Relationships:** model reply → parent and comment → post as **`Refer`** fields (self-reference for reply chains), not id strings. Normalize by default; see **`weegloo-create-content-type`**.
+  - **Read + render:** ACDA returns the member's own/assigned posts; CDA serves any publicly readable ones. With `publishWithAuthor`, both carry `createdBy` for rendering the author.
 - **Anti-pattern:** do **not** route member writes through CMA from the browser; CMA writes from clients require a Weegloo **console** session, not a member token.
 
 ### 5. Composite / multi-tier service
@@ -146,6 +150,17 @@ When planning an architecture, answer these in order:
 If the product covers more than one row, ship all matching paths - they coexist (recipe 5).
 
 **TypeScript projects:** if the app reads from CDA or ACDA, generate typed response interfaces with `npx weegloo-codegen` after ContentType setup. See **`weegloo-create-content-type`** skill for usage.
+
+## After the architecture — model the content (do these next)
+
+Choosing the API / login / role combination is only step 1. **Before** writing any code, payloads, or asking the user to decide content-shape questions, invoke the content-modeling skills in order — do **not** design ContentTypes or Content from memory or from the rule summaries:
+
+1. **`weegloo-create-content-type`** — define each `ContentType`'s fields, `localized` flags, **ShortText / LongText / RichText** choice (search semantics drive this), validations, `publishWithAuthor`, and `Refer` relationships. A field-type question (e.g. "store the body as LongText or RichText?") is **answered here first**, then only the genuine product trade-off goes to the user.
+2. **`weegloo-default-locale`** — whenever any field is multi-locale: per-locale bucket rules, read fallback, and the mandatory default-locale value on every Content create.
+3. **`weegloo-delivery-access-token`** — provision the least-privilege DeliveryAccessToken for any CDA path (never Administrator / first list item).
+4. **`weegloo-marketapp-packaging`** — if this ships (or may ever ship) as a MarketApp / WebHosting deploy: inline the source Space `sys.id`, DeliveryAccessToken, and referenced resource `sys.id`s as verbatim literal strings at build time.
+
+This chain is the intended path: pick the architecture here, then walk skills 1–4 before implementation.
 
 ## Related
 
