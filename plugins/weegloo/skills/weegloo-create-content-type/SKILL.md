@@ -1,6 +1,6 @@
 ---
 name: weegloo-create-content-type
-description: Creates a ContentType in Weegloo. Covers localized vs localized-false fields, ShortText vs LongText vs RichText (search semantics), FieldValidation, and soft guidance. English only.
+description: Creates or designs a ContentType in Weegloo — content modeling, schema and field design, choosing a field's type. Covers localized vs localized-false fields, ShortText vs LongText vs RichText (search semantics), FieldValidation, publishWithAuthor, and Refer relationships, plus soft guidance. Use when modeling content for a new app, defining fields/schema, deciding ShortText/LongText/RichText for a field (e.g. a note/post body), or before proposing or finalizing ANY ContentType. English only.
 ---
 
 # Weegloo Create ContentType
