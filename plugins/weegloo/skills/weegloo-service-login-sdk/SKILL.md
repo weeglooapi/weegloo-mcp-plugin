@@ -27,7 +27,7 @@ Browser apps (static sites, Weegloo WebHosting, SPAs, Next.js, etc.) should use 
       - `service-login.4ba25e91.js`
       - `service-login.51817f08.esm.js`
       - `service-login.7f47bcb0.min.js`
-  - **Version manifest** (current hashes per version): `https://weegloo-media.com/static/libs/service-login/manifiest.json`
+  - **Version manifest** (current hashes per version): `https://weegloo-media.com/static/libs/service-login/manifest.json`
     - Look up the hash for the version you want to pin, then load the matching `.<hash>.js` URL above.
 - Source: vanilla JavaScript, zero runtime dependencies, ships UMD + ESM + minified
 
