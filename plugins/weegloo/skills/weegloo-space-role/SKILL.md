@@ -10,6 +10,7 @@ description: SpaceRole and ServiceUserRole permission rules — scope ContentTyp
 - Creating or updating a **`SpaceRole`** (`cma_CreateSpaceRole`, `cma_UpdateSpaceRole`) for **Weegloo Users** (CMA / CDA / `DeliveryAccessToken`).
 - Creating or updating a **`ServiceUserRole`** (`cma_CreateServiceUserRole`, …) for **Service Users** (ACMA / ACDA).
 - Scoping permissions so a caller may only see or change **resources they created** (private notes, drafts, per-member data).
+- **Webhook + WriteBack** job ContentTypes — open **Create**, **Read / Edit / Delete** with **`:self`** only (**`weegloo-webhook-writeback`**).
 - Pinning access to **one specific creator** by user id (audit, delegation, or a fixed service account).
 
 Canonical API reference (overview + structure): **`weegloo-api-endpoints`** rule → *Weegloo documentation* → **SpaceRole**.
@@ -128,7 +129,20 @@ Example shape (illustrative — add other actions/maps as required):
 }
 ```
 
-Repeat the same **`createdBy`** + **`contentType`** pattern on **`Create`** / **`Edit`** / **`Delete`** if those actions should also be self-scoped.
+For **`Create`**, use a **contentType-only** rule (no **`createdBy`**) when anyone permitted by the role may add new rows — see **Webhook job** recipe below.
+
+---
+
+## Recipe — Webhook job Request / Response Content
+
+When a **ContentType** carries async **request** + **response** for an external API (**`weegloo-webhook-writeback`**):
+
+| Action | `createdBy` filter |
+|--------|-------------------|
+| **`Create`** | **Omit** — allow new job rows for the job **ContentType** |
+| **`Read`**, **`Edit`**, **`Delete`**, … | **`":self"`** + job **ContentType** `Refer` |
+
+End users submit jobs (**Create**); they may only **read / change / delete their own** job Content. **WriteBack** still updates **`response`** platform-side after the external API succeeds.
 
 ---
 
@@ -170,4 +184,5 @@ OpenAPI field shapes: **`weegloo-api-endpoints`** → CMA API docs → **`Create
 - **`weegloo-delivery-access-token`** — bind a least-privilege **SpaceRole** to a CDA token.
 - **`weegloo-service-login`** — ServiceUserRole, `defaultRole`, `roleOverride`, `isAdmin`, ACMA ownership defaults.
 - **`weegloo-service-architecture`** — which role type each service pattern needs.
+- **`weegloo-webhook-writeback`** — async external API jobs; mandatory Create vs `:self` Read/Edit/Delete split.
 - **`weegloo-api-endpoints`** — API base URLs, docs index, `SpaceRole` reference link.

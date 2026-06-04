@@ -1,6 +1,6 @@
 ---
 name: weegloo-webhook-writeback
-description: Async external-API jobs on Weegloo using Webhook + WriteBack — job ContentType, Content.Create trigger, Transformation to call third-party APIs, WriteBack to update the same Content or ingest Media, frontend poll by sys.id. Use when integrating LLM/image/search/webhook backends, proxying user requests through Weegloo without a custom server, or designing poll-until-response flows.
+description: Async external-API jobs on Weegloo using Webhook + WriteBack — job ContentType, Content.Create trigger, Transformation to call third-party APIs, WriteBack to update the same Content or ingest Media, frontend poll by sys.id. Mandates SpaceRole/ServiceUserRole layout for job Content — open Create, Read/Edit/Delete scoped with createdBy :self. Use when integrating LLM/image/search/webhook backends or designing poll-until-response flows.
 ---
 
 # Weegloo — Webhook + WriteBack (async external API jobs)
@@ -21,6 +21,8 @@ Canonical behavior and JSON examples: [Webhook — WriteBack](https://docs.weegl
 
 Sensitive values (API keys) belong in Webhook **`Headers`** (secret entries), **not** in Content fields exposed to end users.
 
+**Role design is part of the integration.** Job rows hold **request** (user input) and **response** (filled by **WriteBack** after the external API succeeds). End users must be able to **create** a job, but must **not** read, edit, or delete **another user’s** job — and must **not** forge a completed **`response`** on their own or others’ rows. Configure **`SpaceRole`** (Weegloo User + CMA/CDA) or **`ServiceUserRole`** (Service User + ACMA/ACDA) accordingly — see **§ Role design for job Request / Response Content** below.
+
 ## Agent workflow (do this in order)
 
 Copy and track:
@@ -29,10 +31,11 @@ Copy and track:
 - [ ] 1. Read weegloo-create-content-type + weegloo-default-locale (field types, locale buckets)
 - [ ] 2. Design job ContentType (request + response fields)
 - [ ] 3. cma_CreateContentType (note sys.id)
-- [ ] 4. Ensure MCP exposes Webhook tools (group=extra or group=all — see below)
-- [ ] 5. Create Webhook: ONE topic, filter to job ContentType, URL + secret Headers + Transformation + writeBacks
-- [ ] 6. Document frontend: CMA create → poll CDA/CMA by sys.id until response set
-- [ ] 7. SpaceRole: end users must not forge “completed” jobs if that matters — scope writes with **`createdBy.sys.id": ":self"`** where appropriate (**`weegloo-space-role`**; see Security)
+- [ ] 4. **Configure role(s)** for job Content — **Create** open on job ContentType; **Read / Edit / Delete** (and related actions you grant) **only** with **`createdBy.sys.id": ":self"`** on that ContentType (**§ Role design**; **`weegloo-space-role`**)
+- [ ] 5. Ensure MCP exposes Webhook tools (group=extra or group=all — see below)
+- [ ] 6. Create Webhook: ONE topic, filter to job ContentType, URL + secret Headers + Transformation + writeBacks
+- [ ] 7. Document frontend: create job → poll by sys.id until response set (caller may **Read** only **own** rows per role)
+- [ ] 8. Verify: user A cannot **Read** or **Edit** user B’s job; user cannot **Edit** `response` to fake completion (WriteBack still updates via platform)
 ```
 
 ### MCP tools
@@ -54,6 +57,106 @@ Typical fields (adapt names to the product):
 - **Binary / image APIs** — use **`Refer` (Media)** for `response`; in WriteBack set the field to **`{ "$media": { "source": "{ /response/... }", "encoding": "url" } }`** (or `base64`) so Weegloo ingests the file and stores a Media reference.
 
 Follow **`weegloo-create-content-type`** for RichText vs LongText defaults. Follow **`weegloo-default-locale`**: on **Content create**, every populated field needs the **default locale** bucket (e.g. `"en-US": "..."`).
+
+Leave **`response`** empty at create time. Only **WriteBack** (after a **2xx** external response) should populate it — role rules below stop users from patching **`response`** directly to impersonate a finished job.
+
+## Role design for job Request / Response Content (mandatory)
+
+When the job ContentType is the **Request / Response carrier** for an external API (this skill’s main pattern), **always** split permissions on the role’s **`content`** map:
+
+| Action on job **Content** | Typical rule | Why |
+| --- | --- | --- |
+| **`Create`** | **Allow** for the job **ContentType** — **no** `createdBy` filter (or only `contentType` filter) | Any permitted caller may **submit** a new job (request payload). |
+| **`Read`** | **Allow** with **`contentType`** + **`createdBy.sys.id": ":self"`** | Poll and inspect **only your own** job row (`sys.id` you created). |
+| **`Edit`** | **Allow** with **`contentType`** + **`createdBy.sys.id": ":self"`** | Optional user edits to **request** fields on **own** rows only; blocks forging **`response`** on others’ rows or tampering with others’ results. |
+| **`Delete`** | Same **`:self`** + **ContentType** filter if delete is granted | Users may cancel **own** jobs only. |
+| **`Publish`** / **`Unpublish`** | Apply the same **`:self`** + **ContentType** pattern if the role grants them | Avoid cross-user publish of job state. |
+
+Use the reserved id **`:self`** (not a hard-coded User id) so the filter tracks **whoever is authenticated** — see **`weegloo-space-role`**.
+
+**Who gets which role**
+
+| Caller | Role resource | Assign via |
+| --- | --- | --- |
+| Weegloo User (console, custom admin, PAT) | **`SpaceRole`** | Space membership and/or **`DeliveryAccessToken`** for CDA poll |
+| Service User (product sign-up) | **`ServiceUserRole`** | **`ServiceLogin.sys.defaultRole`** / **`ServiceUser.roleOverride`** |
+
+Create or update roles with **`cma_CreateSpaceRole`** / **`cma_CreateServiceUserRole`** (MCP). Full filter shapes and mistakes: **`weegloo-space-role`**.
+
+**Illustrative `content` rules** (job ContentType id `<jobCtId>` — add **`media`** / **`contentType`** maps separately if needed):
+
+```json
+"content": {
+  "Create": {
+    "Allow": [
+      {
+        "contentType": {
+          "sys": {
+            "type": "Refer",
+            "id": "<jobCtId>",
+            "targetType": "ContentType"
+          }
+        }
+      }
+    ]
+  },
+  "Read": {
+    "Allow": [
+      {
+        "contentType": {
+          "sys": {
+            "type": "Refer",
+            "id": "<jobCtId>",
+            "targetType": "ContentType"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Refer",
+            "id": ":self",
+            "targetType": "User"
+          }
+        }
+      }
+    ]
+  },
+  "Edit": {
+    "Allow": [
+      {
+        "contentType": {
+          "sys": {
+            "type": "Refer",
+            "id": "<jobCtId>",
+            "targetType": "ContentType"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Refer",
+            "id": ":self",
+            "targetType": "User"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+Mirror **`Delete`** (and any other granted actions) with the same **`contentType`** + **`:self`** pair.
+
+**What this does *not* block**
+
+- **WriteBack** runs as the **platform** after a successful external call. It can **`update`** the triggering Content’s **`response`** even though the end user has no **Edit** on another member’s row. That is intended.
+- **Create** stays broad so the Webhook pipeline can start from a new row per user request.
+
+**What goes wrong without this**
+
+- **Open `Read` on job Content** → any user polls or leaks **another user’s** request/response (prompts, generated media, PII).
+- **Open `Edit` on job Content** → a user sets **`response`** manually and bypasses the external API (fake “completed” job).
+- **Open `Delete` on others’ jobs** → griefing or denial of service on shared Spaces.
+
+**CDA / DeliveryAccessToken:** if anonymous visitors poll jobs, the token’s **`SpaceRole`** must still use **`:self`** on **Read** for the job ContentType — a shared token does **not** add per-browser identity. Per-member jobs belong on **ACDA** + **`ServiceUserRole`**, not public CDA, unless each visitor is a distinct authenticated Weegloo User.
 
 ## Step 2 — Webhook configuration
 
@@ -172,13 +275,14 @@ CDA reads use the delivery **`locale`** query parameter as usual; job polling by
 1. **ContentType** `ImageGenerationJob` (example):
    - `prompt` — `ShortText` or `LongText`, `localized: false`
    - `response` — `Refer` → **Media**, `localized: false`
-2. **Webhook**
+2. **Role** — **`Create`** on `ImageGenerationJob` Content; **`Read`** / **`Edit`** / **`Delete`** with **`createdBy.sys.id": ":self"`** (§ Role design).
+3. **Webhook**
    - Topic: **`Content.Create`**
    - Filter: `sys.contentType.sys.id` **EQ** `<ImageGenerationJob sys.id>`
    - **Transformation**: POST body `{ "prompt": "{ /payload/fields/prompt/en-US }" }` (use the space default locale code)
    - **Headers**: provider API key (secret)
-3. **WriteBack**: Pattern **B1** (`encoding: base64`) unless the provider returns a URL — then Pattern **B2**. Map `source` to the provider’s base64 or URL field (e.g. `b64_json`, `image`, `data[0].url`).
-4. **Frontend**
+4. **WriteBack**: Pattern **B1** (`encoding: base64`) unless the provider returns a URL — then Pattern **B2**. Map `source` to the provider’s base64 or URL field (e.g. `b64_json`, `image`, `data[0].url`).
+5. **Frontend**
    - **Create** job Content via **CMA** (or ACMA if members create jobs — see **`weegloo-service-architecture`**).
    - Save returned **`sys.id`**.
    - **Poll** **CDA** (public site + DeliveryAccessToken) or **CMA** GET until `fields.response` references a Media (or use **`weegloo-api-query-optimization`** `sys.id` single fetch).
@@ -199,7 +303,7 @@ CDA reads use the delivery **`locale`** query parameter as usual; job polling by
 | Logic | No conditionals/loops in WriteBack — only pointer extraction. |
 | Chaining | WriteBack changes emit events; other Webhooks may fire — platform blocks infinite loops on create/update. |
 | Reliability | **At-most-once** — a failed mid-flight operation may be lost; design idempotent external APIs where cost matters. |
-| Security | Restrict **SpaceRole** so users cannot **directly create** “finished” job rows or privileged result types. Use **`createdBy.sys.id": ":self"`** on job/result **Content** rules when members should only touch their own rows (**`weegloo-space-role`**). |
+| Security (roles) | **Mandatory** for Request/Response job ContentTypes: **`Create`** without `createdBy` filter; **`Read` / `Edit` / `Delete`** (and publish actions you grant) with **`contentType`** + **`createdBy.sys.id": ":self"`**. Prevents cross-user job snooping and manual **`response`** forgery. **`weegloo-space-role`**. |
 | Media | `$media` has no **`update`** action. |
 | Plain-text API body | `{ /response }` is whole body; sub-paths need JSON. |
 
