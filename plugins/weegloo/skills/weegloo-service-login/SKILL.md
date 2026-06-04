@@ -32,7 +32,7 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 | Resource | Purpose |
 |----------|---------|
 | **`ServiceLogin`** | The Space's per-product login configuration (e.g. enabled OAuth providers, redirect/origin settings). Holds **`sys.defaultRole`** → a `Refer` to the **`ServiceUserRole`** assigned by default to every new member. |
-| **`ServiceUserRole`** | Permission rule set applied to app-managed members. Defines what those members may read/write through **ACMA** / **ACDA**. Multiple roles may exist per Space. |
+| **`ServiceUserRole`** | Permission rule set applied to app-managed members. Defines what those members may read/write through **ACMA** / **ACDA**. Multiple roles may exist per Space. Optional filters on **`content`**, **`contentType`**, **`media`** include **`createdBy.sys.id`** (fixed id or **`:self`** = current member). See **`weegloo-space-role`**. |
 | **`ServiceUser`** | One record per app-managed member of the Space (i.e. one end-user account in the product). Optional **`roleOverride`** (a `Refer` to a different **`ServiceUserRole`**) overrides `ServiceLogin.sys.defaultRole` for **that** member. Optional **`isAdmin: true`** elevates the member (see below). |
 
 **Important:** these are **not** the same as Weegloo's built-in account model.
@@ -125,7 +125,7 @@ A product may combine all three - see **`weegloo-service-architecture`** for ser
 
 When wiring ServiceLogin for a product:
 
-1. Define one or more **`ServiceUserRole`**s that match the product's permission tiers (e.g. `member-reader`, `paid-member`, `moderator`). Keep them **least-privilege**.
+1. Define one or more **`ServiceUserRole`**s that match the product's permission tiers (e.g. `member-reader`, `paid-member`, `moderator`). Keep them **least-privilege**. For “only this member’s rows” on a ContentType, set **`createdBy.sys.id`** to **`:self`** on the role’s **`content`** (and/or **`media`**) rules — see **`weegloo-space-role`**.
 2. Pick the **default** role and set **`ServiceLogin.sys.defaultRole`** to its `Refer`.
 3. Configure the OAuth provider(s) and the product origin(s) so callbacks reach the app.
 4. In product code, on successful provider sign-in, capture the **Bearer Token** and call **ACMA** / **ACDA** with it.
@@ -145,4 +145,5 @@ When wiring ServiceLogin for a product:
 - **Picking the API combo per service type:** **`weegloo-service-architecture`** skill.
 - **Weegloo User login (admin / platform account — CMA, Upload, CDA):** **`weegloo-user-login`** skill.
 - **Public read tokens for CDA:** **`weegloo-delivery-access-token`** skill.
+- **Role permission filters (`createdBy`, `:self`):** **`weegloo-space-role`** skill.
 - **Published-only delivery model:** **`weegloo-cda-publish`** skill.

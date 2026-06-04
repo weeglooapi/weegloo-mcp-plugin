@@ -22,7 +22,7 @@ description: Create Weegloo DeliveryAccessToken (CDA) via CMA-bind role.sys.id t
 
 2. **Bind `role` to the intended `SpaceRole` by `sys.id`.** If you just created a read-only **`SpaceRole`** for CDA, **`cma_CreateDeliveryAccessToken`** MUST set **`role.sys.id`** to **that** role’s **`sys.id`** from the **`cma_CreateSpaceRole`** response (or from **`cma_GetOneSpaceRole`** for a user-approved role). **Do not** substitute another id from a fresh list; **do not** use Administrator.
 
-3. **Preferred order:** **`cma_CreateSpaceRole`** (read-only for the **`ContentType`s** CDA needs) → copy **`sys.id`** from the response → **`cma_CreateDeliveryAccessToken`** with **`role`** referencing **only** that id. OpenAPI: **`weegloo-api-endpoints`** (do not duplicate URLs here).
+3. **Preferred order:** **`cma_CreateSpaceRole`** (read-only for the **`ContentType`s** CDA needs) → copy **`sys.id`** from the response → **`cma_CreateDeliveryAccessToken`** with **`role`** referencing **only** that id. Permission rule design (`createdBy`, **`:self`**, `contentType` filters): **`weegloo-space-role`** skill. OpenAPI: **`weegloo-api-endpoints`** (do not duplicate URLs here).
 
 4. **Required `role` shape:**
 
@@ -74,6 +74,10 @@ Do **not** treat Administrator as an acceptable workaround for **public, browser
 Schema: **`weegloo-api-endpoints`** → CMA OpenAPI (**`CreateDeliveryAccessToken`**).
 
 ---
+
+## Related
+
+- **`weegloo-space-role`** — permission maps, **`createdBy.sys.id`**, **`:self`**, per-user private Content.
 
 ## Important
 

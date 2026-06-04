@@ -32,7 +32,7 @@ Copy and track:
 - [ ] 4. Ensure MCP exposes Webhook tools (group=extra or group=all — see below)
 - [ ] 5. Create Webhook: ONE topic, filter to job ContentType, URL + secret Headers + Transformation + writeBacks
 - [ ] 6. Document frontend: CMA create → poll CDA/CMA by sys.id until response set
-- [ ] 7. SpaceRole: end users must not forge “completed” jobs if that matters (see Security)
+- [ ] 7. SpaceRole: end users must not forge “completed” jobs if that matters — scope writes with **`createdBy.sys.id": ":self"`** where appropriate (**`weegloo-space-role`**; see Security)
 ```
 
 ### MCP tools
@@ -199,7 +199,7 @@ CDA reads use the delivery **`locale`** query parameter as usual; job polling by
 | Logic | No conditionals/loops in WriteBack — only pointer extraction. |
 | Chaining | WriteBack changes emit events; other Webhooks may fire — platform blocks infinite loops on create/update. |
 | Reliability | **At-most-once** — a failed mid-flight operation may be lost; design idempotent external APIs where cost matters. |
-| Security | Restrict **SpaceRole** so users cannot **directly create** “finished” job rows or privileged result types. |
+| Security | Restrict **SpaceRole** so users cannot **directly create** “finished” job rows or privileged result types. Use **`createdBy.sys.id": ":self"`** on job/result **Content** rules when members should only touch their own rows (**`weegloo-space-role`**). |
 | Media | `$media` has no **`update`** action. |
 | Plain-text API body | `{ /response }` is whole body; sub-paths need JSON. |
 
@@ -217,3 +217,4 @@ CDA reads use the delivery **`locale`** query parameter as usual; job polling by
 - **`weegloo-api-query-optimization`** — poll single Content by `sys.id`
 - **`weegloo-service-architecture`** — CMA vs ACMA for who creates jobs
 - **`weegloo-delivery-access-token`** — CDA poll from the browser
+- **`weegloo-space-role`** — `createdBy` / `:self` on SpaceRole rules

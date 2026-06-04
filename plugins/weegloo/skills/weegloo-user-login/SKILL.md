@@ -186,3 +186,4 @@ There is no server-side session to revoke unless the product also calls a CMA re
 - **Deploy ZIP / WebHosting platform constraints:** **`weegloo-web-hosting`** skill.
 - **HTTP bases / `Accept` header / OpenAPI links / token-scope rules:** **`weegloo-api-endpoints`** rule.
 - **Public read tokens for CDA (preferred over a Weegloo User token in the browser):** **`weegloo-delivery-access-token`** skill.
+- **SpaceRole permission filters (`createdBy`, `:self`):** **`weegloo-space-role`** skill.

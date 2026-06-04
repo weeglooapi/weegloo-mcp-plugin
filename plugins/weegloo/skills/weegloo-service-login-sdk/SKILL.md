@@ -203,6 +203,7 @@ If a server, CLI, or native app needs to exchange tokens, follow the wire protoc
 ## Related
 
 - **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser, permission rules):** **`weegloo-service-login`** skill.
+- **Role filters (`createdBy`, `:self`):** **`weegloo-space-role`** skill.
 - **Base URLs and Accept-header rules:** **`weegloo-api-endpoints`** rule.
 - **Picking the right API per service type:** **`weegloo-service-architecture`** skill.
 - **Weegloo User login (admin / platform account — the *other* login model in Weegloo; CMA / Upload / CDA):** **`weegloo-user-login`** skill.

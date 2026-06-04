@@ -169,4 +169,5 @@ This chain is the intended path: pick the architecture here, then walk skills 1�
 - **`weegloo-service-login`** — ServiceLogin / ServiceUser / ServiceUserRole / `isAdmin` mechanics and Bearer Token scope. The end-user identity model.
 - **`weegloo-service-login-sdk`** — OAuth wire protocol on `auth.weegloo.com` and the official browser SDK for ServiceLogin.
 - **`weegloo-delivery-access-token`** — least-privilege DeliveryAccessToken creation for CDA.
+- **`weegloo-space-role`** — SpaceRole / ServiceUserRole permission filters (`createdBy`, `:self`).
 - **`weegloo-cda-publish`** — publish model that gates what CDA / ACDA actually return.
