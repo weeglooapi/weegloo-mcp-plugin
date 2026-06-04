@@ -21,6 +21,7 @@ rules:
       - Before proposing or finalizing a **service architecture** (which APIs / login / roles a product uses), you **MUST** invoke **`weegloo-service-architecture`** first. Do **not** decide CMA/CDA vs ACMA/ACDA, token type, or role scope from memory or these summaries.
       - Before designing or proposing a **ContentType** (fields, `localized`, ShortText/LongText/RichText, validations, `publishWithAuthor`, `Refer`), you **MUST** invoke **`weegloo-create-content-type`** first — and **`weegloo-default-locale`** whenever any field is multi-locale.
       - If the app is (or may ever become) a **MarketApp / WebHosting** deploy, invoke **`weegloo-marketapp-packaging`** before writing build-time config, and **`weegloo-delivery-access-token`** before provisioning any CDA token.
+      - Before provisioning **Webhook + WriteBack** for **external API** work (async job Content, `Content.Create` trigger, poll by `sys.id`, LLM/image/search proxy), you **MUST** invoke **`weegloo-webhook-writeback`** first.
       - **Do not ask the user to decide** something a skill already specifies (e.g. LongText vs RichText search semantics) until you have read the relevant skill — research first, then surface only the genuine product choice.
 
   - section: HTTP JSON media type (when calling Weegloo APIs from code)
