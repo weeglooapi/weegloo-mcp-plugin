@@ -11,6 +11,8 @@ const REPO = 'weeglooapi/weegloo-mcp-plugin';
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
 const GITHUB_API_BRANCHES = `https://api.github.com/repos/${REPO}/branches?per_page=100`;
 const GITHUB_API_CONTENTS = `https://api.github.com/repos/${REPO}/contents`;
+/** Release-asset host (github.com/<repo>/releases). NOT api.github.com — not rate-limited, no git needed. */
+const RELEASE_BASE = `https://github.com/${REPO}/releases`;
 
 export const SKILL_FILES = ['SKILL.md', 'metadata.json'];
 
@@ -171,11 +173,76 @@ async function listRuleIdsFromContents(ref, rulesContentsPath) {
 }
 
 /**
+ * Builds a GitHub Release asset URL. These are plain HTTPS downloads served
+ * from GitHub's asset CDN — they need no git client and do NOT consume the
+ * api.github.com REST rate limit.
+ *
+ * A tag-like ref (`v1.0.13`, `1.0.13`) resolves to that specific release; any
+ * other ref (`latest`, a branch name, empty) resolves to the latest release.
+ *
+ * @param {string} ref
+ * @param {string} assetName e.g. 'manifest.json' or 'weegloo-bundle.zip'
+ */
+export function releaseAssetUrl(ref, assetName) {
+  const isTag = Boolean(ref) && ref !== 'latest' && /^v?\d/.test(ref);
+  return isTag
+    ? `${RELEASE_BASE}/download/${encodeURIComponent(ref)}/${assetName}`
+    : `${RELEASE_BASE}/latest/download/${assetName}`;
+}
+
+/**
+ * Fetches the bundle manifest from the Release assets (see {@link releaseAssetUrl}).
+ * Returns the parsed manifest, or `null` if no release/manifest exists for this
+ * ref (e.g. a branch with no published release) so callers fall back to the
+ * Contents API. Never throws on HTTP/parse errors.
+ *
+ * @param {string} ref
+ * @returns {Promise<{ skills: {id:string}[], rules: {id:string}[], repoContentPrefix?: string } | null>}
+ */
+export async function fetchReleaseManifest(ref) {
+  try {
+    const res = await fetch(releaseAssetUrl(ref, 'manifest.json'));
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.skills) || !Array.isArray(data.rules)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function idsFromManifest(entries) {
+  return entries
+    .map((e) => e && e.id)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
  * Fetches skill/rule ids and which repo layout the ref uses (nested plugin vs legacy repo root).
+ *
+ * Prefers the Release **manifest.json** (one CDN fetch, no api.github.com), so
+ * the picker is not capped by the 60-req/hour unauthenticated Contents-API
+ * limit. Falls back to the Contents API when no release/manifest is available
+ * for the ref (e.g. a feature branch).
+ *
  * @param {string} ref Branch or tag name
  * @returns {Promise<{ skills: string[], rules: string[], repoContentPrefix: string }>}
  */
 export async function fetchResourceLists(ref) {
+  const manifest = await fetchReleaseManifest(ref);
+  if (manifest) {
+    const skills = idsFromManifest(manifest.skills);
+    const rules = idsFromManifest(manifest.rules);
+    if (skills.length > 0) {
+      return {
+        skills,
+        rules: rules.length > 0 ? rules : DEFAULT_RULE_IDS,
+        repoContentPrefix: manifest.repoContentPrefix ?? PLUGIN_PACKAGE_ROOT,
+      };
+    }
+  }
+
   try {
     const nestedSkills = await listSkillIdsFromContents(ref, `${PLUGIN_PACKAGE_ROOT}/skills`);
     if (nestedSkills.length > 0) {
