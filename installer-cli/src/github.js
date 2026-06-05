@@ -271,9 +271,12 @@ export async function fetchResourceLists(ref) {
 }
 
 /**
- * Downloads a file from GitHub raw content and writes it to localPath.
+ * Fetches a file's text from GitHub raw content (no disk write).
+ * @param {string} ref
+ * @param {string} remotePath path under repo root
+ * @returns {Promise<string>}
  */
-export async function downloadFile(ref, remotePath, localPath) {
+export async function fetchTextFromRepo(ref, remotePath) {
   const url = `${RAW_BASE}/${ref}/${remotePath}`;
 
   let res;
@@ -287,8 +290,35 @@ export async function downloadFile(ref, remotePath, localPath) {
     throw new Error(`HTTP ${res.status} ${res.statusText}\n  ${url}`);
   }
 
-  const text = await res.text();
+  return res.text();
+}
+
+/**
+ * Downloads a file from GitHub raw content and writes it to localPath.
+ */
+export async function downloadFile(ref, remotePath, localPath) {
+  const text = await fetchTextFromRepo(ref, remotePath);
   const dir = path.dirname(localPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(localPath, text, 'utf-8');
+}
+
+/**
+ * Downloads the release bundle zip bytes (weegloo-bundle.zip) for a ref via the
+ * Release asset CDN — no git client, no api.github.com. Returns the raw bytes,
+ * or `null` if no bundle exists for the ref (caller falls back to per-file raw
+ * downloads). Never throws on HTTP errors.
+ *
+ * @param {string} ref
+ * @returns {Promise<Uint8Array | null>}
+ */
+export async function fetchBundleZip(ref) {
+  try {
+    const res = await fetch(releaseAssetUrl(ref, 'weegloo-bundle.zip'));
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    return new Uint8Array(buf);
+  } catch {
+    return null;
+  }
 }

@@ -4,13 +4,8 @@ import os from 'os';
 import { spawn } from 'child_process';
 import ora from 'ora';
 import chalk from 'chalk';
-import {
-  downloadFile,
-  getPluginRef,
-  fetchMcpConfig,
-  SKILL_FILES,
-  repoContentPath,
-} from './github.js';
+import { getPluginRef, fetchMcpConfig, SKILL_FILES } from './github.js';
+import { prepareResourceSource } from './resources.js';
 
 /**
  * @param {'global' | 'project'} scope
@@ -209,22 +204,32 @@ export async function installCodex({
   if (!installSkillsRules) {
     console.log(chalk.dim('  - Skills / Rules: skipped (MCP only)'));
   } else {
+    // Resolve resource source once (release bundle, or per-file fallback).
+    let source = null;
+    if (skills.length > 0 || rules.length > 0) {
+      const prepSpinner = ora({ text: '  Preparing resources', indent: 0 }).start();
+      source = await prepareResourceSource({ ref, repoContentPrefix });
+      prepSpinner.succeed(
+        source.mode === 'bundle'
+          ? `  Resources ready    ${chalk.dim('(release bundle)')}`
+          : `  Resources ready    ${chalk.dim('(per-file download)')}`
+      );
+    }
+
     if (skills.length === 0) {
       console.log(chalk.dim('  - Skills: none selected, skipping'));
     } else {
-      const skillsSpinner = ora({ text: `  Downloading skills (0/${skills.length})`, indent: 0 }).start();
+      const skillsSpinner = ora({ text: `  Installing skills (0/${skills.length})`, indent: 0 }).start();
       try {
         ensureDir(skillsDir);
         for (let i = 0; i < skills.length; i++) {
           const skill = skills[i];
-          skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
+          skillsSpinner.text = `  Installing skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
           const destDir = path.join(skillsDir, skill);
+          ensureDir(destDir);
           for (const file of SKILL_FILES) {
-            await downloadFile(
-              ref,
-              repoContentPath(repoContentPrefix, `skills/${skill}/${file}`),
-              path.join(destDir, file)
-            );
+            const text = await source.getSkillFile(skill, file);
+            fs.writeFileSync(path.join(destDir, file), text, 'utf-8');
           }
         }
         skillsSpinner.succeed(
@@ -238,19 +243,13 @@ export async function installCodex({
     if (rules.length === 0) {
       console.log(chalk.dim('  - Rules: none selected, skipping'));
     } else {
-      const rulesSpinner = ora({ text: `  Downloading rules (0/${rules.length})`, indent: 0 }).start();
+      const rulesSpinner = ora({ text: `  Installing rules (0/${rules.length})`, indent: 0 }).start();
       try {
         ensureDir(path.dirname(instructionsPath));
         for (let i = 0; i < rules.length; i++) {
           const rule = rules[i];
-          rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-          const tmpPath = path.join(os.tmpdir(), `weegloo-codex-${rule}.mdc`);
-          await downloadFile(
-            ref,
-            repoContentPath(repoContentPrefix, `rules/${rule}.mdc`),
-            tmpPath
-          );
-          const content = fs.readFileSync(tmpPath, 'utf-8');
+          rulesSpinner.text = `  Installing rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
+          const content = await source.getRuleText(rule);
           upsertRuleInAgentsMd(instructionsPath, rule, content);
         }
         rulesSpinner.succeed(
