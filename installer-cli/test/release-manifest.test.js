@@ -81,6 +81,32 @@ test('fetchResourceLists reads ids from the release manifest (no api.github.com)
   assert.equal(apiCalled, false);
 });
 
+test('a branch ref skips the release path entirely (no release asset fetch)', async () => {
+  let releaseFetched = false;
+  await withMockedFetch(
+    async (url) => {
+      const u = String(url);
+      if (u.includes('/releases/')) {
+        releaseFetched = true;
+        throw new Error('a branch ref must not hit a release asset URL');
+      }
+      if (u.includes('/contents/plugins/weegloo/skills')) {
+        return { ok: true, json: async () => [{ type: 'dir', name: 'branch-skill' }] };
+      }
+      if (u.includes('/contents/plugins/weegloo/rules')) {
+        return { ok: true, json: async () => [{ type: 'file', name: 'branch-rule.mdc' }] };
+      }
+      return { ok: false, status: 404 };
+    },
+    async () => {
+      const r = await fetchResourceLists('some-feature-branch');
+      assert.deepEqual(r.skills, ['branch-skill']);
+      assert.deepEqual(r.rules, ['branch-rule']);
+    }
+  );
+  assert.equal(releaseFetched, false);
+});
+
 test('fetchResourceLists falls back to the Contents API when no manifest', async () => {
   await withMockedFetch(
     async (url) => {

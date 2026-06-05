@@ -283,24 +283,32 @@ async function resolveLatestTag() {
   return versions[0] ?? null;
 }
 
+/** A ref that names a release (a `v1.2.3` / `1.2.3` tag), vs a branch name. */
+function isReleaseTag(ref) {
+  return Boolean(ref) && /^v?\d/.test(ref);
+}
+
 /**
- * Resolves a ref to the concrete release tag to fetch assets from. A real tag
- * passes through; `latest` (or empty) resolves to the current Latest release
- * (see {@link resolveLatestTag}). If resolution fails, returns `'latest'` so
- * callers fall back to the (cache-prone but functional) `latest/download` URL.
+ * Resolves a ref to the release tag to fetch assets from, or `null` when the
+ * ref is a **branch** (not a release) — so callers fall back to the Contents
+ * API / raw for that exact branch instead of silently serving the latest
+ * release. A real tag passes through; `latest`/empty resolves to the current
+ * Latest release (see {@link resolveLatestTag}), or `'latest'` as a last resort
+ * (the documented, if cache-prone, `latest/download` URL).
  * @param {string} ref
- * @returns {Promise<string>}
+ * @returns {Promise<string | null>}
  */
 async function resolveReleaseRef(ref) {
-  if (ref && ref !== 'latest') return ref;
-  return (await resolveLatestTag()) ?? 'latest';
+  if (isReleaseTag(ref)) return ref;
+  if (!ref || ref === 'latest') return (await resolveLatestTag()) ?? 'latest';
+  return null; // a branch ref → no release
 }
 
 /**
  * Fetches the bundle manifest from the Release assets (see {@link releaseAssetUrl}).
  * Returns the parsed manifest, or `null` if no release/manifest exists for this
- * ref (e.g. a branch with no published release) so callers fall back to the
- * Contents API. Never throws on HTTP/parse errors.
+ * ref (a branch, or no published release) so callers fall back to the Contents
+ * API. Never throws on HTTP/parse errors.
  *
  * @param {string} ref
  * @returns {Promise<{ skills: {id:string}[], rules: {id:string}[], repoContentPrefix?: string } | null>}
@@ -308,6 +316,7 @@ async function resolveReleaseRef(ref) {
 export async function fetchReleaseManifest(ref) {
   try {
     const tag = await resolveReleaseRef(ref);
+    if (!tag) return null; // branch ref → Contents API fallback
     const res = await fetch(releaseAssetUrl(tag, 'manifest.json'));
     if (!res.ok) return null;
     const data = await res.json();
@@ -422,6 +431,7 @@ export async function downloadFile(ref, remotePath, localPath) {
 export async function fetchBundleZip(ref) {
   try {
     const tag = await resolveReleaseRef(ref);
+    if (!tag) return null; // branch ref → per-file raw fallback
     const res = await fetch(releaseAssetUrl(tag, 'weegloo-bundle.zip'));
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
