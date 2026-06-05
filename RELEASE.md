@@ -1,44 +1,57 @@
 # Releasing the plugin bundle
 
-The installer CLI resolves the **install picker** from a GitHub Release
-**`manifest.json`** asset instead of walking the GitHub Contents API per
-directory. This avoids two constraints that bit us in production:
+Distribution follows the Helm `chart-releaser` pattern — content in GitHub
+**Releases**, the version index on GitHub **Pages** — so none of the three
+install-time touchpoints hits the rate-limited GitHub REST API, and none needs
+a git client:
 
-- **No GitHub REST API rate limit.** Listing skills/rules via
-  `api.github.com/.../contents` is capped at 60 requests/hour for
-  unauthenticated callers; release-asset downloads are not.
-- **No git client required.** Assets are plain HTTPS downloads (served from
-  GitHub's asset CDN), so users without `git` installed can still install.
+| Touchpoint | Source | Why it's safe |
+| --- | --- | --- |
+| **Version list** (latest + recent N) | `versions.json` on **GitHub Pages** | static file, our own contract, Fastly CDN, no `api.github.com` |
+| **Skill/rule list** for a version | `releases/download/<tag>/manifest.json` | documented release-asset permalink, asset CDN |
+| **File content** | `releases/download/<tag>/weegloo-bundle.zip` | one download, extracted in memory (fflate), no git |
 
-> **How the CLI consumes a release:**
-> - **Listing** — `fetchResourceLists` reads the skill/rule list from
->   `manifest.json` (one CDN fetch, no `api.github.com`).
-> - **File content** — `prepareResourceSource` downloads `weegloo-bundle.zip`
->   once from the asset CDN and extracts it in memory (fflate), then installs
->   files from that map — **no `raw.githubusercontent.com`, no git client**.
-> - **Fallback** — when a ref has no published release (e.g. a feature branch),
->   the CLI degrades gracefully: listing falls back to the Contents API and file
->   content to per-file raw fetches. So the installer keeps working before the
->   first release exists, and switches to the bundle automatically once it does.
+> **How the CLI consumes a release (default path):**
+> 1. **Picker** — `fetchVersionsIndex` reads `versions.json` from Pages → shows
+>    `latest` (recommended) + the most recent versions. No `api.github.com`.
+> 2. **Resolve** — the chosen version, or `versions.json.latest`, gives a
+>    concrete tag (so the stale `releases/latest/download` CDN cache is avoided).
+> 3. **List** — `fetchReleaseManifest` reads that tag's `manifest.json` asset.
+> 4. **Install** — `prepareResourceSource` downloads that tag's
+>    `weegloo-bundle.zip` once and extracts it in memory.
+>
+> Content versions are **decoupled from the CLI (npm) version**: editing skills
+> and cutting a release does not require an npm publish, and `npx weegloo` keeps
+> working regardless.
+>
+> **Fallbacks** (best-effort, never a hard dependency): Pages index unreachable
+> → atom feed, then just `latest`; no release for a ref → Contents API + raw
+> per-file (the pre-release path); `-a/--all-branches` → `branches` API
+> (maintainer debug only, intentional).
 
 ## What gets published
 
-`scripts/build-bundle.mjs` stages `plugins/weegloo/` into `dist/bundle/`:
+On a `v*` tag, `release.yml` produces **two kinds of artifact from one run**:
 
-```
-manifest.json        # enumerates every skill + rule (the picker reads this)
-skills/<id>/...       # SKILL.md, metadata.json, ...
-rules/<id>.mdc
-.mcp.json
-```
+**1. Per-version content → GitHub Release `<tag>`** (`scripts/build-bundle.mjs`
+stages `plugins/weegloo/` into `dist/bundle/`, zipped to `weegloo-bundle.zip`):
 
-The `.github/workflows/release.yml` workflow zips that into
-`weegloo-bundle.zip` and uploads **two** assets to the release:
-
-| Asset | Used for |
+| Release asset | Used for |
 | --- | --- |
-| `manifest.json` | Populate the install picker (list skills/rules) — one tiny fetch |
-| `weegloo-bundle.zip` | The actual skill/rule files to install |
+| `manifest.json` | the version's skill/rule list (one tiny fetch before the zip) |
+| `weegloo-bundle.zip` | the actual files (`skills/<id>/...`, `rules/<id>.mdc`, `.mcp.json`) |
+
+**2. Cross-version index → GitHub Pages** (`scripts/build-versions-index.mjs`
+turns `gh release list` into `versions.json`, published to the `gh-pages`
+branch):
+
+```
+{ "schemaVersion": 1, "latest": "v1.2.0",
+  "versions": [ { "version": "v1.2.0", "date": "..." }, ... ] }
+```
+
+Served at `https://<owner>.github.io/<repo>/versions.json`. Regenerated from the
+authoritative release list each publish, so it self-heals.
 
 ## Cutting a release
 
@@ -55,6 +68,19 @@ does not exist.
 
 The workflow needs no secrets beyond the default `GITHUB_TOKEN` (it has
 `contents: write`).
+
+**One-time setup (for the Pages version index):** create an empty `gh-pages`
+branch and point Pages at it.
+
+```bash
+git switch --orphan gh-pages
+printf '' > .nojekyll
+git add .nojekyll && git commit -m "init gh-pages" && git push -u origin gh-pages
+git switch -   # back to your working branch
+```
+
+Then in repo **Settings → Pages**, set the source to the `gh-pages` branch
+(root). The release workflow writes `versions.json` there on every release.
 
 ## Downloading the assets (no git, no API)
 
@@ -85,35 +111,36 @@ BUNDLE_REF=v1.0.13 node scripts/build-bundle.mjs   # → dist/bundle/
 
 | Purpose | Before (depended on) | After (this design) |
 | --- | --- | --- |
-| Version picker | `api.github.com/repos/<repo>/branches` — REST, **60/hr** | `github.com/<repo>/releases.atom` (+ `tags.atom` fallback) and a synthetic `latest` — **not REST** |
-| Resolve `latest` | (n/a — was a `latest` branch) | `github.com/<repo>/releases/latest` (manual redirect, `no-cache`) → concrete tag — not REST |
+| Version picker | `api.github.com/repos/<repo>/branches` — REST, **60/hr** | `<owner>.github.io/<repo>/versions.json` (GitHub **Pages**) — static CDN, **not REST** |
+| Resolve `latest` | (n/a — was a `latest` branch) | `versions.json.latest` → concrete tag (Pages); fallback `releases/latest` redirect — not REST |
 | Skill/rule **listing** | `api.github.com/repos/<repo>/contents/.../skills?ref=` + `.../rules?ref=` — REST, **60/hr** (this caused the 2+2 fallback) | `github.com/<repo>/releases/download/<tag>/manifest.json` — asset CDN |
 | File **content** (~35 reqs) | `raw.githubusercontent.com/.../skills/<id>/<file>` ×N — raw bucket | `github.com/<repo>/releases/download/<tag>/weegloo-bundle.zip` **once** → extract in memory — asset CDN |
 | MCP config | `raw.githubusercontent.com/.../.mcp.json` — raw | **unchanged** (still raw) |
 
-- **`api.github.com`** is the REST API with the unauthenticated **60/hour** shared bucket — the old picker and listing depended on it; the default path no longer does (the `-a` debug flag still uses `branches` intentionally).
-- **`github.com`** atom feeds / `releases/latest` redirect / `releases/.../download/*` are **not** the REST API and do not draw from that bucket.
+- **`api.github.com`** is the REST API with the unauthenticated **60/hour** shared bucket — the old picker and listing depended on it; the default path no longer does (the `-a` debug flag still uses `branches` intentionally; the release CI uses it authenticated).
+- **`github.com` Pages / `releases/.../download/*`** are **not** the REST API and do not draw from that bucket.
 - **`raw.githubusercontent.com`** is a separate, looser bucket (can 429 under heavy automated load); file content moved to the zip, leaving only `.mcp.json` on raw (a future follow-up can fold it into the bundle).
 
 ## Why these endpoints are safe to depend on (no REST rate limit)
 
 The documented **60 req/hour** unauthenticated cap is a **REST API** primary rate
 limit, scoped to `api.github.com` only ([GitHub Docs](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)).
-The endpoints the installer now uses live on `github.com` (atom feeds, the
-`releases/latest` redirect, and release-asset downloads served from the asset
-CDN), which are a different, non-REST surface.
+The endpoints the installer now uses live on `github.com` (GitHub Pages and
+release-asset downloads served from the asset CDN), a different, non-REST
+surface. Pages `versions.json` is additionally **our own contract** — its shape
+cannot be broken by a GitHub API change, only by us.
 
 Empirically verified (2026-06-05, public repo, unauthenticated):
 
-- 40× `releases.atom` + 40× a release asset (redirect-followed) = **80 requests → all HTTP 200, zero 429**.
+- 40× a github.com feed + 40× a release asset (redirect-followed) = **80 requests → all HTTP 200, zero 429**.
 - `api.github.com` core `remaining` was **unchanged** across those 80 requests (58 → 58) — i.e. they draw from a **different bucket**, not the REST 60/hour.
 - Those responses carry **no `x-ratelimit-*` headers** (REST responses do), confirming they are not REST-rate-limited.
 
 Honest caveat: GitHub may apply **undocumented secondary/abuse limits** to
 extreme automated volume. A normal install makes only a handful of requests
-(atom + `latest` redirect + manifest + zip ≈ 4), far below any such threshold,
-and needs **no token** for a public repo. Atom feeds (`commits.atom`,
-`tags.atom`, `releases.atom`) are a long-standing public GitHub feature.
+(`versions.json` + manifest + zip ≈ 3), far below any such threshold, and needs
+**no token** for a public repo. (The `.atom` feed remains only as a best-effort
+picker fallback if Pages is unavailable.)
 
 ## Verifying on a fork (no upstream impact)
 
