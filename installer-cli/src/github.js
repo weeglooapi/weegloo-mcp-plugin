@@ -14,6 +14,56 @@ const GITHUB_API_CONTENTS = `https://api.github.com/repos/${REPO}/contents`;
 
 export const SKILL_FILES = ['SKILL.md', 'metadata.json'];
 
+/**
+ * Headers for unauthenticated-or-authenticated GitHub REST API calls.
+ * Unauthenticated requests share a low 60/hour/IP limit; a token raises it to
+ * 5,000/hour. Reads GITHUB_TOKEN or GH_TOKEN from the environment if present.
+ */
+function githubApiHeaders() {
+  const headers = { Accept: 'application/vnd.github.v3+json' };
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+/**
+ * True when a GitHub API response is a rate-limit rejection (vs a genuine
+ * 404/empty). GitHub returns 403 (or 429) with `x-ratelimit-remaining: 0`.
+ * @param {Response} res
+ */
+function isRateLimitResponse(res) {
+  if (res.status !== 403 && res.status !== 429) return false;
+  return res.headers.get('x-ratelimit-remaining') === '0';
+}
+
+/** Whether a rate-limit warning has already been printed this run (print once). */
+let rateLimitWarned = false;
+
+/**
+ * Prints a one-time warning so the rate-limited fallback to a default subset is
+ * not mistaken for "the repo only has these resources".
+ * @param {Response} [res] Response carrying x-ratelimit-reset, if available.
+ */
+function warnRateLimited(res) {
+  if (rateLimitWarned) return;
+  rateLimitWarned = true;
+  const resetEpoch = Number(res?.headers?.get('x-ratelimit-reset'));
+  let when = '';
+  if (Number.isFinite(resetEpoch) && resetEpoch > 0) {
+    const mins = Math.max(0, Math.ceil((resetEpoch * 1000 - epochNowMs()) / 60000));
+    when = ` (resets in ~${mins} min)`;
+  }
+  const hint = process.env.GITHUB_TOKEN || process.env.GH_TOKEN ? '' : ' Set GITHUB_TOKEN to raise the limit (60→5000/hour).';
+  console.warn(
+    `\n  ⚠  GitHub API rate limit exceeded${when} — showing a default subset of skills/rules, not the full list.${hint}\n`
+  );
+}
+
+/** Wall-clock ms; isolated so it is the only Date usage and easy to reason about. */
+function epochNowMs() {
+  return Date.now();
+}
+
 /** Plugin package root within this repo (Claude / Cursor marketplace layout). */
 export const PLUGIN_PACKAGE_ROOT = 'plugins/weegloo';
 
@@ -35,8 +85,14 @@ export function repoContentPath(repoContentPrefix, relativePath) {
 async function fetchContentsJson(ref, contentsApiPath) {
   const res = await fetch(
     `${GITHUB_API_CONTENTS}/${contentsApiPath}?ref=${encodeURIComponent(ref)}`,
-    { headers: { Accept: 'application/vnd.github.v3+json' } }
+    { headers: githubApiHeaders() }
   );
+  if (isRateLimitResponse(res)) {
+    const err = new Error('GitHub API rate limit exceeded');
+    err.code = 'GITHUB_RATE_LIMIT';
+    err.response = res;
+    throw err;
+  }
   if (!res.ok) return null;
   try {
     const data = await res.json();
@@ -64,8 +120,12 @@ export async function fetchBranches(options = {}) {
   const includeHidden = Boolean(options.includeHidden);
   try {
     const res = await fetch(GITHUB_API_BRANCHES, {
-      headers: { Accept: 'application/vnd.github.v3+json' },
+      headers: githubApiHeaders(),
     });
+    if (isRateLimitResponse(res)) {
+      warnRateLimited(res);
+      return [];
+    }
     if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data)) return [];
@@ -194,7 +254,9 @@ export async function fetchResourceLists(ref) {
       rules: legacyRules.length > 0 ? legacyRules : DEFAULT_RULE_IDS,
       repoContentPrefix: '',
     };
-  } catch {
+  } catch (err) {
+    // A rate-limit rejection must not look like "the repo only has the defaults".
+    if (err && err.code === 'GITHUB_RATE_LIMIT') warnRateLimited(err.response);
     return {
       skills: DEFAULT_SKILL_IDS,
       rules: DEFAULT_RULE_IDS,
