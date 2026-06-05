@@ -36,11 +36,25 @@ test('fetchResourceLists reads ids from the release manifest (no api.github.com)
   let apiCalled = false;
   await withMockedFetch(
     async (url) => {
-      if (String(url).includes('api.github.com')) {
+      const u = String(url);
+      if (u.includes('api.github.com')) {
         apiCalled = true;
         throw new Error('Contents API must not be called when a manifest exists');
       }
-      if (String(url).includes('/releases/') && String(url).endsWith('manifest.json')) {
+      // 'latest' is resolved to a concrete tag via the releases/latest redirect.
+      if (u.endsWith('/releases/latest')) {
+        return {
+          ok: false,
+          status: 302,
+          headers: {
+            get: (k) =>
+              k.toLowerCase() === 'location'
+                ? 'https://github.com/weeglooapi/weegloo-mcp-plugin/releases/tag/v9.9.9'
+                : null,
+          },
+        };
+      }
+      if (u.includes('/releases/download/v9.9.9/manifest.json')) {
         return {
           ok: true,
           json: async () => ({
@@ -51,7 +65,7 @@ test('fetchResourceLists reads ids from the release manifest (no api.github.com)
           }),
         };
       }
-      throw new Error(`unexpected fetch: ${url}`);
+      throw new Error(`unexpected fetch: ${u}`);
     },
     async () => {
       const r = await fetchResourceLists('latest');

@@ -233,6 +233,45 @@ export function releaseAssetUrl(ref, assetName) {
 }
 
 /**
+ * Resolves the `latest` ref to a concrete release tag.
+ *
+ * Why not just use `releases/latest/download/<asset>`: that shortcut redirect
+ * is **CDN-cached** and can keep pointing at the *previous* release for minutes
+ * after a new one is published. The `releases/latest` page redirect, by
+ * contrast, is `cache-control: no-cache` and always reflects the current
+ * "Latest" release — so we follow it (manual redirect) to get the real tag,
+ * then fetch that tag's immutable per-tag asset URLs.
+ *
+ * Falls back to the newest tag from the atom feed, then to `null`.
+ * @returns {Promise<string | null>}
+ */
+async function resolveLatestTag() {
+  try {
+    const res = await fetch(`${RELEASE_BASE}/latest`, { redirect: 'manual' });
+    const loc = res.headers.get('location');
+    const m = loc && loc.match(/\/releases\/tag\/([^/?#]+)/);
+    if (m) return decodeURIComponent(m[1]);
+  } catch {
+    /* fall through to the atom feed */
+  }
+  const versions = await fetchReleaseVersions();
+  return versions[0] ?? null;
+}
+
+/**
+ * Resolves a ref to the concrete release tag to fetch assets from. A real tag
+ * passes through; `latest` (or empty) resolves to the current Latest release
+ * (see {@link resolveLatestTag}). If resolution fails, returns `'latest'` so
+ * callers fall back to the (cache-prone but functional) `latest/download` URL.
+ * @param {string} ref
+ * @returns {Promise<string>}
+ */
+async function resolveReleaseRef(ref) {
+  if (ref && ref !== 'latest') return ref;
+  return (await resolveLatestTag()) ?? 'latest';
+}
+
+/**
  * Fetches the bundle manifest from the Release assets (see {@link releaseAssetUrl}).
  * Returns the parsed manifest, or `null` if no release/manifest exists for this
  * ref (e.g. a branch with no published release) so callers fall back to the
@@ -243,7 +282,8 @@ export function releaseAssetUrl(ref, assetName) {
  */
 export async function fetchReleaseManifest(ref) {
   try {
-    const res = await fetch(releaseAssetUrl(ref, 'manifest.json'));
+    const tag = await resolveReleaseRef(ref);
+    const res = await fetch(releaseAssetUrl(tag, 'manifest.json'));
     if (!res.ok) return null;
     const data = await res.json();
     if (!data || !Array.isArray(data.skills) || !Array.isArray(data.rules)) return null;
@@ -356,7 +396,8 @@ export async function downloadFile(ref, remotePath, localPath) {
  */
 export async function fetchBundleZip(ref) {
   try {
-    const res = await fetch(releaseAssetUrl(ref, 'weegloo-bundle.zip'));
+    const tag = await resolveReleaseRef(ref);
+    const res = await fetch(releaseAssetUrl(tag, 'weegloo-bundle.zip'));
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
     return new Uint8Array(buf);
