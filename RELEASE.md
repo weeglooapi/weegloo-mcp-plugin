@@ -1,14 +1,22 @@
 # Releasing the plugin bundle
 
-The installer CLI downloads skills/rules as a **single GitHub Release asset**
-rather than walking the GitHub Contents API per directory. This avoids two
-constraints that bit us in production:
+The installer CLI resolves the **install picker** from a GitHub Release
+**`manifest.json`** asset instead of walking the GitHub Contents API per
+directory. This avoids two constraints that bit us in production:
 
 - **No GitHub REST API rate limit.** Listing skills/rules via
   `api.github.com/.../contents` is capped at 60 requests/hour for
   unauthenticated callers; release-asset downloads are not.
 - **No git client required.** Assets are plain HTTPS downloads (served from
   GitHub's asset CDN), so users without `git` installed can still install.
+
+> **Wired today:** `fetchResourceLists` reads the skill/rule list from
+> `manifest.json` (one CDN fetch, no `api.github.com`), falling back to the
+> Contents API only when a ref has no release. Individual skill/rule **files**
+> are still fetched from `raw.githubusercontent.com` (a separate, looser
+> bucket). Switching file content to extracting `weegloo-bundle.zip` — which
+> would drop the raw fetches too — is a follow-up; the zip is already published
+> below so that change needs no pipeline work.
 
 ## What gets published
 
