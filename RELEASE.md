@@ -10,13 +10,16 @@ directory. This avoids two constraints that bit us in production:
 - **No git client required.** Assets are plain HTTPS downloads (served from
   GitHub's asset CDN), so users without `git` installed can still install.
 
-> **Wired today:** `fetchResourceLists` reads the skill/rule list from
-> `manifest.json` (one CDN fetch, no `api.github.com`), falling back to the
-> Contents API only when a ref has no release. Individual skill/rule **files**
-> are still fetched from `raw.githubusercontent.com` (a separate, looser
-> bucket). Switching file content to extracting `weegloo-bundle.zip` — which
-> would drop the raw fetches too — is a follow-up; the zip is already published
-> below so that change needs no pipeline work.
+> **How the CLI consumes a release:**
+> - **Listing** — `fetchResourceLists` reads the skill/rule list from
+>   `manifest.json` (one CDN fetch, no `api.github.com`).
+> - **File content** — `prepareResourceSource` downloads `weegloo-bundle.zip`
+>   once from the asset CDN and extracts it in memory (fflate), then installs
+>   files from that map — **no `raw.githubusercontent.com`, no git client**.
+> - **Fallback** — when a ref has no published release (e.g. a feature branch),
+>   the CLI degrades gracefully: listing falls back to the Contents API and file
+>   content to per-file raw fetches. So the installer keeps working before the
+>   first release exists, and switches to the bundle automatically once it does.
 
 ## What gets published
 
