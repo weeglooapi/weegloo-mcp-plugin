@@ -83,6 +83,48 @@ export async function fetchBranches(options = {}) {
   }
 }
 
+const RELEASES_ATOM = `https://github.com/${REPO}/releases.atom`;
+const TAGS_ATOM = `https://github.com/${REPO}/tags.atom`;
+
+/**
+ * Lists release version tags, newest first, from the static `releases.atom`
+ * feed (falling back to `tags.atom`). These are github.com feeds — NOT
+ * api.github.com — so they are not subject to the 60-req/hour unauthenticated
+ * REST rate limit and need no git client. Returns [] on failure (caller can
+ * fall back to just offering `latest`).
+ *
+ * @returns {Promise<string[]>} e.g. ['v1.0.13', 'v1.0.12', ...]
+ */
+export async function fetchReleaseVersions() {
+  for (const url of [RELEASES_ATOM, TAGS_ATOM]) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const xml = await res.text();
+      const tags = [];
+      const seen = new Set();
+      const re = /releases\/tag\/([^<"\s]+)/g;
+      let m;
+      while ((m = re.exec(xml)) !== null) {
+        let tag = m[1];
+        try {
+          tag = decodeURIComponent(m[1]);
+        } catch {
+          /* keep raw tag if it is not valid percent-encoding */
+        }
+        if (!seen.has(tag)) {
+          seen.add(tag);
+          tags.push(tag);
+        }
+      }
+      if (tags.length > 0) return tags;
+    } catch {
+      // try the next feed
+    }
+  }
+  return [];
+}
+
 /**
  * Determines the GitHub ref (branch or tag) to fetch plugin files from.
  *

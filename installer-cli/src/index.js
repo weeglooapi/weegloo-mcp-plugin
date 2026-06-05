@@ -1,7 +1,7 @@
 import { select, checkbox, password } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { getPluginRef, fetchBranches, fetchResourceLists } from './github.js';
+import { getPluginRef, fetchBranches, fetchReleaseVersions, fetchResourceLists } from './github.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -58,9 +58,10 @@ async function main() {
     process.argv.includes('-a') || process.argv.includes('--all-branches');
   if (!refFromEnvOrArg) {
     const branchSpinner = ora({ text: '  Fetching plugin versions...', indent: 0 }).start();
-    const branches = await fetchBranches({ includeHidden: showAllBranches });
-    branchSpinner.stop();
-    if (branches.length > 0) {
+    let sorted;
+    if (showAllBranches) {
+      // Internal/debug path (-a): list every branch incl. develop via the API.
+      const branches = await fetchBranches({ includeHidden: true });
       const parseVersion = (s) => {
         const m = String(s).replace(/^v/, '').match(/^(\d+(?:\.\d+)*)/);
         if (!m) return null;
@@ -84,9 +85,17 @@ async function main() {
       const rest = branches
         .filter((b) => b !== 'latest' && !parseVersion(b))
         .sort((a, b) => a.localeCompare(b));
-      const sorted = [...latestOnly, ...versionBranches, ...rest];
+      sorted = [...latestOnly, ...versionBranches, ...rest];
+    } else {
+      // Default path: 'latest' + recent release tags from the static atom feed
+      // (no api.github.com). 'latest' resolves to the latest GitHub Release.
+      const versions = await fetchReleaseVersions();
+      sorted = ['latest', ...versions.slice(0, 5)];
+    }
+    branchSpinner.stop();
+    if (sorted.length > 1) {
       pluginRef = await select({
-        message: 'Select plugin version (branch):',
+        message: 'Select plugin version:',
         choices: sorted.map((name) => ({
           name: name === 'latest' ? `${chalk.bold(name)}  ${chalk.dim('(recommended)')}` : name,
           value: name,
