@@ -55,22 +55,61 @@ authoritative release list each publish, so it self-heals.
 
 ## Cutting a release
 
-Either push a tag:
+For a human, a release is essentially **"push a version tag"** — CI does the rest.
+
+### Every time
+
+1. **Land your skill/rule changes** in `plugins/weegloo/` on the canonical
+   branch (normal PR/merge).
+2. **Tag a version and push it** (must match `v*`, semver recommended):
+   ```bash
+   git tag v1.2.0
+   git push origin v1.2.0
+   ```
+   …or, from the **Actions tab → "Release plugin bundle" → Run workflow**, enter
+   the tag as input (`workflow_dispatch` creates the tag if it doesn't exist).
+3. **Done.** `release.yml` then automatically:
+   - builds the bundle and creates **GitHub Release `v1.2.0`** with
+     `manifest.json` + `weegloo-bundle.zip`;
+   - regenerates `versions.json` and publishes it to **`gh-pages`** (the Pages
+     index);
+   - GitHub marks `v1.2.0` as **Latest**, so the installer's `latest` resolves
+     to it.
+
+The workflow needs no secrets beyond the default `GITHUB_TOKEN` (`contents: write`).
+
+### Verify (optional)
 
 ```bash
-git tag v1.0.13
-git push origin v1.0.13
+gh release view v1.2.0 --repo weeglooapi/weegloo-mcp-plugin --json assets --jq '.assets[].name'
+curl -s https://weeglooapi.github.io/weegloo-mcp-plugin/versions.json | head
+# or just run `npx weegloo` — the picker should show `latest` + v1.2.0
 ```
 
-…or run the **Release plugin bundle** workflow manually (Actions tab →
-`workflow_dispatch`) with the tag name as input — it will create the tag if it
-does not exist.
+### Notes
 
-The workflow needs no secrets beyond the default `GITHUB_TOKEN` (it has
-`contents: write`).
+- **No `npm publish` for content.** Skills/rules are decoupled from the CLI (npm)
+  version — a content release is just a tag push. Publish to npm only when the
+  CLI program itself changes.
+- **`latest` lag ~10 min** — the Pages index has a CDN cache TTL. Need it
+  immediately? Pick `v1.2.0` explicitly in the picker (per-tag assets are exact).
+- **No separate "latest" release/tag** — GitHub designates it automatically and
+  re-points it on the next tag.
+- **Prereleases:** the current workflow publishes every `v*` as a normal (Latest)
+  release. A beta channel would need a `prerelease` branch in the workflow (not
+  yet wired).
 
-**One-time setup (for the Pages version index):** create an empty `gh-pages`
-branch and point Pages at it.
+### Fixing a bad release
+
+- Cleanest: **push a newer tag** (`v1.2.1`) — the workflow re-runs and
+  regenerates `versions.json` too.
+- Deleting a release alone does **not** update `versions.json` (it's rebuilt only
+  on a workflow run) — re-run the workflow (`workflow_dispatch`) to refresh the
+  index.
+
+### One-time setup (enabling the Pages index)
+
+Only needed once per repo. Create an empty `gh-pages` branch and point Pages at it:
 
 ```bash
 git switch --orphan gh-pages
