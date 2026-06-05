@@ -1,0 +1,57 @@
+name: Release plugin bundle
+
+# Publishes the skills/rules bundle as GitHub Release assets so the installer
+# CLI can download them via
+#   https://github.com/<repo>/releases/latest/download/<asset>
+# which needs neither a git client nor the rate-limited GitHub REST API.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.0.13). Created if it does not exist.'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve release tag
+        id: ref
+        run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build bundle
+        run: BUNDLE_REF="${{ steps.ref.outputs.tag }}" node scripts/build-bundle.mjs
+
+      - name: Zip bundle
+        run: |
+          cd dist/bundle
+          zip -r -X ../weegloo-bundle.zip .
+          cd -
+          echo "── bundle contents ──"
+          unzip -l dist/weegloo-bundle.zip
+
+      - name: Create / update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ref.outputs.tag }}
+          name: ${{ steps.ref.outputs.tag }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/weegloo-bundle.zip
+            dist/bundle/manifest.json

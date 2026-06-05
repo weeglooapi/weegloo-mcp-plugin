@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - latest
+
+jobs:
+  installer-tests:
+    name: installer-cli tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: installer-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: installer-cli/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  bundle-build:
+    name: bundle build (release dry-run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build bundle
+        run: BUNDLE_REF="ci-${{ github.sha }}" node scripts/build-bundle.mjs
+      - name: Validate manifest
+        run: |
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("dist/bundle/manifest.json", "utf8"));
+            if (!Array.isArray(m.skills) || m.skills.length === 0) throw new Error("manifest has no skills");
+            if (!Array.isArray(m.rules) || m.rules.length === 0) throw new Error("manifest has no rules");
+            for (const s of m.skills) {
+              if (!s.files.includes("SKILL.md")) throw new Error(`skill ${s.id} missing SKILL.md in manifest`);
+              for (const f of s.files) {
+                if (!fs.existsSync(`dist/bundle/skills/${s.id}/${f}`)) throw new Error(`missing staged file skills/${s.id}/${f}`);
+              }
+            }
+            for (const r of m.rules) {
+              if (!fs.existsSync(`dist/bundle/rules/${r.file}`)) throw new Error(`missing staged rule ${r.file}`);
+            }
+            console.log(`manifest OK: ${m.skills.length} skills, ${m.rules.length} rules`);
+          '
