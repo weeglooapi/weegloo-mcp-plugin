@@ -184,6 +184,30 @@ export async function fetchMcpConfig(ref) {
 export const DEFAULT_SKILL_IDS = ['weegloo-create-content-type', 'weegloo-web-hosting'];
 export const DEFAULT_RULE_IDS = ['weegloo-global-rules', 'weegloo-web-hosting-rules'];
 
+const [REPO_OWNER, REPO_NAME] = REPO.split('/');
+/** Cross-version index published to GitHub Pages (static, CDN, not api.github.com). */
+const VERSIONS_INDEX_URL = `https://${REPO_OWNER}.github.io/${REPO_NAME}/versions.json`;
+
+/**
+ * Fetches the version index (`versions.json`) from GitHub Pages — one static
+ * CDN file listing `latest` + recent versions. This is our own contract, not
+ * api.github.com, so it has no REST rate limit. Returns the parsed index, or
+ * `null` if unavailable (caller falls back to the atom feed / `latest`).
+ *
+ * @returns {Promise<{ latest: string|null, versions: {version:string,date?:string,prerelease?:boolean}[] } | null>}
+ */
+export async function fetchVersionsIndex() {
+  try {
+    const res = await fetch(VERSIONS_INDEX_URL);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.versions)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Lists skill directory names from a GitHub contents path.
  * @param {string} ref
@@ -235,17 +259,18 @@ export function releaseAssetUrl(ref, assetName) {
 /**
  * Resolves the `latest` ref to a concrete release tag.
  *
- * Why not just use `releases/latest/download/<asset>`: that shortcut redirect
- * is **CDN-cached** and can keep pointing at the *previous* release for minutes
- * after a new one is published. The `releases/latest` page redirect, by
- * contrast, is `cache-control: no-cache` and always reflects the current
- * "Latest" release — so we follow it (manual redirect) to get the real tag,
- * then fetch that tag's immutable per-tag asset URLs.
+ * Primary source is the Pages `versions.json` `latest` field (static, stable,
+ * no rate limit). Fallbacks, in order: the `releases/latest` page redirect
+ * (`cache-control: no-cache`, always current — note the `releases/latest/download/*`
+ * shortcut is CDN-cached and can lag, so we avoid it here), then the newest
+ * atom-feed tag, then `null`.
  *
- * Falls back to the newest tag from the atom feed, then to `null`.
  * @returns {Promise<string | null>}
  */
 async function resolveLatestTag() {
+  const index = await fetchVersionsIndex();
+  if (index?.latest) return index.latest;
+
   try {
     const res = await fetch(`${RELEASE_BASE}/latest`, { redirect: 'manual' });
     const loc = res.headers.get('location');

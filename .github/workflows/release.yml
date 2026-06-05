@@ -55,3 +55,28 @@ jobs:
           files: |
             dist/weegloo-bundle.zip
             dist/bundle/manifest.json
+
+      # ── Version index (versions.json) → GitHub Pages ──────────────
+      # The installer's version picker reads this one static CDN file (no
+      # api.github.com). Regenerated from the authoritative release list each
+      # publish, so it self-heals. `gh` here is authenticated (GITHUB_TOKEN),
+      # not the user-facing path, so its API use is not rate-limit-sensitive.
+      - name: Generate versions index
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p public
+          : > public/.nojekyll
+          gh release list --repo "${{ github.repository }}" --limit 100 \
+            --json tagName,createdAt,isLatest,isDraft,isPrerelease \
+            | node scripts/build-versions-index.mjs > public/versions.json
+          echo "── versions.json ──"
+          cat public/versions.json
+
+      - name: Publish versions index to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          publish_branch: gh-pages
+          keep_files: true

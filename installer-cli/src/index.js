@@ -1,7 +1,13 @@
 import { select, checkbox, password } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { getPluginRef, fetchBranches, fetchReleaseVersions, fetchResourceLists } from './github.js';
+import {
+  getPluginRef,
+  fetchBranches,
+  fetchReleaseVersions,
+  fetchVersionsIndex,
+  fetchResourceLists,
+} from './github.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -87,9 +93,12 @@ async function main() {
         .sort((a, b) => a.localeCompare(b));
       sorted = [...latestOnly, ...versionBranches, ...rest];
     } else {
-      // Default path: 'latest' + recent release tags from the static atom feed
-      // (no api.github.com). 'latest' resolves to the latest GitHub Release.
-      const versions = await fetchReleaseVersions();
+      // Default path: 'latest' + recent versions from the static Pages index
+      // (versions.json — our contract, CDN, no api.github.com). 'latest'
+      // resolves to the latest GitHub Release. Falls back to the atom feed.
+      const index = await fetchVersionsIndex();
+      let versions = (index?.versions ?? []).map((v) => v.version).filter(Boolean);
+      if (versions.length === 0) versions = await fetchReleaseVersions();
       sorted = ['latest', ...versions.slice(0, 5)];
     }
     branchSpinner.stop();

@@ -41,6 +41,10 @@ test('fetchResourceLists reads ids from the release manifest (no api.github.com)
         apiCalled = true;
         throw new Error('Contents API must not be called when a manifest exists');
       }
+      // No Pages index in this test → latest falls back to the redirect.
+      if (u.includes('github.io') && u.endsWith('/versions.json')) {
+        return { ok: false, status: 404 };
+      }
       // 'latest' is resolved to a concrete tag via the releases/latest redirect.
       if (u.endsWith('/releases/latest')) {
         return {
