@@ -95,8 +95,8 @@ x-ratelimit-resource: core
 - `GET https://github.com/<repo>.git/info/refs?service=git-upload-pack`.
 - 응답(pkt-line)에서 `refs/heads/<name>`만 파싱. **첫 ref 줄 뒤에 붙는 git capability
   문자열을 잘라내야 함**(공백/`\0`에서 stop). 권장 패턴: `/[0-9a-f]{40} refs\/heads\/([^\s\0]+)/g`.
-- 받은 전체 브랜치를 기존 필터 로직(develop 숨김 / 버전정렬 / 최신 N / `-a`=전체)에
-  그대로 통과. `-a`도 info/refs가 develop까지 주므로 **api 불필요** → api.github.com 완전 제거.
+- 받은 전체 브랜치를 picker 정책(§13: `latest` + strict-semver만 / `-a`=전체)에 통과.
+  `-a`도 info/refs가 develop까지 주므로 **api 불필요** → api.github.com 완전 제거.
 - **폴백은 간단하게** (사용자 결정 b): `info/refs` 실패 시 → `['latest']`. (api/branches로
   되돌리지 않음 — 한도 있는 면으로 폴백하면 의미가 약해지고 복잡도만 늘어남.)
 
@@ -335,3 +335,17 @@ R3(검증된 패턴): `info/refs`는 모든 `git clone`이 때리는 면이라 G
 - **`io.js`** — `writeContentFile`(로컬 FS)를 `github.js`에서 분리. `github.js`는 이제 GitHub 표면 접근만.
 
 **의도적으로 안 한 것:** `github.js` 디렉터리 모듈화(238줄·소비자 1 → 두 번째 전략 생길 때), comparator 주입(YAGNI). 원칙은 §11과 동일 — *"두 번째 소비자나 실제 응집 위반이 있을 때만 쪼갠다."*
+
+---
+
+## 13. semver-only picker 정책 + 정렬/배치 분리 (2026-06-06)
+
+picker에 **`latest` + strict-semver(`X.Y.Z`) 버전 브랜치만** 노출. 이전엔 info/refs가 주는
+`improve`·`feat/*`·`beta`·`develop`까지 다 떴음(잠재 버그). `-a/--all-branches`는 전체(메인테이너 디버그).
+
+- **strict semver**: `^v?\d+\.\d+\.\d+(-prerelease)?(+build)?$`. `1.0`/`1`은 제외(사용자 "일단 strict").
+- **정렬 ↔ 배치 책임 분리** (`versions.js`):
+  - `sortVersionBranches` = **버전 정렬만**(semver 필터 + 최신순 + cap). `latest`/`develop`을 모름.
+  - `orderBranchesForPicker` = **배치만**. 기본: `latest`(핀) → 버전. `-a`: `latest` → 버전 → 기타(alpha) → `develop`(맨 뒤). **핀은 그 브랜치가 실제 존재할 때만**.
+- **visibility 전부 `versions.js`로 통합**: `github.js`에서 `HIDDEN_BRANCHES`/`includeHidden` 제거,
+  `listBranches()`는 전체 브랜치 반환(순수 데이터 접근). `index.js`는 정렬 결과가 비면 picker 스킵(기본 ref).
