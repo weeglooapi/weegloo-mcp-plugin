@@ -293,3 +293,21 @@ R3(검증된 패턴): `info/refs`는 모든 `git clone`이 때리는 면이라 G
 - 2026-06-06 `api.github.com/branches`: `x-ratelimit-resource: core`, 60→59 (core 버킷 확정).
 - 2026-06-06 `info/refs` ×80: 80/80 → 200, `x-ratelimit-*` 없음, core 불변, 파싱 결과 `1.0.10/1.0.11/1.0.12/develop/latest`.
 - 2025-10 (외부) bazarr #3057: raw 429 실사례 — raw는 C/D 등급임을 재확인.
+
+---
+
+## 10. 코드 리뷰 반영 (Codex, 2026-06-06)
+
+구현(브랜치 `feat/installer-branch-native-manifest`)에 Codex 리뷰를 받아 하드닝. Critical/블로커는 없었고,
+지적된 HIGH 2건이 모두 **"조용한 degradation"**(이 ADR이 없애려던 버그 클래스)이라 우선 반영:
+
+| 심각도 | 지적 | 반영 |
+|---|---|---|
+| HIGH | 빌드 시 깨진 `.mcp.json`을 조용히 기본(prod) URL로 대체 | `buildMcp()`가 **존재하는** 파일 파싱 실패 시 throw. 기본값은 파일이 아예 없을 때만. (dev 브랜치가 prod URL로 새는 것 방지) |
+| HIGH | manifest fetch 실패가 경고 없이 raw-default/빈 설치로 강등 | `index.js`가 `resources.source !== 'manifest'`이면 **노란 경고** 출력(raw-default=브랜치에 manifest 없음 / none=fetch 실패) |
+| MEDIUM | `normalizeManifest`가 `schemaVersion` 미검증 | `schemaVersion === 1` 강제(미래 v2 manifest는 거부→폴백, 오해석 방지) + 빈 id/content 엔트리 제거 |
+| MEDIUM | `httpGet` per-attempt 타임아웃 없음 | 시도마다 `AbortController` 15s 데드라인, 타임아웃도 네트워크 오류처럼 재시도 |
+| LOW | `localeCompare`가 로케일 의존 | manifest 정렬을 **바이트 비교**로(결정론 보강). skill 파일 키 순서만 바뀌고 내용 동일 |
+
+테스트 11/11 통과(신규: 깨진 `.mcp.json`→throw, `schemaVersion` 거부, 빈 엔트리 제거). Codex 샌드박스에서 보고된
+`codex.test.js` 2건 실패는 `/var` 쓰기 차단(샌드박스 한정)이며 로컬·CI 무관 — 코드 버그 아님.
