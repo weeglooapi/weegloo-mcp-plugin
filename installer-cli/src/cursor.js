@@ -3,7 +3,6 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
-import { getPluginRef } from './github.js';
 import { writeContentFile } from './io.js';
 
 const CURSOR_HOME = path.join(os.homedir(), '.cursor');
@@ -65,14 +64,13 @@ export async function installCursor({
   installMcp,
   installSkillsRules,
 }) {
-  const ref = pluginRef ?? getPluginRef();
   const baseDir = scope === 'global' ? CURSOR_HOME : path.join(process.cwd(), '.cursor');
   const skillsDir = path.join(baseDir, 'skills');
   const rulesDir = path.join(baseDir, 'rules');
   const mcpPath = getCursorMcpPath(scope);
 
   console.log(chalk.bold('  ▶  Installing for Cursor...'));
-  console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
+  console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(pluginRef)}`));
   console.log();
 
   if (installMcp) {

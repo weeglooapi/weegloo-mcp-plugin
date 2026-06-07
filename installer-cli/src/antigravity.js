@@ -3,7 +3,6 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
-import { getPluginRef } from './github.js';
 import { writeContentFile } from './io.js';
 
 const ANTIGRAVITY_HOME = path.join(os.homedir(), '.gemini', 'antigravity');
@@ -58,13 +57,12 @@ export async function installAntigravity({
   installMcp,
   installSkillsRules,
 }) {
-  const ref = pluginRef ?? getPluginRef();
   const skillsDir = scope === 'global'
     ? path.join(ANTIGRAVITY_HOME, 'skills')
     : path.join(process.cwd(), '.agent', 'skills');
 
   console.log(chalk.bold('  ▶  Installing for Antigravity...'));
-  console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
+  console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(pluginRef)}`));
   console.log();
 
   if (installMcp) {
