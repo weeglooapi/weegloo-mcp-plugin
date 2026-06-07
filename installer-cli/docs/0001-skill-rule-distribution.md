@@ -349,3 +349,15 @@ picker에 **`latest` + strict-semver(`X.Y.Z`) 버전 브랜치만** 노출. 이�
   - `orderBranchesForPicker` = **배치만**. 기본: `latest`(핀) → 버전. `-a`: `latest` → 버전 → 기타(alpha) → `develop`(맨 뒤). **핀은 그 브랜치가 실제 존재할 때만**.
 - **visibility 전부 `versions.js`로 통합**: `github.js`에서 `HIDDEN_BRANCHES`/`includeHidden` 제거,
   `listBranches()`는 전체 브랜치 반환(순수 데이터 접근). `index.js`는 정렬 결과가 비면 picker 스킵(기본 ref).
+
+---
+
+## 14. 필요 파일 fetch 실패 → fail fast (2026-06-08)
+
+§10 HIGH#2의 "경고 + 진행"을 **fail fast로 강화**(조용한 degradation 완전 제거):
+
+- `loadResources(ref)`는 manifest를 못 받으면(404 / 네트워크 / 잘못된 JSON / 미지원 `schemaVersion`) **`null` 반환**. (이전의 가짜 `source:'none'` 빈 shape 제거.)
+- `index.js`: `loadResources`가 null이면 **에러 + `process.exit(1)`** — 빈/추측 설치로 진행하지 않음. 메시지: "manifest를 못 받았다 → 네트워크 확인 또는 게시된 버전 선택".
+- manifest는 선택한 install(skills/rules 콘텐츠 + 그 ref의 MCP URL)의 **유일한 소스**라, 못 받으면 그 ref로 충실히 설치할 수 없음 → 추측 대신 즉시 실패가 정직.
+- 부수: `fetchManifest`가 폴백 제거 후 `loadResources`의 passthrough가 되어 **하나로 병합**.
+- picker(`listBranches`)는 그대로 `['latest']` 폴백(결정 b) — "필요한 파일"이 아니라 버전 목록이라 별개.
