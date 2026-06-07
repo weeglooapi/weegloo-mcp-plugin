@@ -8,7 +8,7 @@ const pkg = require('../package.json');
 
 // Default plugin repo; override with WEEGLOO_REPO=owner/name to point the installer at a
 // fork / mirror / staging repo (used for end-to-end testing). All URLs below derive from it.
-const REPO = process.env.WEEGLOO_REPO || 'weeglooapi/weegloo-mcp-plugin';
+export const REPO = process.env.WEEGLOO_REPO || 'weeglooapi/weegloo-mcp-plugin';
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
 
 /**

@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
+import { REPO } from './github.js';
 import { writeContentFile } from './io.js';
 
 function ensureDir(dirPath) {
@@ -55,7 +56,7 @@ export async function installClaude({
   const mcpPath = getClaudeMcpPath(scope);
 
   console.log(chalk.bold('  ▶  Installing for Claude Code...'));
-  console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(pluginRef)}`));
+  console.log(chalk.dim(`     github: ${REPO} @ ${chalk.cyan(pluginRef)}`));
   console.log();
 
   if (installMcp) {

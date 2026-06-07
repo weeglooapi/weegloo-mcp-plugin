@@ -4,6 +4,7 @@ import os from 'os';
 import { spawn } from 'child_process';
 import ora from 'ora';
 import chalk from 'chalk';
+import { REPO } from './github.js';
 import { writeContentFile } from './io.js';
 
 /**
@@ -172,7 +173,7 @@ export async function installCodex({
   const instructionsPath = getCodexInstructionsPath(scope);
 
   console.log(chalk.bold('  ▶  Installing for Codex...'));
-  console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(pluginRef)}`));
+  console.log(chalk.dim(`     github: ${REPO} @ ${chalk.cyan(pluginRef)}`));
   console.log();
 
   if (installMcp) {
