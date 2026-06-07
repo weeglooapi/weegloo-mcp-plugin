@@ -323,3 +323,15 @@ R3(검증된 패턴): `info/refs`는 모든 `git clone`이 때리는 면이라 G
 - 죽은 export `SKILL_FILES`/`repoContentPath`, `listBranches`의 중복 `?? ['latest']` 가드(체인이 이미 보장).
 
 결과: `loadResources` = **manifest 1요청 → 없으면 `source:'none'`(빈 목록 + 기본 MCP) + 경고**. 약 70줄 제거. **전제**: 배포 브랜치에 manifest 백필(배포 체크리스트). 유지한 폴백(값을 함): picker `['latest']`(결정 b), `httpGet` 429/타임아웃 재시도, manifest 내 필드 기본값.
+
+---
+
+## 12. SRP 분리 (2026-06-06)
+
+파일도 책임 단위로 조금 더 분리(과편화는 회피):
+
+- **`versions.js`** — `orderBranchesForPicker`(+ 내부 `parseVersion`/`compareVersion`). picker 정책(latest 최상단 → 최신 N 버전 desc → 나머지 alpha)이 `github.js`(필터)와 `index.js`(정렬/slice)에 흩어져 있던 걸 **순수·단일 책임 유닛**으로 통합. `index.js` main()은 ~25줄 감소.
+- **`parseBranchesFromInfoRefs`는 파싱만** — dedup + 광고 순서 반환. 정렬은 호출자(정책)의 몫.
+- **`io.js`** — `writeContentFile`(로컬 FS)를 `github.js`에서 분리. `github.js`는 이제 GitHub 표면 접근만.
+
+**의도적으로 안 한 것:** `github.js` 디렉터리 모듈화(238줄·소비자 1 → 두 번째 전략 생길 때), comparator 주입(YAGNI). 원칙은 §11과 동일 — *"두 번째 소비자나 실제 응집 위반이 있을 때만 쪼갠다."*
