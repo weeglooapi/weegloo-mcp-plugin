@@ -1,0 +1,55 @@
+name: Regenerate installer manifest
+
+# Branch-native distribution: whenever skills/rules/.mcp.json change on a branch,
+# regenerate plugins/weegloo/installer-manifest.json and commit it back to the same
+# branch so `npx weegloo` (which reads that one file via raw) serves fresh content.
+# See installer-cli/docs/0001-skill-rule-distribution.md (D4).
+#
+# Loop safety (no infinite re-trigger):
+#   - the default GITHUB_TOKEN's commits do NOT trigger workflows (GitHub built-in)
+#   - the manifest path is NOT in `paths`, so a manifest-only commit wouldn't match anyway
+#   - `git diff --cached --quiet` makes a no-content-change run a no-op
+# This workflow file must exist on every distributable branch (latest, version branches).
+
+on:
+  push:
+    paths:
+      - 'plugins/weegloo/skills/**'
+      - 'plugins/weegloo/rules/**'
+      - 'plugins/weegloo/.mcp.json'
+      - 'scripts/build-installer-manifest.mjs'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: installer-manifest-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build installer manifest
+        run: node scripts/build-installer-manifest.mjs
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins/weegloo/installer-manifest.json
+          if git diff --cached --quiet; then
+            echo "installer-manifest.json unchanged — nothing to commit"
+            exit 0
+          fi
+          git commit -m "chore(manifest): regenerate installer-manifest.json [skip ci]"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin "HEAD:${{ github.ref_name }}"
