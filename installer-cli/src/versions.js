@@ -5,6 +5,14 @@
  * lives in ONE place instead of being smeared across github.js and index.js.
  */
 
+/** Strict semver: MAJOR.MINOR.PATCH, optional `v` prefix, optional -prerelease / +build. */
+const SEMVER = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+/** Whether a branch name is a selectable plugin version (strict semver). */
+export function isSemverBranch(name) {
+  return SEMVER.test(name);
+}
+
 /** Parses a leading dotted version ("v1.0.12" → [1,0,12]); null if not version-like. */
 function parseVersion(s) {
   const m = String(s).replace(/^v/, '').match(/^(\d+(?:\.\d+)*)/);
@@ -25,21 +33,40 @@ function compareVersion(a, b) {
 }
 
 /**
- * Orders branch names for the version picker:
- *   `latest` first → the newest `limit` version branches (desc) → other branches (alpha).
+ * Sorts the strict-semver branches newest-first, capped at `limit`. This is the only
+ * version-ordering responsibility — it knows nothing about latest/develop layout.
  *
- * @param {string[]} branches  distributable branch names (hidden refs already filtered upstream)
+ * @param {string[]} branches
  * @param {{ limit?: number }} [opts]
  * @returns {string[]}
  */
-export function orderBranchesForPicker(branches, { limit = 5 } = {}) {
-  const latestOnly = branches.filter((b) => b === 'latest');
-  const versionBranches = branches
-    .filter((b) => b !== 'latest' && parseVersion(b))
-    .sort(compareVersion)
-    .slice(0, limit);
-  const rest = branches
-    .filter((b) => b !== 'latest' && !parseVersion(b))
+export function sortVersionBranches(branches, { limit = 5 } = {}) {
+  return branches.filter(isSemverBranch).sort(compareVersion).slice(0, limit);
+}
+
+/** Recommended default — pinned to the top of the picker (only if the branch exists). */
+const PINNED_TOP = 'latest';
+/** Internal mainline — shown only with `-a`, pinned to the very bottom (only if it exists). */
+const INTERNAL_BRANCH = 'develop';
+
+/**
+ * Lays out the version picker (composition only — version sorting is sortVersionBranches' job):
+ *   default      : `latest` → newest `limit` semver versions.
+ *   showAll (-a) : `latest` → versions → other branches (alpha) → `develop`, last.
+ * Pinned branches appear only when they actually exist in `branches`.
+ *
+ * @param {string[]} branches  all branch names from the repo
+ * @param {{ limit?: number, showAll?: boolean }} [opts]
+ * @returns {string[]}
+ */
+export function orderBranchesForPicker(branches, { limit = 5, showAll = false } = {}) {
+  const has = (name) => branches.includes(name);
+  const top = has(PINNED_TOP) ? [PINNED_TOP] : [];
+  const versions = sortVersionBranches(branches, { limit });
+  if (!showAll) return [...top, ...versions];
+  const others = branches
+    .filter((b) => b !== PINNED_TOP && b !== INTERNAL_BRANCH && !isSemverBranch(b))
     .sort((a, b) => a.localeCompare(b));
-  return [...latestOnly, ...versionBranches, ...rest];
+  const bottom = has(INTERNAL_BRANCH) ? [INTERNAL_BRANCH] : [];
+  return [...top, ...versions, ...others, ...bottom];
 }

@@ -59,10 +59,10 @@ async function main() {
     process.argv.includes('-a') || process.argv.includes('--all-branches');
   if (!refFromEnvOrArg) {
     const branchSpinner = ora({ text: '  Fetching plugin versions...', indent: 0 }).start();
-    const branches = await listBranches({ includeHidden: showAllBranches });
+    const branches = await listBranches();
     branchSpinner.stop();
-    if (branches.length > 0) {
-      const sorted = orderBranchesForPicker(branches);
+    const sorted = orderBranchesForPicker(branches, { showAll: showAllBranches });
+    if (sorted.length > 0) {
       pluginRef = await select({
         message: 'Select plugin version (branch):',
         choices: sorted.map((name) => ({

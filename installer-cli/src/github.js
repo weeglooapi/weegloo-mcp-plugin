@@ -22,12 +22,6 @@ export const PLUGIN_PACKAGE_ROOT = 'plugins/weegloo';
 const DEFAULT_MCP_URL = 'https://ai.weegloo.com/mcp';
 const DEFAULT_UPLOAD_API_URL = 'https://upload.weegloo.com/v1';
 
-/**
- * Branch names that exist in the repo but must never appear in the installer's
- * plugin-version picker (internal / non-distributable refs).
- */
-const HIDDEN_BRANCHES = new Set(['develop']);
-
 // ── transport seam ──────────────────────────────────────────────────────────
 // All network access goes through httpGet so retry/backoff lives in one place
 // (raw can 429 under load — bazarr #3057) and tests mock fetch in one spot.
@@ -135,26 +129,20 @@ async function infoRefsBranches() {
 }
 
 /**
- * Lists distributable branch names (data access only — picker ordering/selection is
- * {@link module:versions.orderBranchesForPicker}'s job).
+ * Lists ALL branch names from the repo (data access only). Picker visibility &
+ * ordering — the semver-only policy and the `-a` show-all — live in
+ * `orderBranchesForPicker` (versions.js).
  * Strategy chain: git smart-HTTP info/refs → ['latest'] fallback.
  * (A future git-CLI strategy slots in at the front of this chain — see ADR D6.)
  *
- * @param {{ includeHidden?: boolean }} [options]  includeHidden=true keeps `develop` (CLI `-a`)
  * @returns {Promise<string[]>}
  */
-export async function listBranches(options = {}) {
-  const includeHidden = Boolean(options.includeHidden);
-  const all = await firstUsable(
+export async function listBranches() {
+  // The final ['latest'] strategy always yields a non-empty list, so this is non-null.
+  return firstUsable(
     [infoRefsBranches, () => ['latest']],
     (arr) => Array.isArray(arr) && arr.length > 0
   );
-  const names = all; // chain's final `['latest']` strategy guarantees a non-empty list
-  return names.filter((name) => {
-    if (!name) return false;
-    if (includeHidden) return true;
-    return !HIDDEN_BRANCHES.has(name);
-  });
 }
 
 // ── ResourceSource: manifest (content + MCP) for a ref ───────────────────────
