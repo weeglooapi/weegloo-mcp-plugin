@@ -54,7 +54,7 @@
 | 1 | 버전 목록(picker) | `GET /{repo}.git/info/refs?service=git-upload-pack` | **github.com** git smart-HTTP (**core 버킷 밖**) | `-a`도 동일(develop 포함 전체를 받아 클라에서 필터). 실패 시 폴백 `['latest']` |
 | 2 | skill/rule **목록 + 콘텐츠** | `GET /{repo}/{ref}/plugins/weegloo/installer-manifest.json` (→ 루트 폴백) | raw.githubusercontent.com | **1요청으로 목록+전체 콘텐츠 임베드** → #4·#5(per-file 다운로드) 제거 |
 | 3 | MCP 설정 | manifest `mcp` 블록에 **흡수**(런타임 별도 fetch 없음) | — | 빌드 시 브랜치 `.mcp.json` → manifest. 없으면 기본 URL |
-| 4 | (폴백) manifest 없을 때 | raw per-file로 DEFAULT skill/rule 세트 | raw.githubusercontent.com | 드묾. **api.github.com 안 씀** |
+| 4 | (폴백) manifest 없을 때 | **없음** — `source:'none'`(빈 목록) + 경고 출력 | — | 추측 설치 안 함(정직한 실패). 백필 전제 — ADR §11 |
 
 **설치 1회당 합계 (default 경로):** api core **0** + info/refs **1** + raw **1**(manifest = 콘텐츠 + MCP 설정 통합). CI(`--ref`/`WEEGLOO_REF`)면 picker 스킵 → 총 raw **1**. 합치기 한계 근거: [ADR 0001 D5](./0001-skill-rule-distribution.md#d5-호출-합치기의-한계--picker는-왜-분리-유지하나).
 

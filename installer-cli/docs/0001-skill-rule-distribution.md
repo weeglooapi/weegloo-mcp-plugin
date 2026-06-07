@@ -62,8 +62,8 @@ x-ratelimit-resource: core
 컷 없이 브랜치 push만으로 동작. → R5, R6.
 
 ### D2. 콘텐츠 = 브랜치 안 committed manifest JSON, 전부 임베드
-- 위치(stable): `plugins/weegloo/installer-manifest.json` (nested),
-  레거시 폴백 `installer-manifest.json`(루트). 기존 nested/legacy 감지 로직 재사용.
+- 위치(stable): `plugins/weegloo/installer-manifest.json` (nested). manifest는 이 경로에만
+  생성·소비된다(루트 후보 없음 — §11).
 - skill 15 × (`SKILL.md` + `metadata.json`) + rule 5 × `.mdc` = **텍스트 35개를 전부
   inline**. (저장소에 바이너리 자산 0개 확인 → base64 불필요. 추후 바이너리가 생기면
   그 항목만 base64 폴백.)
@@ -145,7 +145,7 @@ x-ratelimit-resource: core
     () => ['latest'],     // 폴백 (결정 b)
   ], (arr) => arr?.length)
   ```
-- **ResourceSource**(콘텐츠+MCP) 체인 — `manifest(ref)` → `rawDefault(ref)`(폴백). **둘 다 동일한 정규화 형태** 반환.
+- **ResourceSource**(콘텐츠+MCP) — `manifest(ref)` 단일 소스. 없으면 `source:'none'`(빈 목록+기본 MCP)으로 **동일한 정규화 형태** 반환(추측 폴백 없음 — §11). CDN/Pages 이전 시 이 한 함수만 교체.
 - **정규화 형태 = 설치 측 계약**: 설치 모듈은 `{ skills:[{id,files}], rules:[{id,content}], mcp:{…} }` 만 알고 **출처를 모른다**(fetch ↔ install 디커플). 소스가 바뀌어도 설치 모듈/`index.js` picker는 불변.
 - **transport seam**: 모든 HTTP는 주입 가능한 `httpGet(url, {retry})` 한 곳을 통과 → 429/5xx 백오프(§8)와 테스트용 fetch 목킹을 **한 군데**서.
 
@@ -208,7 +208,7 @@ R3(검증된 패턴): `info/refs`는 모든 `git clone`이 때리는 면이라 G
    - **transport** `httpGet(url, {retry})` 한 곳 — 429/5xx 백오프(§8 raw 행) + 테스트 fetch 목킹 지점.
    - **`firstUsable(strategies, isUsable)`** 콤비네이터(첫 "쓸 만한" 결과 반환).
    - **VersionSource** `listBranches()` = `firstUsable([infoRefs, () => ['latest']])` — info/refs 파서(capability 절단). 구 `fetchBranches`/`api.github.com` 상수/`fetchContentsJson` 제거.
-   - **ResourceSource** `loadResources(ref)` = `firstUsable([manifest(ref), rawDefault(ref)])` → 정규화 `{skills,rules,mcp}` 반환. 구 `fetchResourceLists`/per-file `downloadFile`/`fetchMcpConfig` 흡수.
+   - **ResourceSource** `loadResources(ref)` = `fetchManifest(ref)` → 없으면 `source:'none'`. 정규화 `{skills,rules,mcp}` 반환. 구 `fetchResourceLists`/per-file `downloadFile`/`fetchMcpConfig` 흡수.
    - 파일 분리(`src/sources/`)는 **구현 재량** — D6 seam(콤비네이터·두 소스·정규화 형태·transport)만 지키면 됨.
 2. `installer-cli/src/index.js` 및 `claude.js`/`cursor.js`/`codex.js`/`antigravity.js`
    - `listBranches()`/`loadResources()`의 **정규화 형태만 소비**(선택분 content 디스크 기록, MCP는 `mcp`). **출처 비의존** → 소스 전략 교체 시 picker·설치 모듈 무변경.
@@ -311,3 +311,15 @@ R3(검증된 패턴): `info/refs`는 모든 `git clone`이 때리는 면이라 G
 
 테스트 11/11 통과(신규: 깨진 `.mcp.json`→throw, `schemaVersion` 거부, 빈 엔트리 제거). Codex 샌드박스에서 보고된
 `codex.test.js` 2건 실패는 `/var` 쓰기 차단(샌드박스 한정)이며 로컬·CI 무관 — 코드 버그 아님.
+
+---
+
+## 11. 후속 단순화 — 폴백 축소 (2026-06-06)
+
+"fallback이 많으면 절반쯤 동작하며 진짜 문제를 가리고 버그 발견을 늦춘다"는 판단으로 불필요한 폴백 제거:
+
+- **raw-per-file DEFAULT 폴백**(`rawDefaultResources` + `fetchRawText`/`mcpFromRaw` + `DEFAULT_SKILL_IDS/RULE_IDS`) — manifest 없는 브랜치에 **하드코딩 2스킬/2룰을 추측 설치**해 그 브랜치의 실제 콘텐츠와 무관한 결과를 내고 "manifest 없음"을 가렸음. §10 HIGH#2 경고가 이미 그 상태를 정직하게 알리므로 불필요.
+- **레거시 루트 manifest 후보** — manifest는 `plugins/weegloo/`에만 생성되어 루트 URL은 영원히 miss(헛 요청).
+- 죽은 export `SKILL_FILES`/`repoContentPath`, `listBranches`의 중복 `?? ['latest']` 가드(체인이 이미 보장).
+
+결과: `loadResources` = **manifest 1요청 → 없으면 `source:'none'`(빈 목록 + 기본 MCP) + 경고**. 약 70줄 제거. **전제**: 배포 브랜치에 manifest 백필(배포 체크리스트). 유지한 폴백(값을 함): picker `['latest']`(결정 b), `httpGet` 429/타임아웃 재시도, manifest 내 필드 기본값.
