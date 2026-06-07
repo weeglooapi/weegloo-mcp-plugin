@@ -55,6 +55,11 @@ function buildSkills(skillsDir) {
     for (const name of names) {
       files[name] = readEmbeddableText(path.join(skillDir, name));
     }
+    // Mirror the installer's strict invariants: a manifest the consumer would reject
+    // must fail the build here, not get committed and brick every install on this branch.
+    if (Object.keys(files).length === 0) {
+      throw new Error(`skill '${id}' has no files — installer would reject this manifest`);
+    }
     return { id, files };
   });
 }
@@ -65,7 +70,13 @@ function buildRules(rulesDir) {
     .filter((e) => e.isFile() && e.name.endsWith('.mdc'))
     .map((e) => e.name.replace(/\.mdc$/, ''))
     .sort(byteCompare)
-    .map((id) => ({ id, content: readEmbeddableText(path.join(rulesDir, `${id}.mdc`)) }));
+    .map((id) => {
+      const content = readEmbeddableText(path.join(rulesDir, `${id}.mdc`));
+      if (!content) {
+        throw new Error(`rule '${id}' is empty — installer would reject this manifest`);
+      }
+      return { id, content };
+    });
 }
 
 /** Extracts the weegloo MCP URLs from the branch's `.mcp.json`, falling back to defaults. */
