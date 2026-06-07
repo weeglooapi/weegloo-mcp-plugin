@@ -6,7 +6,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
 
-const REPO = 'weeglooapi/weegloo-mcp-plugin';
+// Default plugin repo; override with WEEGLOO_REPO=owner/name to point the installer at a
+// fork / mirror / staging repo (used for end-to-end testing). All URLs below derive from it.
+const REPO = process.env.WEEGLOO_REPO || 'weeglooapi/weegloo-mcp-plugin';
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
 
 /**
