@@ -357,6 +357,7 @@ picker에 **`latest` + strict-semver(`X.Y.Z`) 버전 브랜치만** 노출. 이�
 §10 HIGH#2의 "경고 + 진행"을 **fail fast로 강화**(조용한 degradation 완전 제거):
 
 - `loadResources(ref)`는 manifest를 못 받으면(404 / 네트워크 / 잘못된 JSON / 미지원 `schemaVersion`) **`null` 반환**. (이전의 가짜 `source:'none'` 빈 shape 제거.)
+- **`normalizeManifest`는 strict**: schemaVersion 외에도 **구조 불일치 전부**(비-문자열 `repoContentPrefix`/mcp URL, malformed skill/rule 엔트리) → `null` → fail fast. §10 MEDIUM#1의 "mcp DEFAULT / 빈 엔트리 드롭" lenient 동작을 대체. manifest는 자기생성물이라 불일치=빌드 버그 → 조용히 default/drop하지 않고 시끄럽게 실패(생성기 수정). 기본값은 **생산자(빌드 스크립트)에만**, 소비자 `DEFAULT_*_URL` 상수 제거. 대가: all-or-nothing(엔트리 하나 깨지면 전체 거부).
 - `index.js`: `loadResources`가 null이면 **에러 + `process.exit(1)`** — 빈/추측 설치로 진행하지 않음. 메시지: "manifest를 못 받았다 → 네트워크 확인 또는 게시된 버전 선택".
 - manifest는 선택한 install(skills/rules 콘텐츠 + 그 ref의 MCP URL)의 **유일한 소스**라, 못 받으면 그 ref로 충실히 설치할 수 없음 → 추측 대신 즉시 실패가 정직.
 - 부수: `fetchManifest`가 폴백 제거 후 `loadResources`의 passthrough가 되어 **하나로 병합**.
