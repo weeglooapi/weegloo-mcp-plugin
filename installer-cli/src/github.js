@@ -185,11 +185,18 @@ function normalizeManifest(data) {
 }
 
 /**
- * Fetches the branch-committed installer manifest (one raw request — no api.github.com).
+ * Loads ref-scoped resources (skill/rule content + MCP URLs) from the branch-committed
+ * manifest in a single raw request (no api.github.com), normalized. Install code consumes
+ * this shape and never touches the network — so swapping the source (e.g. a CDN mirror)
+ * changes nothing downstream. See ADR D6 (ResourceSource).
+ *
+ * Returns null when the manifest is unavailable or invalid (404, network error, bad JSON,
+ * unsupported schemaVersion) so the caller can fail fast rather than install a degraded set.
+ *
  * @param {string} ref
- * @returns {Promise<object|null>} normalized resources, or null if no valid manifest
+ * @returns {Promise<{ source: string, repoContentPrefix: string, mcp: {weeglooUrl:string, uploadApiUrl:string}, skills: Array<{id:string, files:Record<string,string>}>, rules: Array<{id:string, content:string}> } | null>}
  */
-export async function fetchManifest(ref) {
+export async function loadResources(ref) {
   const url = `${RAW_BASE}/${ref}/${PLUGIN_PACKAGE_ROOT}/installer-manifest.json`;
   try {
     const res = await httpGet(url, { retry: 2 });
@@ -198,29 +205,4 @@ export async function fetchManifest(ref) {
   } catch {
     return null;
   }
-}
-
-/**
- * Loads everything ref-scoped (skill/rule lists + content + MCP URLs) for `ref`
- * in a single normalized shape. Install code consumes this shape and never touches
- * the network — so swapping the source (e.g. a CDN mirror) changes nothing downstream.
- * See ADR D6.
- *
- * Source: the branch-committed manifest (one raw request). If absent/invalid, returns
- * `source: 'none'` with empty lists + default MCP URLs; index.js surfaces that to the
- * user rather than silently installing a guessed subset.
- *
- * @param {string} ref
- * @returns {Promise<{ source: string, repoContentPrefix: string, mcp: {weeglooUrl:string, uploadApiUrl:string}, skills: Array<{id:string, files:Record<string,string>}>, rules: Array<{id:string, content:string}> }>}
- */
-export async function loadResources(ref) {
-  const manifest = await fetchManifest(ref);
-  if (manifest) return manifest;
-  return {
-    source: 'none',
-    repoContentPrefix: '',
-    mcp: { weeglooUrl: DEFAULT_MCP_URL, uploadApiUrl: DEFAULT_UPLOAD_API_URL },
-    skills: [],
-    rules: [],
-  };
 }

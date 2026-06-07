@@ -90,15 +90,11 @@ test('loadResources normalizes a manifest fetched from raw', async () => {
   }
 });
 
-test('loadResources falls back to empty defaults when nothing is reachable', async () => {
+test('loadResources returns null when no manifest is reachable (caller fails fast)', async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response('not found', { status: 404 });
   try {
-    const r = await loadResources('missing-branch');
-    assert.equal(r.source, 'none');
-    assert.deepEqual(r.skills, []);
-    assert.deepEqual(r.rules, []);
-    assert.ok(r.mcp.weeglooUrl.length > 0, 'mcp falls back to defaults');
+    assert.equal(await loadResources('missing-branch'), null);
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -117,7 +113,7 @@ test('buildManifest throws when an existing .mcp.json is malformed', () => {
   }
 });
 
-test('loadResources rejects an unsupported manifest schemaVersion and falls back', async () => {
+test('loadResources returns null for an unsupported manifest schemaVersion', async () => {
   const v2 = {
     schemaVersion: 2,
     repoContentPrefix: 'plugins/weegloo',
@@ -131,8 +127,7 @@ test('loadResources rejects an unsupported manifest schemaVersion and falls back
       ? new Response(JSON.stringify(v2), { status: 200 })
       : new Response('not found', { status: 404 });
   try {
-    const r = await loadResources('latest');
-    assert.equal(r.source, 'none'); // v2 rejected -> no usable manifest -> none
+    assert.equal(await loadResources('latest'), null); // v2 rejected -> no usable manifest
   } finally {
     globalThis.fetch = realFetch;
   }

@@ -123,18 +123,17 @@ async function main() {
   if (installMcp || installSkillsRules) {
     const resourceSpinner = ora({ text: '  Fetching plugin manifest...', indent: 0 }).start();
     resources = await loadResources(pluginRef);
+
+    // Fail fast: the manifest is the required source for this version's skills/rules/MCP.
+    if (!resources) {
+      resourceSpinner.fail(`  Could not fetch the plugin manifest for '${pluginRef}'.`);
+      console.error(
+        chalk.dim('     Check your network connection, or choose a published version (e.g. latest).')
+      );
+      process.exit(1);
+    }
     resourceSpinner.stop();
     mcp = resources.mcp;
-
-    // Never degrade silently: tell the user when no manifest was loaded.
-    if (resources.source !== 'manifest') {
-      console.log(
-        chalk.yellow(
-          `  ⚠  No installer manifest for '${pluginRef}' — skills/rules couldn't be loaded ` +
-            `(this version may not be published yet, or check your network).`
-        )
-      );
-    }
   }
 
   if (installMcp) {
