@@ -167,18 +167,23 @@ async function main() {
       codex: 'Where would you like to install Codex configuration (MCP / skills / rules)?',
       cursor: 'Where would you like to install Cursor configuration (MCP / skills / rules)?',
       claude: 'Where would you like to install Claude Code configuration (MCP / skills / rules)?',
+      // Antigravity MCP is always written to ~/.gemini/antigravity (scope-independent),
+      // so the scope choice only affects skills / rules.
+      antigravity: 'Where would you like to install Antigravity skills / rules?',
     };
     const projectHints = {
       codex: '(./.codex/ in current folder)',
       cursor: '(./.cursor/ in current folder)',
       claude: '(./.mcp.json and ./.claude/ in current folder)',
+      antigravity: '(./.agent/ in current folder)',
     };
     const globalHints = {
       codex: '(~/.codex/)',
       cursor: '(Cursor app data mcp.json)',
       claude: '(~/.claude.json)',
+      antigravity: '(~/.gemini/antigravity/ and GEMINI.md)',
     };
-    const ideKey = ide === 'codex' || ide === 'cursor' || ide === 'claude' ? ide : null;
+    const ideKey = ['codex', 'cursor', 'claude', 'antigravity'].includes(ide) ? ide : null;
 
     scope = await select({
       message: ideKey ? scopeMessages[ideKey] : 'Where would you like to install Skills / Rules?',
