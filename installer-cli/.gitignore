@@ -1,2 +1,5 @@
 # Environment and secrets
 node_modules/
+
+# Local-only design notes (ADR): kept on the author's machine, not in the PR/repo
+docs/0001-skill-rule-distribution.md

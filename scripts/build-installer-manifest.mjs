@@ -8,8 +8,6 @@
  * otherwise the regenerate-on-push workflow's `git diff --quiet` idempotence guard
  * would never hold and every push would pile up empty commits. File/skill/rule
  * order is sorted so output is identical across platforms and CI runs.
- *
- * See installer-cli/docs/0001-skill-rule-distribution.md (D2, D4).
  */
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';

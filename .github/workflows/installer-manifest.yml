@@ -3,7 +3,6 @@ name: Regenerate installer manifest
 # Branch-native distribution: whenever skills/rules/.mcp.json change on a branch,
 # regenerate plugins/weegloo/installer-manifest.json and commit it back to the same
 # branch so `npx weegloo` (which reads that one file via raw) serves fresh content.
-# See installer-cli/docs/0001-skill-rule-distribution.md (D4).
 #
 # Loop safety (no infinite re-trigger):
 #   - the default GITHUB_TOKEN's commits do NOT trigger workflows (GitHub built-in)

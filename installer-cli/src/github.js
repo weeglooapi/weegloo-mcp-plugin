@@ -14,7 +14,6 @@ const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
 /**
  * Branch list source: git smart-HTTP ref advertisement. This is NOT
  * `api.github.com`, so it does not draw from the 60-req/hour REST "core" bucket.
- * See installer-cli/docs/0001-skill-rule-distribution.md (D3, §8).
  */
 const INFO_REFS_URL = `https://github.com/${REPO}.git/info/refs?service=git-upload-pack`;
 
@@ -132,7 +131,7 @@ async function infoRefsBranches() {
  * ordering — the semver-only policy and the `-a` show-all — live in
  * `orderBranchesForPicker` (versions.js).
  * Strategy chain: git smart-HTTP info/refs → ['latest'] fallback.
- * (A future git-CLI strategy slots in at the front of this chain — see ADR D6.)
+ * (A future git-CLI strategy slots in at the front of this chain.)
  *
  * @returns {Promise<string[]>}
  */
@@ -194,7 +193,7 @@ function normalizeManifest(data) {
  * Loads ref-scoped resources (skill/rule content + MCP URLs) from the branch-committed
  * manifest in a single raw request (no api.github.com), normalized. Install code consumes
  * this shape and never touches the network — so swapping the source (e.g. a CDN mirror)
- * changes nothing downstream. See ADR D6 (ResourceSource).
+ * changes nothing downstream (swappable source seam).
  *
  * Returns null when the manifest is unavailable or invalid (404, network error, bad JSON,
  * unsupported schemaVersion) so the caller can fail fast rather than install a degraded set.

@@ -1,11 +1,10 @@
 # 인스톨러 네트워크 엔드포인트 인벤토리
 
 `npx weegloo`(installer-cli)가 **무엇을 받기 위해 어떤 엔드포인트를 호출하는지**의 인벤토리.
-각 엔드포인트의 **계약 안정성 등급 / rate-limit / 리스크**는 중복하지 않고
-[ADR 0001 §8 의존성 계약 & 리스크 레지스터](./0001-skill-rule-distribution.md#8-의존성-계약--리스크-레지스터)를 참조한다.
+각 엔드포인트의 **계약 안정성·rate-limit·리스크** 요약은 §4 참조.
 
-- as-is = 현재 `improve`/기존 코드 (`api.github.com` 사용, rate-limit 문제 있음)
-- to-be = ADR 0001 결정 적용 후 (branch-native manifest + git `info/refs`)
+- as-is = 기존 코드 (`api.github.com` 사용, rate-limit 문제 있음)
+- to-be = 변경 적용 후 (branch-native manifest + git `info/refs`)
 
 > 줄 번호는 작성 시점(2026-06-06) 기준. 코드 변경 시 함께 갱신.
 
@@ -23,9 +22,9 @@
 **순효과:** `api.github.com` **3~5 → 0** (60/hr 하드캡·silent degradation 제거) · 총 네트워크 호출 **`N+4~6` → 2**(인터랙티브: info/refs + manifest, **서로 다른 버킷**) / **1**(CI, picker 스킵).
 
 **왜 더 합치지 않았나 / 무엇을 안 골랐나:**
-- picker(레포 레벨)와 manifest(ref 스코프)는 **닭-달걀**이라 1호출로 못 합침 → [ADR D5](./0001-skill-rule-distribution.md#d5-호출-합치기의-한계--picker는-왜-분리-유지하나).
-- 태그/릴리즈(Design D)·`atom` 피드·`codeload tar.gz`·npm 번들·중앙 `branches.json`을 기각한 이유 → [ADR §5](./0001-skill-rule-distribution.md#5-기각된-대안-alternatives--why-not).
-- 각 엔드포인트의 계약 안정성·rate-limit 등급(A/B/C/D)과 리스크 → [ADR §8](./0001-skill-rule-distribution.md#8-의존성-계약--리스크-레지스터).
+- picker(레포 레벨)와 manifest(ref 스코프)는 **닭-달걀**이라 1호출로 못 합침 — ref 스코프 파일을 읽으려면 ref를 먼저 알아야 하는데, 그 ref 목록을 발견하는 게 곧 picker다.
+- 태그/릴리즈·`atom` 피드·`codeload tar.gz`·npm 번들·중앙 `branches.json`은 기각 — 각각 릴리즈 의식↑ / 비공식 계약 / 전체 트리 다운로드 / 콘텐츠↔CLI 버전 결합 / 크로스브랜치 유지보수 부담.
+- 각 엔드포인트의 계약 안정성·rate-limit 등급은 §4 참조.
 
 ---
 
@@ -47,16 +46,16 @@
 
 ---
 
-## 2. 변경 후 (to-be — ADR 0001)
+## 2. 변경 후 (to-be)
 
 | # | 받는 것 | 메서드·엔드포인트 | 호스트 / 버킷 | 비고 |
 |---|---|---|---|---|
 | 1 | 버전 목록(picker) | `GET /{repo}.git/info/refs?service=git-upload-pack` | **github.com** git smart-HTTP (**core 버킷 밖**) | `-a`도 동일(develop 포함 전체를 받아 클라에서 필터). 실패 시 폴백 `['latest']` |
 | 2 | skill/rule **목록 + 콘텐츠** | `GET /{repo}/{ref}/plugins/weegloo/installer-manifest.json` (→ 루트 폴백) | raw.githubusercontent.com | **1요청으로 목록+전체 콘텐츠 임베드** → #4·#5(per-file 다운로드) 제거 |
 | 3 | MCP 설정 | manifest `mcp` 블록에 **흡수**(런타임 별도 fetch 없음) | — | 빌드 시 브랜치 `.mcp.json` → manifest. 없으면 기본 URL |
-| 4 | manifest 못 받을 때 | **없음 — fail fast**(에러 + `exit 1`) | — | `loadResources`→null → 조용한 degradation 금지 — ADR §14 |
+| 4 | manifest 못 받을 때 | **없음 — fail fast**(에러 + `exit 1`) | — | `loadResources`→null → 조용한 degradation 금지 |
 
-**설치 1회당 합계 (default 경로):** api core **0** + info/refs **1** + raw **1**(manifest = 콘텐츠 + MCP 설정 통합). CI(`--ref`/`WEEGLOO_REF`)면 picker 스킵 → 총 raw **1**. 합치기 한계 근거: [ADR 0001 D5](./0001-skill-rule-distribution.md#d5-호출-합치기의-한계--picker는-왜-분리-유지하나).
+**설치 1회당 합계 (default 경로):** api core **0** + info/refs **1** + raw **1**(manifest = 콘텐츠 + MCP 설정 통합). CI(`--ref`/`WEEGLOO_REF`)면 picker 스킵 → 총 raw **1**.
 
 ---
 
@@ -74,7 +73,7 @@
 
 ## 4. 각 엔드포인트가 의존하는 응답 계약 (우리가 파싱하는 것)
 
-> "어디까지 안전/명시 계약인지"는 ADR 0001 §8 등급(A/B/C/D) 참조.
+> 등급: **A**=문서/스펙 계약, **B**=우리 계약, **C**=사실상 안정(SLA 없음), **D**=관측 기반(문서 보장 아님).
 
 - **`/branches`** (as-is) — JSON 배열, `[].name`(브랜치명)만 사용. *(api core, REST 문서 계약)*
 - **`/contents/{path}`** (as-is) — JSON 배열, `[].type`(`dir`/`file`) + `[].name`. *(api core, REST 문서 계약)*
@@ -89,4 +88,4 @@
 
 - 호출 그래프 진입점: `installer-cli/src/index.js` `main()` → 버전 선택(#1) → IDE 선택 → 설치 옵션 → (MCP면 #3) → (skills/rules면 #2, 이후 #4·#5).
 - 코드: `installer-cli/src/github.js`(네트워크 전부) + `installer-cli/src/{claude,cursor,codex,antigravity}.js`(설치/쓰기).
-- 결정 배경·대안·리스크: [ADR 0001](./0001-skill-rule-distribution.md).
+- 결정 배경·대안·트레이드오프·리스크 레지스터: PR 설명 참조.
