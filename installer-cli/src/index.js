@@ -147,6 +147,15 @@ async function main() {
     resources = await loadResources(pluginRef);
     resourceSpinner.stop();
     mcp = resources.mcp;
+
+    // Never degrade silently: tell the user when the manifest wasn't used.
+    if (resources.source !== 'manifest') {
+      const why =
+        resources.source === 'raw-default'
+          ? `No manifest on '${pluginRef}' — installing the default skill/rule subset only.`
+          : `Could not fetch resources for '${pluginRef}' — check your network or the selected version.`;
+      console.log(chalk.yellow(`  ⚠  ${why}`));
+    }
   }
 
   if (installMcp) {

@@ -41,17 +41,22 @@ const HIDDEN_BRANCHES = new Set(['develop']);
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Per-attempt deadline so a stalled connection can't block the fallback chain. */
+const REQUEST_TIMEOUT_MS = 15000;
+
 /**
  * @param {string} url
- * @param {{ retry?: number, headers?: Record<string,string> }} [opts]
+ * @param {{ retry?: number, headers?: Record<string,string>, timeout?: number }} [opts]
  * @returns {Promise<Response>}
  */
 async function httpGet(url, opts = {}) {
-  const { retry = 0, headers } = opts;
+  const { retry = 0, headers, timeout = REQUEST_TIMEOUT_MS } = opts;
   let attempt = 0;
   for (;;) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
     try {
-      const res = await fetch(url, headers ? { headers } : undefined);
+      const res = await fetch(url, { signal: controller.signal, ...(headers ? { headers } : {}) });
       if ((res.status === 429 || res.status >= 500) && attempt < retry) {
         attempt += 1;
         await delay(Math.min(250 * 2 ** attempt, 2000));
@@ -59,12 +64,15 @@ async function httpGet(url, opts = {}) {
       }
       return res;
     } catch (err) {
+      // Network error or timeout abort → retry while attempts remain, else surface.
       if (attempt < retry) {
         attempt += 1;
         await delay(Math.min(250 * 2 ** attempt, 2000));
         continue;
       }
       throw err;
+    } finally {
+      clearTimeout(timer);
     }
   }
 }
@@ -174,9 +182,30 @@ function manifestCandidates(ref) {
   ];
 }
 
-/** Coerces a raw manifest JSON into the normalized resource shape, or null if invalid. */
+/** Manifest schema version this CLI understands. A newer manifest is rejected (caller falls back). */
+const SUPPORTED_SCHEMA_VERSION = 1;
+
+/**
+ * Coerces a raw manifest JSON into the normalized resource shape, or null if it is
+ * not a manifest of the supported schema version. Entries with missing/empty
+ * id/content are dropped so a partially-corrupt manifest can't install blank files.
+ */
 function normalizeManifest(data) {
-  if (!data || !Array.isArray(data.skills) || !Array.isArray(data.rules)) return null;
+  if (!data || data.schemaVersion !== SUPPORTED_SCHEMA_VERSION) return null;
+  if (!Array.isArray(data.skills) || !Array.isArray(data.rules)) return null;
+  const skills = data.skills
+    .filter((s) => s && typeof s.id === 'string' && s.id && s.files && typeof s.files === 'object')
+    .map((s) => {
+      const files = {};
+      for (const [name, content] of Object.entries(s.files)) {
+        if (name && typeof content === 'string') files[name] = content;
+      }
+      return { id: s.id, files };
+    })
+    .filter((s) => Object.keys(s.files).length > 0);
+  const rules = data.rules
+    .filter((r) => r && typeof r.id === 'string' && r.id && typeof r.content === 'string' && r.content)
+    .map((r) => ({ id: r.id, content: r.content }));
   return {
     source: 'manifest',
     repoContentPrefix: typeof data.repoContentPrefix === 'string' ? data.repoContentPrefix : '',
@@ -185,12 +214,8 @@ function normalizeManifest(data) {
       uploadApiUrl:
         typeof data.mcp?.uploadApiUrl === 'string' ? data.mcp.uploadApiUrl : DEFAULT_UPLOAD_API_URL,
     },
-    skills: data.skills
-      .filter((s) => s && typeof s.id === 'string')
-      .map((s) => ({ id: s.id, files: s.files && typeof s.files === 'object' ? s.files : {} })),
-    rules: data.rules
-      .filter((r) => r && typeof r.id === 'string')
-      .map((r) => ({ id: r.id, content: typeof r.content === 'string' ? r.content : '' })),
+    skills,
+    rules,
   };
 }
 

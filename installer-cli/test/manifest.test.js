@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import path from 'node:path';
+import os from 'node:os';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { parseBranchesFromInfoRefs, loadResources } from '../src/github.js';
@@ -96,6 +98,71 @@ test('loadResources falls back to empty defaults when nothing is reachable', asy
     assert.deepEqual(r.skills, []);
     assert.deepEqual(r.rules, []);
     assert.ok(r.mcp.weeglooUrl.length > 0, 'mcp falls back to defaults');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('buildManifest throws when an existing .mcp.json is malformed', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'weegloo-mcp-bad-'));
+  try {
+    const contentRoot = path.join(root, 'plugins', 'weegloo');
+    mkdirSync(path.join(contentRoot, 'skills', 's1'), { recursive: true });
+    writeFileSync(path.join(contentRoot, 'skills', 's1', 'SKILL.md'), 'body');
+    writeFileSync(path.join(contentRoot, '.mcp.json'), '{ not valid json ]');
+    assert.throws(() => buildManifest({ rootDir: root }), /invalid JSON/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('loadResources rejects an unsupported manifest schemaVersion and falls back', async () => {
+  const v2 = {
+    schemaVersion: 2,
+    repoContentPrefix: 'plugins/weegloo',
+    mcp: {},
+    skills: [{ id: 'a', files: { 'SKILL.md': 'x' } }],
+    rules: [],
+  };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) =>
+    String(url).includes('installer-manifest.json')
+      ? new Response(JSON.stringify(v2), { status: 200 })
+      : new Response('not found', { status: 404 });
+  try {
+    const r = await loadResources('latest');
+    assert.equal(r.source, 'none'); // v2 rejected, raw-default 404 -> none
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('loadResources drops manifest entries with empty id/content', async () => {
+  const manifest = {
+    schemaVersion: 1,
+    repoContentPrefix: 'plugins/weegloo',
+    mcp: {},
+    skills: [
+      { id: 'good', files: { 'SKILL.md': 'x' } },
+      { id: '', files: { 'SKILL.md': 'x' } }, // empty id
+      { id: 'nofiles', files: {} }, // no usable files
+      { id: 'nonstr', files: { 'SKILL.md': 123 } }, // non-string content
+    ],
+    rules: [
+      { id: 'r1', content: 'body' },
+      { id: 'r2', content: '' }, // empty content
+    ],
+  };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) =>
+    String(url).includes('installer-manifest.json')
+      ? new Response(JSON.stringify(manifest), { status: 200 })
+      : new Response('x', { status: 404 });
+  try {
+    const r = await loadResources('latest');
+    assert.equal(r.source, 'manifest');
+    assert.deepEqual(r.skills.map((s) => s.id), ['good']);
+    assert.deepEqual(r.rules.map((x) => x.id), ['r1']);
   } finally {
     globalThis.fetch = realFetch;
   }
