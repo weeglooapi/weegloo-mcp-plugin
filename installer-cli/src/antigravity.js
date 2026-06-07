@@ -3,13 +3,7 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
-import {
-  downloadFile,
-  getPluginRef,
-  fetchMcpConfig,
-  SKILL_FILES,
-  repoContentPath,
-} from './github.js';
+import { getPluginRef, writeContentFile } from './github.js';
 
 const ANTIGRAVITY_HOME = path.join(os.homedir(), '.gemini', 'antigravity');
 const ANTIGRAVITY_MCP_PATH = path.join(ANTIGRAVITY_HOME, 'mcp_config.json');
@@ -58,7 +52,7 @@ export async function installAntigravity({
   mcpGroup,
   skills,
   rules,
-  repoContentPrefix = '',
+  mcp = {},
   scope,
   installMcp,
   installSkillsRules,
@@ -73,7 +67,7 @@ export async function installAntigravity({
   console.log();
 
   if (installMcp) {
-    const { weeglooUrl, uploadApiUrl } = await fetchMcpConfig(ref);
+    const { weeglooUrl, uploadApiUrl } = mcp;
     const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
     try {
       ensureDir(ANTIGRAVITY_HOME);
@@ -109,19 +103,15 @@ export async function installAntigravity({
   } else if (skills.length === 0) {
     console.log(chalk.dim('  - Skills: none selected, skipping'));
   } else {
-    const skillsSpinner = ora({ text: `  Downloading skills (0/${skills.length})`, indent: 0 }).start();
+    const skillsSpinner = ora({ text: `  Installing skills (0/${skills.length})`, indent: 0 }).start();
     try {
       ensureDir(skillsDir);
       for (let i = 0; i < skills.length; i++) {
         const skill = skills[i];
-        skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
-        const destDir = path.join(skillsDir, skill);
-        for (const file of SKILL_FILES) {
-          await downloadFile(
-            ref,
-            repoContentPath(repoContentPrefix, `skills/${skill}/${file}`),
-            path.join(destDir, file)
-          );
+        skillsSpinner.text = `  Installing skills (${i + 1}/${skills.length}) ${chalk.dim(skill.id)}`;
+        const destDir = path.join(skillsDir, skill.id);
+        for (const [fileName, content] of Object.entries(skill.files)) {
+          writeContentFile(path.join(destDir, fileName), content);
         }
       }
       skillsSpinner.succeed(
@@ -138,18 +128,15 @@ export async function installAntigravity({
   } else if (rules.length === 0) {
     console.log(chalk.dim('  - Rules: none selected, skipping'));
   } else {
-    const rulesSpinner = ora({ text: `  Downloading rules (0/${rules.length})`, indent: 0 }).start();
+    const rulesSpinner = ora({ text: `  Installing rules (0/${rules.length})`, indent: 0 }).start();
     try {
       if (scope === 'global') {
         // Global rules → append to ~/.gemini/GEMINI.md
         ensureDir(path.dirname(GEMINI_MD_PATH));
         for (let i = 0; i < rules.length; i++) {
           const rule = rules[i];
-          rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-          const tmpPath = path.join(os.tmpdir(), `weegloo-${rule}.md`);
-          await downloadFile(ref, repoContentPath(repoContentPrefix, `rules/${rule}.mdc`), tmpPath);
-          const content = fs.readFileSync(tmpPath, 'utf-8');
-          appendToGeminiMd(rule, content);
+          rulesSpinner.text = `  Installing rules (${i + 1}/${rules.length}) ${chalk.dim(rule.id)}`;
+          appendToGeminiMd(rule.id, rule.content);
         }
         rulesSpinner.succeed(
           `  Rules installed    ${chalk.dim(`(${rules.length})  → ${GEMINI_MD_PATH}`)}`
@@ -160,12 +147,8 @@ export async function installAntigravity({
         ensureDir(rulesDir);
         for (let i = 0; i < rules.length; i++) {
           const rule = rules[i];
-          rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-          await downloadFile(
-            ref,
-            repoContentPath(repoContentPrefix, `rules/${rule}.mdc`),
-            path.join(rulesDir, `${rule}.md`)
-          );
+          rulesSpinner.text = `  Installing rules (${i + 1}/${rules.length}) ${chalk.dim(rule.id)}`;
+          writeContentFile(path.join(rulesDir, `${rule.id}.md`), rule.content);
         }
         rulesSpinner.succeed(
           `  Rules installed    ${chalk.dim(`(${rules.length})  → ${path.join(process.cwd(), '.agent', 'rules')}`)}`

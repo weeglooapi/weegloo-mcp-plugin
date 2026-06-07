@@ -1,7 +1,7 @@
 import { select, checkbox, password } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { getPluginRef, fetchBranches, fetchResourceLists } from './github.js';
+import { getPluginRef, listBranches, loadResources } from './github.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -58,7 +58,7 @@ async function main() {
     process.argv.includes('-a') || process.argv.includes('--all-branches');
   if (!refFromEnvOrArg) {
     const branchSpinner = ora({ text: '  Fetching plugin versions...', indent: 0 }).start();
-    const branches = await fetchBranches({ includeHidden: showAllBranches });
+    const branches = await listBranches({ includeHidden: showAllBranches });
     branchSpinner.stop();
     if (branches.length > 0) {
       const parseVersion = (s) => {
@@ -138,8 +138,16 @@ async function main() {
   let scope = 'project';
   let skills = [];
   let rules = [];
-  /** '' = legacy repo root; 'plugins/weegloo' = nested marketplace layout */
-  let repoContentPrefix = '';
+  let mcp = { weeglooUrl: undefined, uploadApiUrl: undefined };
+
+  // One manifest fetch covers skill/rule lists + content + MCP URLs (no api.github.com).
+  let resources = null;
+  if (installMcp || installSkillsRules) {
+    const resourceSpinner = ora({ text: '  Fetching plugin manifest...', indent: 0 }).start();
+    resources = await loadResources(pluginRef);
+    resourceSpinner.stop();
+    mcp = resources.mcp;
+  }
 
   if (installMcp) {
     console.log(
@@ -208,25 +216,22 @@ async function main() {
     });
   }
 
-  if (installSkillsRules) {
-    const resourceSpinner = ora({ text: '  Fetching skills and rules from branch...', indent: 0 }).start();
-    const { skills: skillIds, rules: ruleIds, repoContentPrefix: layoutPrefix } =
-      await fetchResourceLists(pluginRef);
-    repoContentPrefix = layoutPrefix;
-    resourceSpinner.stop();
+  if (installSkillsRules && resources) {
+    const skillChoices = resources.skills.map((s) => ({ name: chalk.bold(s.id), value: s.id, checked: true }));
+    const ruleChoices = resources.rules.map((r) => ({ name: chalk.bold(r.id), value: r.id, checked: true }));
 
-    const skillChoices = skillIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
-    const ruleChoices = ruleIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
-
-    skills = await checkbox({
+    const chosenSkillIds = await checkbox({
       message: 'Select skills to install:',
       choices: skillChoices,
     });
 
-    rules = await checkbox({
+    const chosenRuleIds = await checkbox({
       message: 'Select rules to install:',
       choices: ruleChoices,
     });
+
+    skills = resources.skills.filter((s) => chosenSkillIds.includes(s.id));
+    rules = resources.rules.filter((r) => chosenRuleIds.includes(r.id));
   }
 
   console.log();
@@ -237,7 +242,7 @@ async function main() {
     mcpGroup,
     skills,
     rules,
-    repoContentPrefix,
+    mcp,
     scope,
     installMcp,
     installSkillsRules,
