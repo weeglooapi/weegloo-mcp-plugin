@@ -3,7 +3,8 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
-import { getPluginRef, writeContentFile } from './github.js';
+import { getPluginRef } from './github.js';
+import { writeContentFile } from './io.js';
 
 const CURSOR_HOME = path.join(os.homedir(), '.cursor');
 

@@ -2,6 +2,7 @@ import { select, checkbox, password } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
 import { getPluginRef, listBranches, loadResources } from './github.js';
+import { orderBranchesForPicker } from './versions.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -61,30 +62,7 @@ async function main() {
     const branches = await listBranches({ includeHidden: showAllBranches });
     branchSpinner.stop();
     if (branches.length > 0) {
-      const parseVersion = (s) => {
-        const m = String(s).replace(/^v/, '').match(/^(\d+(?:\.\d+)*)/);
-        if (!m) return null;
-        return m[1].split('.').map(Number);
-      };
-      const compareVersion = (a, b) => {
-        const aVer = parseVersion(a);
-        const bVer = parseVersion(b);
-        for (let i = 0; i < Math.max(aVer?.length ?? 0, bVer?.length ?? 0); i++) {
-          const x = aVer?.[i] ?? 0;
-          const y = bVer?.[i] ?? 0;
-          if (x !== y) return y - x;
-        }
-        return String(a).localeCompare(String(b));
-      };
-      const latestOnly = branches.filter((b) => b === 'latest');
-      const versionBranches = branches
-        .filter((b) => b !== 'latest' && parseVersion(b))
-        .sort(compareVersion)
-        .slice(0, 5);
-      const rest = branches
-        .filter((b) => b !== 'latest' && !parseVersion(b))
-        .sort((a, b) => a.localeCompare(b));
-      const sorted = [...latestOnly, ...versionBranches, ...rest];
+      const sorted = orderBranchesForPicker(branches);
       pluginRef = await select({
         message: 'Select plugin version (branch):',
         choices: sorted.map((name) => ({

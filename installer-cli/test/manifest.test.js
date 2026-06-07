@@ -29,7 +29,8 @@ test('parseBranchesFromInfoRefs extracts heads, drops capabilities and tags', ()
     ['c'.repeat(40), 'refs/heads/develop'],
     ['d'.repeat(40), 'refs/tags/v1.0.0'],
   ]);
-  assert.deepEqual(parseBranchesFromInfoRefs(adv), ['1.0.12', 'develop', 'latest']);
+  // Parser preserves advertisement order + dedups; ordering is the caller's concern.
+  assert.deepEqual(parseBranchesFromInfoRefs(adv), ['latest', '1.0.12', 'develop']);
 });
 
 test('parseBranchesFromInfoRefs returns [] on empty / non-advertisement input', () => {

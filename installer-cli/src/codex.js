@@ -4,7 +4,8 @@ import os from 'os';
 import { spawn } from 'child_process';
 import ora from 'ora';
 import chalk from 'chalk';
-import { getPluginRef, writeContentFile } from './github.js';
+import { getPluginRef } from './github.js';
+import { writeContentFile } from './io.js';
 
 /**
  * @param {'global' | 'project'} scope

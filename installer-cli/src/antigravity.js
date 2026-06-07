@@ -3,7 +3,8 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
-import { getPluginRef, writeContentFile } from './github.js';
+import { getPluginRef } from './github.js';
+import { writeContentFile } from './io.js';
 
 const ANTIGRAVITY_HOME = path.join(os.homedir(), '.gemini', 'antigravity');
 const ANTIGRAVITY_MCP_PATH = path.join(ANTIGRAVITY_HOME, 'mcp_config.json');

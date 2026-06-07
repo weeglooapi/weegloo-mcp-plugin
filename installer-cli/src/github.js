@@ -1,4 +1,3 @@
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
@@ -115,7 +114,7 @@ export function getPluginRef() {
  * ignored, and stops at NUL/newline so the capability string trailing the first
  * ref line is dropped.
  * @param {string} text
- * @returns {string[]} sorted, de-duplicated branch names
+ * @returns {string[]} de-duplicated branch names in advertisement order (ordering is the caller's concern)
  */
 export function parseBranchesFromInfoRefs(text) {
   const names = new Set();
@@ -125,7 +124,7 @@ export function parseBranchesFromInfoRefs(text) {
     const name = match[1].split(/[\0 ]/)[0].trim();
     if (name) names.add(name);
   }
-  return [...names].sort((a, b) => a.localeCompare(b));
+  return [...names];
 }
 
 async function infoRefsBranches() {
@@ -136,7 +135,8 @@ async function infoRefsBranches() {
 }
 
 /**
- * Lists distributable branch names for the version picker.
+ * Lists distributable branch names (data access only — picker ordering/selection is
+ * {@link module:versions.orderBranchesForPicker}'s job).
  * Strategy chain: git smart-HTTP info/refs → ['latest'] fallback.
  * (A future git-CLI strategy slots in at the front of this chain — see ADR D6.)
  *
@@ -235,11 +235,4 @@ export async function loadResources(ref) {
     skills: [],
     rules: [],
   };
-}
-
-/** Writes embedded file content to localPath, creating parent dirs as needed. */
-export function writeContentFile(localPath, content) {
-  const dir = path.dirname(localPath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(localPath, content, 'utf-8');
 }
