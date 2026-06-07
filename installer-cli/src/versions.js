@@ -5,8 +5,8 @@
  * lives in ONE place instead of being smeared across github.js and index.js.
  */
 
-/** Strict semver: MAJOR.MINOR.PATCH, optional `v` prefix, optional -prerelease / +build. */
-const SEMVER = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+/** Literal MAJOR.MINOR.PATCH only — matches the repo's release branches (no `v`, no prerelease/build). */
+const SEMVER = /^\d+\.\d+\.\d+$/;
 
 /** Whether a branch name is a selectable plugin version (strict semver). */
 export function isSemverBranch(name) {

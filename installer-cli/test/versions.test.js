@@ -3,11 +3,11 @@ import test from 'node:test';
 
 import { orderBranchesForPicker, sortVersionBranches, isSemverBranch } from '../src/versions.js';
 
-test('isSemverBranch: strict MAJOR.MINOR.PATCH only', () => {
-  for (const ok of ['1.0.10', 'v1.0.0', '2.3.4', '1.0.0-beta.1', '1.0.0+build.5']) {
+test('isSemverBranch: literal MAJOR.MINOR.PATCH only', () => {
+  for (const ok of ['1.0.10', '2.3.4', '0.0.0', '10.20.30']) {
     assert.ok(isSemverBranch(ok), `expected semver: ${ok}`);
   }
-  for (const no of ['1.0', '1', 'latest', 'develop', 'feat/x', 'beta', '1.0.x', 'v1']) {
+  for (const no of ['v1.0.0', '1.0.0-beta.1', '1.0.0+build.5', '1.0', '1', 'latest', 'develop', 'feat/x', 'beta', '1.0.x', 'v1']) {
     assert.ok(!isSemverBranch(no), `expected NOT semver: ${no}`);
   }
 });
