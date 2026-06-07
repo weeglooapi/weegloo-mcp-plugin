@@ -19,9 +19,6 @@ const INFO_REFS_URL = `https://github.com/${REPO}.git/info/refs?service=git-uplo
 /** Plugin package root within this repo (Claude / Cursor marketplace layout). */
 export const PLUGIN_PACKAGE_ROOT = 'plugins/weegloo';
 
-const DEFAULT_MCP_URL = 'https://ai.weegloo.com/mcp';
-const DEFAULT_UPLOAD_API_URL = 'https://upload.weegloo.com/v1';
-
 // ── transport seam ──────────────────────────────────────────────────────────
 // All network access goes through httpGet so retry/backoff lives in one place
 // (raw can 429 under load — bazarr #3057) and tests mock fetch in one spot.
@@ -147,38 +144,45 @@ export async function listBranches() {
 
 // ── ResourceSource: manifest (content + MCP) for a ref ───────────────────────
 
-/** Manifest schema version this CLI understands. A newer manifest is rejected (caller falls back). */
+/** Manifest schema version this CLI understands. A different version is rejected (caller fails fast). */
 const SUPPORTED_SCHEMA_VERSION = 1;
 
 /**
- * Coerces a raw manifest JSON into the normalized resource shape, or null if it is
- * not a manifest of the supported schema version. Entries with missing/empty
- * id/content are dropped so a partially-corrupt manifest can't install blank files.
+ * Strictly validates a raw manifest and returns the normalized resource shape, or null
+ * if ANYTHING is off: wrong schemaVersion, a missing/non-string field, or a malformed
+ * skill/rule entry. The manifest is our own generated artifact, so a mismatch is a build
+ * bug — fail loudly (the caller fails fast) instead of defaulting or dropping silently.
+ * Defaults for absent fields belong to the producer (build-installer-manifest.mjs), not here.
  */
 function normalizeManifest(data) {
   if (!data || data.schemaVersion !== SUPPORTED_SCHEMA_VERSION) return null;
+  if (typeof data.repoContentPrefix !== 'string') return null;
+  if (typeof data.mcp?.weeglooUrl !== 'string' || typeof data.mcp?.uploadApiUrl !== 'string') return null;
   if (!Array.isArray(data.skills) || !Array.isArray(data.rules)) return null;
-  const skills = data.skills
-    .filter((s) => s && typeof s.id === 'string' && s.id && s.files && typeof s.files === 'object')
-    .map((s) => {
-      const files = {};
-      for (const [name, content] of Object.entries(s.files)) {
-        if (name && typeof content === 'string') files[name] = content;
-      }
-      return { id: s.id, files };
-    })
-    .filter((s) => Object.keys(s.files).length > 0);
-  const rules = data.rules
-    .filter((r) => r && typeof r.id === 'string' && r.id && typeof r.content === 'string' && r.content)
-    .map((r) => ({ id: r.id, content: r.content }));
+
+  const skills = [];
+  for (const s of data.skills) {
+    if (!s || typeof s.id !== 'string' || !s.id || !s.files || typeof s.files !== 'object') return null;
+    const entries = Object.entries(s.files);
+    if (entries.length === 0) return null;
+    const files = {};
+    for (const [name, content] of entries) {
+      if (!name || typeof content !== 'string') return null;
+      files[name] = content;
+    }
+    skills.push({ id: s.id, files });
+  }
+
+  const rules = [];
+  for (const r of data.rules) {
+    if (!r || typeof r.id !== 'string' || !r.id || typeof r.content !== 'string' || !r.content) return null;
+    rules.push({ id: r.id, content: r.content });
+  }
+
   return {
     source: 'manifest',
-    repoContentPrefix: typeof data.repoContentPrefix === 'string' ? data.repoContentPrefix : '',
-    mcp: {
-      weeglooUrl: typeof data.mcp?.weeglooUrl === 'string' ? data.mcp.weeglooUrl : DEFAULT_MCP_URL,
-      uploadApiUrl:
-        typeof data.mcp?.uploadApiUrl === 'string' ? data.mcp.uploadApiUrl : DEFAULT_UPLOAD_API_URL,
-    },
+    repoContentPrefix: data.repoContentPrefix,
+    mcp: { weeglooUrl: data.mcp.weeglooUrl, uploadApiUrl: data.mcp.uploadApiUrl },
     skills,
     rules,
   };

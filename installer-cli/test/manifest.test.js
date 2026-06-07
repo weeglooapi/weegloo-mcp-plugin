@@ -133,32 +133,43 @@ test('loadResources returns null for an unsupported manifest schemaVersion', asy
   }
 });
 
-test('loadResources drops manifest entries with empty id/content', async () => {
-  const manifest = {
-    schemaVersion: 1,
-    repoContentPrefix: 'plugins/weegloo',
-    mcp: {},
-    skills: [
-      { id: 'good', files: { 'SKILL.md': 'x' } },
-      { id: '', files: { 'SKILL.md': 'x' } }, // empty id
-      { id: 'nofiles', files: {} }, // no usable files
-      { id: 'nonstr', files: { 'SKILL.md': 123 } }, // non-string content
-    ],
-    rules: [
-      { id: 'r1', content: 'body' },
-      { id: 'r2', content: '' }, // empty content
-    ],
-  };
-  const realFetch = globalThis.fetch;
+function stubManifest(manifest) {
   globalThis.fetch = async (url) =>
     String(url).includes('installer-manifest.json')
       ? new Response(JSON.stringify(manifest), { status: 200 })
       : new Response('x', { status: 404 });
+}
+
+test('loadResources returns null for a malformed entry (strict — no silent drop)', async () => {
+  const realFetch = globalThis.fetch;
+  stubManifest({
+    schemaVersion: 1,
+    repoContentPrefix: 'plugins/weegloo',
+    mcp: { weeglooUrl: 'https://ai.weegloo.com/mcp', uploadApiUrl: 'https://upload.weegloo.com/v1' },
+    skills: [
+      { id: 'good', files: { 'SKILL.md': 'x' } },
+      { id: 'bad', files: { 'SKILL.md': 123 } }, // non-string content → reject whole manifest
+    ],
+    rules: [{ id: 'r1', content: 'body' }],
+  });
   try {
-    const r = await loadResources('latest');
-    assert.equal(r.source, 'manifest');
-    assert.deepEqual(r.skills.map((s) => s.id), ['good']);
-    assert.deepEqual(r.rules.map((x) => x.id), ['r1']);
+    assert.equal(await loadResources('latest'), null);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('loadResources returns null when mcp URLs are missing (defaults belong to the producer)', async () => {
+  const realFetch = globalThis.fetch;
+  stubManifest({
+    schemaVersion: 1,
+    repoContentPrefix: 'plugins/weegloo',
+    mcp: {}, // no weeglooUrl/uploadApiUrl → reject (no consumer-side default)
+    skills: [{ id: 'a', files: { 'SKILL.md': 'x' } }],
+    rules: [{ id: 'r', content: 'body' }],
+  });
+  try {
+    assert.equal(await loadResources('latest'), null);
   } finally {
     globalThis.fetch = realFetch;
   }
