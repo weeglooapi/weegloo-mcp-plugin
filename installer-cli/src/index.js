@@ -206,21 +206,23 @@ async function main() {
   }
 
   if (installSkillsRules) {
-    const skillChoices = resources.skills.map((s) => ({ name: chalk.bold(s.id), value: s.id, checked: true }));
-    const ruleChoices = resources.rules.map((r) => ({ name: chalk.bold(r.id), value: r.id, checked: true }));
+    // Skip an empty checkbox — @inquirer/checkbox throws on zero choices, and a branch
+    // may legitimately have no skills or no rules.
+    if (resources.skills.length > 0) {
+      const chosenSkillIds = await checkbox({
+        message: 'Select skills to install:',
+        choices: resources.skills.map((s) => ({ name: chalk.bold(s.id), value: s.id, checked: true })),
+      });
+      skills = resources.skills.filter((s) => chosenSkillIds.includes(s.id));
+    }
 
-    const chosenSkillIds = await checkbox({
-      message: 'Select skills to install:',
-      choices: skillChoices,
-    });
-
-    const chosenRuleIds = await checkbox({
-      message: 'Select rules to install:',
-      choices: ruleChoices,
-    });
-
-    skills = resources.skills.filter((s) => chosenSkillIds.includes(s.id));
-    rules = resources.rules.filter((r) => chosenRuleIds.includes(r.id));
+    if (resources.rules.length > 0) {
+      const chosenRuleIds = await checkbox({
+        message: 'Select rules to install:',
+        choices: resources.rules.map((r) => ({ name: chalk.bold(r.id), value: r.id, checked: true })),
+      });
+      rules = resources.rules.filter((r) => chosenRuleIds.includes(r.id));
+    }
   }
 
   console.log();
