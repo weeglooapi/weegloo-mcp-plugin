@@ -19,6 +19,9 @@ const SCHEMA_VERSION = 1;
 const DEFAULT_MCP_URL = 'https://ai.weegloo.com/mcp';
 const DEFAULT_UPLOAD_API_URL = 'https://upload.weegloo.com/v1';
 
+/** Bytewise comparator — locale/ICU-independent so manifest order is identical everywhere. */
+const byteCompare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** Reads a file as UTF-8 text, throwing if it is binary / non-UTF-8 (not embeddable as JSON). */
 function readEmbeddableText(filePath) {
   const buf = readFileSync(filePath);
@@ -38,7 +41,7 @@ function listDirsSorted(dir) {
   return readdirSync(dir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
-    .sort((a, b) => a.localeCompare(b));
+    .sort(byteCompare);
 }
 
 function buildSkills(skillsDir) {
@@ -48,7 +51,7 @@ function buildSkills(skillsDir) {
     const names = readdirSync(skillDir, { withFileTypes: true })
       .filter((e) => e.isFile())
       .map((e) => e.name)
-      .sort((a, b) => a.localeCompare(b));
+      .sort(byteCompare);
     for (const name of names) {
       files[name] = readEmbeddableText(path.join(skillDir, name));
     }
@@ -61,7 +64,7 @@ function buildRules(rulesDir) {
   return readdirSync(rulesDir, { withFileTypes: true })
     .filter((e) => e.isFile() && e.name.endsWith('.mdc'))
     .map((e) => e.name.replace(/\.mdc$/, ''))
-    .sort((a, b) => a.localeCompare(b))
+    .sort(byteCompare)
     .map((id) => ({ id, content: readEmbeddableText(path.join(rulesDir, `${id}.mdc`)) }));
 }
 
@@ -73,20 +76,25 @@ function buildMcp(contentRoot, rootDir) {
   ];
   for (const file of candidates) {
     if (!existsSync(file)) continue;
+    // A file that exists but cannot be parsed is a repo error — fail the build
+    // loudly rather than silently committing a manifest with default URLs (which
+    // would, e.g., switch a dev branch's MCP config to production). Defaults apply
+    // only when NO .mcp.json exists at all.
+    let data;
     try {
-      const data = JSON.parse(readFileSync(file, 'utf-8'));
-      const servers = data?.mcpServers ?? {};
-      const weeglooUrl =
-        typeof servers.weegloo?.url === 'string' ? servers.weegloo.url : DEFAULT_MCP_URL;
-      const uploadEnv = servers['weegloo-upload']?.env ?? {};
-      const uploadApiUrl =
-        typeof uploadEnv.UPLOAD_API_URL === 'string'
-          ? uploadEnv.UPLOAD_API_URL
-          : DEFAULT_UPLOAD_API_URL;
-      return { weeglooUrl, uploadApiUrl };
-    } catch {
-      /* try next candidate */
+      data = JSON.parse(readFileSync(file, 'utf-8'));
+    } catch (err) {
+      throw new Error(`invalid JSON in ${file}: ${err.message}`);
     }
+    const servers = data?.mcpServers ?? {};
+    const weeglooUrl =
+      typeof servers.weegloo?.url === 'string' ? servers.weegloo.url : DEFAULT_MCP_URL;
+    const uploadEnv = servers['weegloo-upload']?.env ?? {};
+    const uploadApiUrl =
+      typeof uploadEnv.UPLOAD_API_URL === 'string'
+        ? uploadEnv.UPLOAD_API_URL
+        : DEFAULT_UPLOAD_API_URL;
+    return { weeglooUrl, uploadApiUrl };
   }
   return { weeglooUrl: DEFAULT_MCP_URL, uploadApiUrl: DEFAULT_UPLOAD_API_URL };
 }
