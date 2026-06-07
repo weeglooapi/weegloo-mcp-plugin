@@ -17,17 +17,11 @@ const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
  */
 const INFO_REFS_URL = `https://github.com/${REPO}.git/info/refs?service=git-upload-pack`;
 
-export const SKILL_FILES = ['SKILL.md', 'metadata.json'];
-
 /** Plugin package root within this repo (Claude / Cursor marketplace layout). */
 export const PLUGIN_PACKAGE_ROOT = 'plugins/weegloo';
 
 const DEFAULT_MCP_URL = 'https://ai.weegloo.com/mcp';
 const DEFAULT_UPLOAD_API_URL = 'https://upload.weegloo.com/v1';
-
-/** Default skill/rule IDs when a branch has no manifest (offline / mis-provisioned). */
-export const DEFAULT_SKILL_IDS = ['weegloo-create-content-type', 'weegloo-web-hosting'];
-export const DEFAULT_RULE_IDS = ['weegloo-global-rules', 'weegloo-web-hosting-rules'];
 
 /**
  * Branch names that exist in the repo but must never appear in the installer's
@@ -113,16 +107,6 @@ export function getPluginRef() {
   return pkg.pluginRef ?? 'latest';
 }
 
-/**
- * @param {string} repoContentPrefix  '' = legacy repo-root skills/rules; else e.g. {@link PLUGIN_PACKAGE_ROOT}
- * @param {string} relativePath  path under repo root, e.g. skills/foo/SKILL.md
- */
-export function repoContentPath(repoContentPrefix, relativePath) {
-  const rel = String(relativePath).replace(/^\/+/, '');
-  if (!repoContentPrefix) return rel;
-  return `${repoContentPrefix.replace(/\/+$/, '')}/${rel}`;
-}
-
 // ── VersionSource: branch list for the picker ────────────────────────────────
 
 /**
@@ -165,7 +149,7 @@ export async function listBranches(options = {}) {
     [infoRefsBranches, () => ['latest']],
     (arr) => Array.isArray(arr) && arr.length > 0
   );
-  const names = all ?? ['latest'];
+  const names = all; // chain's final `['latest']` strategy guarantees a non-empty list
   return names.filter((name) => {
     if (!name) return false;
     if (includeHidden) return true;
@@ -174,13 +158,6 @@ export async function listBranches(options = {}) {
 }
 
 // ── ResourceSource: manifest (content + MCP) for a ref ───────────────────────
-
-function manifestCandidates(ref) {
-  return [
-    `${RAW_BASE}/${ref}/${PLUGIN_PACKAGE_ROOT}/installer-manifest.json`,
-    `${RAW_BASE}/${ref}/installer-manifest.json`,
-  ];
-}
 
 /** Manifest schema version this CLI understands. A newer manifest is rejected (caller falls back). */
 const SUPPORTED_SCHEMA_VERSION = 1;
@@ -225,101 +202,32 @@ function normalizeManifest(data) {
  * @returns {Promise<object|null>} normalized resources, or null if no valid manifest
  */
 export async function fetchManifest(ref) {
-  for (const url of manifestCandidates(ref)) {
-    try {
-      const res = await httpGet(url, { retry: 2 });
-      if (!res.ok) continue;
-      const normalized = normalizeManifest(await res.json());
-      if (normalized) return normalized;
-    } catch {
-      /* try next candidate */
-    }
-  }
-  return null;
-}
-
-async function fetchRawText(ref, repoPath) {
+  const url = `${RAW_BASE}/${ref}/${PLUGIN_PACKAGE_ROOT}/installer-manifest.json`;
   try {
-    const res = await httpGet(`${RAW_BASE}/${ref}/${repoPath}`, { retry: 1 });
+    const res = await httpGet(url, { retry: 2 });
     if (!res.ok) return null;
-    return await res.text();
+    return normalizeManifest(await res.json());
   } catch {
     return null;
   }
 }
 
-async function mcpFromRaw(ref) {
-  for (const prefix of [PLUGIN_PACKAGE_ROOT, '']) {
-    const text = await fetchRawText(ref, repoContentPath(prefix, '.mcp.json'));
-    if (text == null) continue;
-    try {
-      const servers = JSON.parse(text)?.mcpServers ?? {};
-      return {
-        weeglooUrl: typeof servers.weegloo?.url === 'string' ? servers.weegloo.url : DEFAULT_MCP_URL,
-        uploadApiUrl:
-          typeof servers['weegloo-upload']?.env?.UPLOAD_API_URL === 'string'
-            ? servers['weegloo-upload'].env.UPLOAD_API_URL
-            : DEFAULT_UPLOAD_API_URL,
-      };
-    } catch {
-      /* try next prefix */
-    }
-  }
-  return { weeglooUrl: DEFAULT_MCP_URL, uploadApiUrl: DEFAULT_UPLOAD_API_URL };
-}
-
-/**
- * Fallback resource source: a branch with no manifest. Pulls the DEFAULT skill/rule
- * set straight from raw per-file (still no api.github.com) so the installer degrades
- * to a working baseline rather than an empty list.
- * @param {string} ref
- */
-async function rawDefaultResources(ref) {
-  const prefixes = [PLUGIN_PACKAGE_ROOT, ''];
-  let repoContentPrefix = '';
-  const skills = [];
-  for (const id of DEFAULT_SKILL_IDS) {
-    let files = null;
-    for (const prefix of prefixes) {
-      const skillMd = await fetchRawText(ref, repoContentPath(prefix, `skills/${id}/SKILL.md`));
-      if (skillMd == null) continue;
-      files = { 'SKILL.md': skillMd };
-      for (const file of SKILL_FILES) {
-        if (file === 'SKILL.md') continue;
-        const extra = await fetchRawText(ref, repoContentPath(prefix, `skills/${id}/${file}`));
-        if (extra != null) files[file] = extra;
-      }
-      repoContentPrefix = prefix;
-      break;
-    }
-    if (files) skills.push({ id, files });
-  }
-  const rules = [];
-  for (const id of DEFAULT_RULE_IDS) {
-    const content = await fetchRawText(ref, repoContentPath(repoContentPrefix, `rules/${id}.mdc`));
-    if (content != null) rules.push({ id, content });
-  }
-  if (skills.length === 0 && rules.length === 0) return null;
-  return { source: 'raw-default', repoContentPrefix, mcp: await mcpFromRaw(ref), skills, rules };
-}
-
 /**
  * Loads everything ref-scoped (skill/rule lists + content + MCP URLs) for `ref`
- * in a single normalized shape, regardless of source. Install code consumes this
- * shape and never touches the network — so swapping the source (e.g. a CDN mirror)
- * changes nothing downstream. See ADR D6.
+ * in a single normalized shape. Install code consumes this shape and never touches
+ * the network — so swapping the source (e.g. a CDN mirror) changes nothing downstream.
+ * See ADR D6.
  *
- * Strategy chain: manifest (1 raw request) → raw-per-file DEFAULT set.
+ * Source: the branch-committed manifest (one raw request). If absent/invalid, returns
+ * `source: 'none'` with empty lists + default MCP URLs; index.js surfaces that to the
+ * user rather than silently installing a guessed subset.
  *
  * @param {string} ref
  * @returns {Promise<{ source: string, repoContentPrefix: string, mcp: {weeglooUrl:string, uploadApiUrl:string}, skills: Array<{id:string, files:Record<string,string>}>, rules: Array<{id:string, content:string}> }>}
  */
 export async function loadResources(ref) {
-  const result = await firstUsable(
-    [() => fetchManifest(ref), () => rawDefaultResources(ref)],
-    (r) => r != null
-  );
-  if (result) return result;
+  const manifest = await fetchManifest(ref);
+  if (manifest) return manifest;
   return {
     source: 'none',
     repoContentPrefix: '',

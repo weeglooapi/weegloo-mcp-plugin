@@ -131,7 +131,7 @@ test('loadResources rejects an unsupported manifest schemaVersion and falls back
       : new Response('not found', { status: 404 });
   try {
     const r = await loadResources('latest');
-    assert.equal(r.source, 'none'); // v2 rejected, raw-default 404 -> none
+    assert.equal(r.source, 'none'); // v2 rejected -> no usable manifest -> none
   } finally {
     globalThis.fetch = realFetch;
   }

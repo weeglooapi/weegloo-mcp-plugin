@@ -148,13 +148,14 @@ async function main() {
     resourceSpinner.stop();
     mcp = resources.mcp;
 
-    // Never degrade silently: tell the user when the manifest wasn't used.
+    // Never degrade silently: tell the user when no manifest was loaded.
     if (resources.source !== 'manifest') {
-      const why =
-        resources.source === 'raw-default'
-          ? `No manifest on '${pluginRef}' — installing the default skill/rule subset only.`
-          : `Could not fetch resources for '${pluginRef}' — check your network or the selected version.`;
-      console.log(chalk.yellow(`  ⚠  ${why}`));
+      console.log(
+        chalk.yellow(
+          `  ⚠  No installer manifest for '${pluginRef}' — skills/rules couldn't be loaded ` +
+            `(this version may not be published yet, or check your network).`
+        )
+      );
     }
   }
 
