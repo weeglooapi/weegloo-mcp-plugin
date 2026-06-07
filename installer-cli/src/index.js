@@ -116,25 +116,22 @@ async function main() {
   let scope = 'project';
   let skills = [];
   let rules = [];
-  let mcp = { weeglooUrl: undefined, uploadApiUrl: undefined };
 
-  // One manifest fetch covers skill/rule lists + content + MCP URLs (no api.github.com).
-  let resources = null;
-  if (installMcp || installSkillsRules) {
-    const resourceSpinner = ora({ text: '  Fetching plugin manifest...', indent: 0 }).start();
-    resources = await loadResources(pluginRef);
+  // At least one of MCP / skills+rules is selected (guarded above), so the manifest is
+  // always needed: one fetch covers skill/rule lists + content + MCP URLs (no api.github.com).
+  const resourceSpinner = ora({ text: '  Fetching plugin manifest...', indent: 0 }).start();
+  const resources = await loadResources(pluginRef);
 
-    // Fail fast: the manifest is the required source for this version's skills/rules/MCP.
-    if (!resources) {
-      resourceSpinner.fail(`  Could not fetch the plugin manifest for '${pluginRef}'.`);
-      console.error(
-        chalk.dim('     Check your network connection, or choose a published version (e.g. latest).')
-      );
-      process.exit(1);
-    }
-    resourceSpinner.stop();
-    mcp = resources.mcp;
+  // Fail fast: the manifest is the required source for this version's skills/rules/MCP.
+  if (!resources) {
+    resourceSpinner.fail(`  Could not fetch the plugin manifest for '${pluginRef}'.`);
+    console.error(
+      chalk.dim('     Check your network connection, or choose a published version (e.g. latest).')
+    );
+    process.exit(1);
   }
+  resourceSpinner.stop();
+  const mcp = resources.mcp;
 
   if (installMcp) {
     console.log(
@@ -203,7 +200,7 @@ async function main() {
     });
   }
 
-  if (installSkillsRules && resources) {
+  if (installSkillsRules) {
     const skillChoices = resources.skills.map((s) => ({ name: chalk.bold(s.id), value: s.id, checked: true }));
     const ruleChoices = resources.rules.map((r) => ({ name: chalk.bold(r.id), value: r.id, checked: true }));
 
