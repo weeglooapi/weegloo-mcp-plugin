@@ -85,4 +85,4 @@ rules:
     items:
       - Filter conditions are sent as direct query parameters, NOT wrapped in filter[].
       - Correct: name[prefix]=value. Wrong: filter[name[prefix]]=value.
-      - Format: {fieldName}[{op}]={value}. Operators: eq, ne, prefix, match, gt, gte, lt, lte etc.
+      - Format: {fieldName}[{op}]={value}. Operators: eq, ne, prefix, match, gt, gte, lt, lte etc...
