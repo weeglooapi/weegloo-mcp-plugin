@@ -1,7 +1,8 @@
 import { select, checkbox, password } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { getPluginRef, fetchBranches, fetchResourceLists } from './github.js';
+import { getPluginRef, listBranches, loadResources } from './github.js';
+import { orderBranchesForPicker } from './versions.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -58,33 +59,10 @@ async function main() {
     process.argv.includes('-a') || process.argv.includes('--all-branches');
   if (!refFromEnvOrArg) {
     const branchSpinner = ora({ text: '  Fetching plugin versions...', indent: 0 }).start();
-    const branches = await fetchBranches({ includeHidden: showAllBranches });
+    const branches = await listBranches();
     branchSpinner.stop();
-    if (branches.length > 0) {
-      const parseVersion = (s) => {
-        const m = String(s).replace(/^v/, '').match(/^(\d+(?:\.\d+)*)/);
-        if (!m) return null;
-        return m[1].split('.').map(Number);
-      };
-      const compareVersion = (a, b) => {
-        const aVer = parseVersion(a);
-        const bVer = parseVersion(b);
-        for (let i = 0; i < Math.max(aVer?.length ?? 0, bVer?.length ?? 0); i++) {
-          const x = aVer?.[i] ?? 0;
-          const y = bVer?.[i] ?? 0;
-          if (x !== y) return y - x;
-        }
-        return String(a).localeCompare(String(b));
-      };
-      const latestOnly = branches.filter((b) => b === 'latest');
-      const versionBranches = branches
-        .filter((b) => b !== 'latest' && parseVersion(b))
-        .sort(compareVersion)
-        .slice(0, 5);
-      const rest = branches
-        .filter((b) => b !== 'latest' && !parseVersion(b))
-        .sort((a, b) => a.localeCompare(b));
-      const sorted = [...latestOnly, ...versionBranches, ...rest];
+    const sorted = orderBranchesForPicker(branches, { showAll: showAllBranches });
+    if (sorted.length > 0) {
       pluginRef = await select({
         message: 'Select plugin version (branch):',
         choices: sorted.map((name) => ({
@@ -138,8 +116,22 @@ async function main() {
   let scope = 'project';
   let skills = [];
   let rules = [];
-  /** '' = legacy repo root; 'plugins/weegloo' = nested marketplace layout */
-  let repoContentPrefix = '';
+
+  // At least one of MCP / skills+rules is selected (guarded above), so the manifest is
+  // always needed: one fetch covers skill/rule lists + content + MCP URLs (no api.github.com).
+  const resourceSpinner = ora({ text: '  Fetching plugin manifest...', indent: 0 }).start();
+  const resources = await loadResources(pluginRef);
+
+  // Fail fast: the manifest is the required source for this version's skills/rules/MCP.
+  if (!resources) {
+    resourceSpinner.fail(`  Could not fetch the plugin manifest for '${pluginRef}'.`);
+    console.error(
+      chalk.dim('     Check your network connection, or choose a published version (e.g. latest).')
+    );
+    process.exit(1);
+  }
+  resourceSpinner.stop();
+  const mcp = resources.mcp;
 
   if (installMcp) {
     console.log(
@@ -175,18 +167,23 @@ async function main() {
       codex: 'Where would you like to install Codex configuration (MCP / skills / rules)?',
       cursor: 'Where would you like to install Cursor configuration (MCP / skills / rules)?',
       claude: 'Where would you like to install Claude Code configuration (MCP / skills / rules)?',
+      // Antigravity MCP is always written to ~/.gemini/antigravity (scope-independent),
+      // so the scope choice only affects skills / rules.
+      antigravity: 'Where would you like to install Antigravity skills / rules?',
     };
     const projectHints = {
       codex: '(./.codex/ in current folder)',
       cursor: '(./.cursor/ in current folder)',
       claude: '(./.mcp.json and ./.claude/ in current folder)',
+      antigravity: '(./.agent/ in current folder)',
     };
     const globalHints = {
       codex: '(~/.codex/)',
       cursor: '(Cursor app data mcp.json)',
       claude: '(~/.claude.json)',
+      antigravity: '(~/.gemini/antigravity/ and GEMINI.md)',
     };
-    const ideKey = ide === 'codex' || ide === 'cursor' || ide === 'claude' ? ide : null;
+    const ideKey = ['codex', 'cursor', 'claude', 'antigravity'].includes(ide) ? ide : null;
 
     scope = await select({
       message: ideKey ? scopeMessages[ideKey] : 'Where would you like to install Skills / Rules?',
@@ -209,24 +206,23 @@ async function main() {
   }
 
   if (installSkillsRules) {
-    const resourceSpinner = ora({ text: '  Fetching skills and rules from branch...', indent: 0 }).start();
-    const { skills: skillIds, rules: ruleIds, repoContentPrefix: layoutPrefix } =
-      await fetchResourceLists(pluginRef);
-    repoContentPrefix = layoutPrefix;
-    resourceSpinner.stop();
+    // Skip an empty checkbox — @inquirer/checkbox throws on zero choices, and a branch
+    // may legitimately have no skills or no rules.
+    if (resources.skills.length > 0) {
+      const chosenSkillIds = await checkbox({
+        message: 'Select skills to install:',
+        choices: resources.skills.map((s) => ({ name: chalk.bold(s.id), value: s.id, checked: true })),
+      });
+      skills = resources.skills.filter((s) => chosenSkillIds.includes(s.id));
+    }
 
-    const skillChoices = skillIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
-    const ruleChoices = ruleIds.map((id) => ({ name: chalk.bold(id), value: id, checked: true }));
-
-    skills = await checkbox({
-      message: 'Select skills to install:',
-      choices: skillChoices,
-    });
-
-    rules = await checkbox({
-      message: 'Select rules to install:',
-      choices: ruleChoices,
-    });
+    if (resources.rules.length > 0) {
+      const chosenRuleIds = await checkbox({
+        message: 'Select rules to install:',
+        choices: resources.rules.map((r) => ({ name: chalk.bold(r.id), value: r.id, checked: true })),
+      });
+      rules = resources.rules.filter((r) => chosenRuleIds.includes(r.id));
+    }
   }
 
   console.log();
@@ -237,7 +233,7 @@ async function main() {
     mcpGroup,
     skills,
     rules,
-    repoContentPrefix,
+    mcp,
     scope,
     installMcp,
     installSkillsRules,

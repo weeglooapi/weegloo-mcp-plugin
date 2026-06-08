@@ -3,13 +3,8 @@ import path from 'path';
 import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
-import {
-  downloadFile,
-  getPluginRef,
-  fetchMcpConfig,
-  SKILL_FILES,
-  repoContentPath,
-} from './github.js';
+import { REPO } from './github.js';
+import { writeContentFile } from './io.js';
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -49,12 +44,11 @@ export async function installClaude({
   mcpGroup,
   skills,
   rules,
-  repoContentPrefix = '',
+  mcp = {},
   scope,
   installMcp,
   installSkillsRules,
 }) {
-  const ref = pluginRef ?? getPluginRef();
   const claudeHome = path.join(os.homedir(), '.claude');
   const baseDir = scope === 'global' ? claudeHome : path.join(process.cwd(), '.claude');
   const skillsDir = path.join(baseDir, 'skills');
@@ -62,11 +56,11 @@ export async function installClaude({
   const mcpPath = getClaudeMcpPath(scope);
 
   console.log(chalk.bold('  ▶  Installing for Claude Code...'));
-  console.log(chalk.dim(`     github: weeglooapi/weegloo-mcp-plugin @ ${chalk.cyan(ref)}`));
+  console.log(chalk.dim(`     github: ${REPO} @ ${chalk.cyan(pluginRef)}`));
   console.log();
 
   if (installMcp) {
-    const { weeglooUrl, uploadApiUrl } = await fetchMcpConfig(ref);
+    const { weeglooUrl, uploadApiUrl } = mcp;
     const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
     try {
       ensureDir(path.dirname(mcpPath));
@@ -103,19 +97,15 @@ export async function installClaude({
   } else if (skills.length === 0) {
     console.log(chalk.dim('  - Skills: none selected, skipping'));
   } else {
-    const skillsSpinner = ora({ text: `  Downloading skills (0/${skills.length})`, indent: 0 }).start();
+    const skillsSpinner = ora({ text: `  Installing skills (0/${skills.length})`, indent: 0 }).start();
     try {
       ensureDir(skillsDir);
       for (let i = 0; i < skills.length; i++) {
         const skill = skills[i];
-        skillsSpinner.text = `  Downloading skills (${i + 1}/${skills.length}) ${chalk.dim(skill)}`;
-        const destDir = path.join(skillsDir, skill);
-        for (const file of SKILL_FILES) {
-          await downloadFile(
-            ref,
-            repoContentPath(repoContentPrefix, `skills/${skill}/${file}`),
-            path.join(destDir, file)
-          );
+        skillsSpinner.text = `  Installing skills (${i + 1}/${skills.length}) ${chalk.dim(skill.id)}`;
+        const destDir = path.join(skillsDir, skill.id);
+        for (const [fileName, content] of Object.entries(skill.files)) {
+          writeContentFile(path.join(destDir, fileName), content);
         }
       }
       skillsSpinner.succeed(
@@ -132,17 +122,13 @@ export async function installClaude({
   } else if (rules.length === 0) {
     console.log(chalk.dim('  - Rules: none selected, skipping'));
   } else {
-    const rulesSpinner = ora({ text: `  Downloading rules (0/${rules.length})`, indent: 0 }).start();
+    const rulesSpinner = ora({ text: `  Installing rules (0/${rules.length})`, indent: 0 }).start();
     try {
       ensureDir(rulesDir);
       for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
-        rulesSpinner.text = `  Downloading rules (${i + 1}/${rules.length}) ${chalk.dim(rule)}`;
-        await downloadFile(
-          ref,
-          repoContentPath(repoContentPrefix, `rules/${rule}.mdc`),
-          path.join(rulesDir, `${rule}.md`)
-        );
+        rulesSpinner.text = `  Installing rules (${i + 1}/${rules.length}) ${chalk.dim(rule.id)}`;
+        writeContentFile(path.join(rulesDir, `${rule.id}.md`), rule.content);
       }
       rulesSpinner.succeed(
         `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesDir}`)}`

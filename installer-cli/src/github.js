@@ -1,4 +1,3 @@
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
@@ -7,92 +6,86 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
 
-const REPO = 'weeglooapi/weegloo-mcp-plugin';
+// Default plugin repo; override with WEEGLOO_REPO=owner/name to point the installer at a
+// fork / mirror / staging repo (used for end-to-end testing). All URLs below derive from it.
+export const REPO = process.env.WEEGLOO_REPO || 'weeglooapi/weegloo-mcp-plugin';
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
-const GITHUB_API_BRANCHES = `https://api.github.com/repos/${REPO}/branches?per_page=100`;
-const GITHUB_API_CONTENTS = `https://api.github.com/repos/${REPO}/contents`;
 
-export const SKILL_FILES = ['SKILL.md', 'metadata.json'];
+/**
+ * Branch list source: git smart-HTTP ref advertisement. This is NOT
+ * `api.github.com`, so it does not draw from the 60-req/hour REST "core" bucket.
+ */
+const INFO_REFS_URL = `https://github.com/${REPO}.git/info/refs?service=git-upload-pack`;
 
 /** Plugin package root within this repo (Claude / Cursor marketplace layout). */
 export const PLUGIN_PACKAGE_ROOT = 'plugins/weegloo';
 
-/**
- * @param {string} repoContentPrefix  '' = legacy repo-root skills/rules; else e.g. {@link PLUGIN_PACKAGE_ROOT}
- * @param {string} relativePath  path under repo root, e.g. skills/foo/SKILL.md
- */
-export function repoContentPath(repoContentPrefix, relativePath) {
-  const rel = String(relativePath).replace(/^\/+/, '');
-  if (!repoContentPrefix) return rel;
-  return `${repoContentPrefix.replace(/\/+$/, '')}/${rel}`;
-}
+// ── transport seam ──────────────────────────────────────────────────────────
+// All network access goes through httpGet so retry/backoff lives in one place
+// (raw can 429 under load — bazarr #3057) and tests mock fetch in one spot.
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Per-attempt deadline so a stalled connection can't block the fallback chain. */
+const REQUEST_TIMEOUT_MS = 15000;
 
 /**
- * @param {string} ref
- * @param {string} contentsApiPath  path under /contents/ (no leading slash)
- * @returns {Promise<object[] | null>}
+ * @param {string} url
+ * @param {{ retry?: number, headers?: Record<string,string>, timeout?: number }} [opts]
+ * @returns {Promise<Response>}
  */
-async function fetchContentsJson(ref, contentsApiPath) {
-  const res = await fetch(
-    `${GITHUB_API_CONTENTS}/${contentsApiPath}?ref=${encodeURIComponent(ref)}`,
-    { headers: { Accept: 'application/vnd.github.v3+json' } }
-  );
-  if (!res.ok) return null;
-  try {
-    const data = await res.json();
-    return Array.isArray(data) ? data : null;
-  } catch {
-    return null;
+async function httpGet(url, opts = {}) {
+  const { retry = 0, headers, timeout = REQUEST_TIMEOUT_MS } = opts;
+  let attempt = 0;
+  for (;;) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+      const res = await fetch(url, { signal: controller.signal, ...(headers ? { headers } : {}) });
+      if ((res.status === 429 || res.status >= 500) && attempt < retry) {
+        attempt += 1;
+        await delay(Math.min(250 * 2 ** attempt, 2000));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      // Network error or timeout abort → retry while attempts remain, else surface.
+      if (attempt < retry) {
+        attempt += 1;
+        await delay(Math.min(250 * 2 ** attempt, 2000));
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
 /**
- * Branch names that exist in the GitHub repo but must never appear in the
- * installer's plugin-version picker (internal / non-distributable refs).
+ * Tries each async strategy in order, returning the first "usable" result.
+ * Errors and unusable results fall through to the next strategy.
+ * @template T
+ * @param {Array<() => Promise<T>>} strategies
+ * @param {(value: T) => boolean} isUsable
+ * @returns {Promise<T | null>}
  */
-const HIDDEN_BRANCHES = new Set(['develop']);
-
-/**
- * Fetches branch names from the plugin GitHub repo (public API, no auth).
- * By default, internal branches in {@link HIDDEN_BRANCHES} are omitted from
- * the list. Pass `{ includeHidden: true }` to list every branch (e.g. CLI `-a`).
- *
- * @param {{ includeHidden?: boolean }} [options]
- * @returns {Promise<string[]>} Branch names, or [] on error.
- */
-export async function fetchBranches(options = {}) {
-  const includeHidden = Boolean(options.includeHidden);
-  try {
-    const res = await fetch(GITHUB_API_BRANCHES, {
-      headers: { Accept: 'application/vnd.github.v3+json' },
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!Array.isArray(data)) return [];
-    return data
-      .map((b) => b.name)
-      .filter((name) => {
-        if (!name) return false;
-        if (includeHidden) return true;
-        return !HIDDEN_BRANCHES.has(name);
-      });
-  } catch {
-    return [];
+async function firstUsable(strategies, isUsable) {
+  for (const strategy of strategies) {
+    try {
+      const result = await strategy();
+      if (isUsable(result)) return result;
+    } catch {
+      /* try next strategy */
+    }
   }
+  return null;
 }
 
 /**
  * Determines the GitHub ref (branch or tag) to fetch plugin files from.
  *
- * Priority:
- *   1. CLI argument  --ref <ref>
- *   2. Environment variable  WEEGLOO_REF
- *   3. pluginRef field in package.json
- *
- * Convention mapping npm dist-tags to GitHub branches/tags:
- *   npx weegloo@latest  →  pluginRef: "latest"  → GitHub branch: latest
- *   npx weegloo@beta    →  pluginRef: "beta"    → GitHub branch: beta
- *   npx weegloo@1.0.0   →  pluginRef: "v1.0.0"  → GitHub tag:   v1.0.0
+ * Priority: CLI `--ref <ref>` → env `WEEGLOO_REF` → package.json `pluginRef` → 'latest'.
  */
 export function getPluginRef() {
   const argIdx = process.argv.indexOf('--ref');
@@ -105,123 +98,116 @@ export function getPluginRef() {
   return pkg.pluginRef ?? 'latest';
 }
 
-const DEFAULT_MCP_URL = 'https://ai.weegloo.com/mcp';
-const DEFAULT_UPLOAD_API_URL = 'https://upload.weegloo.com/v1';
+// ── VersionSource: branch list for the picker ────────────────────────────────
 
 /**
- * Fetches .mcp.json from the given ref and returns weegloo URL and upload API URL.
- * Used so that dev-latest (etc.) branches get dev-ai.weegloo.com / dev-upload.weegloo.com.
- * @param {string} ref Branch or tag name
- * @returns {Promise<{ weeglooUrl: string, uploadApiUrl: string }>} URLs from branch, or defaults
+ * Parses branch names from a git-upload-pack ref advertisement (pkt-line text).
+ * Anchors on the 40-hex object id so the 4-byte pkt-line length prefix is
+ * ignored, and stops at NUL/newline so the capability string trailing the first
+ * ref line is dropped.
+ * @param {string} text
+ * @returns {string[]} de-duplicated branch names in advertisement order (ordering is the caller's concern)
  */
-export async function fetchMcpConfig(ref) {
-  const primary = `${RAW_BASE}/${ref}/${PLUGIN_PACKAGE_ROOT}/.mcp.json`;
-  const legacy = `${RAW_BASE}/${ref}/.mcp.json`;
-  try {
-    let res = await fetch(primary);
-    if (!res.ok) res = await fetch(legacy);
-    if (!res.ok) return { weeglooUrl: DEFAULT_MCP_URL, uploadApiUrl: DEFAULT_UPLOAD_API_URL };
-    const data = await res.json();
-    const servers = data?.mcpServers ?? {};
-    const weeglooUrl =
-      typeof servers.weegloo?.url === 'string' ? servers.weegloo.url : DEFAULT_MCP_URL;
-    const uploadEnv = servers['weegloo-upload']?.env ?? {};
-    const uploadApiUrl =
-      typeof uploadEnv.UPLOAD_API_URL === 'string'
-        ? uploadEnv.UPLOAD_API_URL
-        : DEFAULT_UPLOAD_API_URL;
-    return { weeglooUrl, uploadApiUrl };
-  } catch {
-    return { weeglooUrl: DEFAULT_MCP_URL, uploadApiUrl: DEFAULT_UPLOAD_API_URL };
+export function parseBranchesFromInfoRefs(text) {
+  const names = new Set();
+  const re = /[0-9a-f]{40} refs\/heads\/([^\n\0]+)/g;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const name = match[1].split(/[\0 ]/)[0].trim();
+    if (name) names.add(name);
   }
+  return [...names];
 }
 
-/** Default skill/rule IDs when branch listing fails (e.g. offline). */
-export const DEFAULT_SKILL_IDS = ['weegloo-create-content-type', 'weegloo-web-hosting'];
-export const DEFAULT_RULE_IDS = ['weegloo-global-rules', 'weegloo-web-hosting-rules'];
-
-/**
- * Lists skill directory names from a GitHub contents path.
- * @param {string} ref
- * @param {string} skillsContentsPath  e.g. plugins/weegloo/skills or skills
- */
-async function listSkillIdsFromContents(ref, skillsContentsPath) {
-  const data = await fetchContentsJson(ref, skillsContentsPath);
-  if (!data) return [];
-  return data
-    .filter((e) => e.type === 'dir')
-    .map((e) => e.name)
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+async function infoRefsBranches() {
+  const res = await httpGet(INFO_REFS_URL, { retry: 1 });
+  if (!res.ok) return null;
+  const names = parseBranchesFromInfoRefs(await res.text());
+  return names.length > 0 ? names : null;
 }
 
 /**
- * Lists rule base names (without .mdc) from a GitHub contents path.
- * @param {string} ref
- * @param {string} rulesContentsPath  e.g. plugins/weegloo/rules or rules
+ * Lists ALL branch names from the repo (data access only). Picker visibility &
+ * ordering — the semver-only policy and the `-a` show-all — live in
+ * `orderBranchesForPicker` (versions.js).
+ * Strategy chain: git smart-HTTP info/refs → ['latest'] fallback.
+ * (A future git-CLI strategy slots in at the front of this chain.)
+ *
+ * @returns {Promise<string[]>}
  */
-async function listRuleIdsFromContents(ref, rulesContentsPath) {
-  const data = await fetchContentsJson(ref, rulesContentsPath);
-  if (!data) return [];
-  return data
-    .filter((e) => e.type === 'file' && e.name.endsWith('.mdc'))
-    .map((e) => e.name.replace(/\.mdc$/, ''))
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+export async function listBranches() {
+  // The final ['latest'] strategy always yields a non-empty list, so this is non-null.
+  return firstUsable(
+    [infoRefsBranches, () => ['latest']],
+    (arr) => Array.isArray(arr) && arr.length > 0
+  );
 }
 
+// ── ResourceSource: manifest (content + MCP) for a ref ───────────────────────
+
+/** Manifest schema version this CLI understands. A different version is rejected (caller fails fast). */
+const SUPPORTED_SCHEMA_VERSION = 1;
+
 /**
- * Fetches skill/rule ids and which repo layout the ref uses (nested plugin vs legacy repo root).
- * @param {string} ref Branch or tag name
- * @returns {Promise<{ skills: string[], rules: string[], repoContentPrefix: string }>}
+ * Strictly validates a raw manifest and returns the normalized resource shape, or null
+ * if ANYTHING is off: wrong schemaVersion, a missing/non-string field, or a malformed
+ * skill/rule entry. The manifest is our own generated artifact, so a mismatch is a build
+ * bug — fail loudly (the caller fails fast) instead of defaulting or dropping silently.
+ * Defaults for absent fields belong to the producer (build-installer-manifest.mjs), not here.
  */
-export async function fetchResourceLists(ref) {
-  try {
-    const nestedSkills = await listSkillIdsFromContents(ref, `${PLUGIN_PACKAGE_ROOT}/skills`);
-    if (nestedSkills.length > 0) {
-      const nestedRules = await listRuleIdsFromContents(ref, `${PLUGIN_PACKAGE_ROOT}/rules`);
-      return {
-        skills: nestedSkills,
-        rules: nestedRules.length > 0 ? nestedRules : DEFAULT_RULE_IDS,
-        repoContentPrefix: PLUGIN_PACKAGE_ROOT,
-      };
+function normalizeManifest(data) {
+  if (!data || data.schemaVersion !== SUPPORTED_SCHEMA_VERSION) return null;
+  if (typeof data.repoContentPrefix !== 'string') return null;
+  if (typeof data.mcp?.weeglooUrl !== 'string' || typeof data.mcp?.uploadApiUrl !== 'string') return null;
+  if (!Array.isArray(data.skills) || !Array.isArray(data.rules)) return null;
+
+  const skills = [];
+  for (const s of data.skills) {
+    if (!s || typeof s.id !== 'string' || !s.id || !s.files || typeof s.files !== 'object') return null;
+    const entries = Object.entries(s.files);
+    if (entries.length === 0) return null;
+    const files = {};
+    for (const [name, content] of entries) {
+      if (!name || typeof content !== 'string') return null;
+      files[name] = content;
     }
-
-    const legacySkills = await listSkillIdsFromContents(ref, 'skills');
-    const legacyRules = await listRuleIdsFromContents(ref, 'rules');
-    return {
-      skills: legacySkills.length > 0 ? legacySkills : DEFAULT_SKILL_IDS,
-      rules: legacyRules.length > 0 ? legacyRules : DEFAULT_RULE_IDS,
-      repoContentPrefix: '',
-    };
-  } catch {
-    return {
-      skills: DEFAULT_SKILL_IDS,
-      rules: DEFAULT_RULE_IDS,
-      repoContentPrefix: '',
-    };
+    skills.push({ id: s.id, files });
   }
+
+  const rules = [];
+  for (const r of data.rules) {
+    if (!r || typeof r.id !== 'string' || !r.id || typeof r.content !== 'string' || !r.content) return null;
+    rules.push({ id: r.id, content: r.content });
+  }
+
+  return {
+    source: 'manifest',
+    repoContentPrefix: data.repoContentPrefix,
+    mcp: { weeglooUrl: data.mcp.weeglooUrl, uploadApiUrl: data.mcp.uploadApiUrl },
+    skills,
+    rules,
+  };
 }
 
 /**
- * Downloads a file from GitHub raw content and writes it to localPath.
+ * Loads ref-scoped resources (skill/rule content + MCP URLs) from the branch-committed
+ * manifest in a single raw request (no api.github.com), normalized. Install code consumes
+ * this shape and never touches the network — so swapping the source (e.g. a CDN mirror)
+ * changes nothing downstream (swappable source seam).
+ *
+ * Returns null when the manifest is unavailable or invalid (404, network error, bad JSON,
+ * unsupported schemaVersion) so the caller can fail fast rather than install a degraded set.
+ *
+ * @param {string} ref
+ * @returns {Promise<{ source: string, repoContentPrefix: string, mcp: {weeglooUrl:string, uploadApiUrl:string}, skills: Array<{id:string, files:Record<string,string>}>, rules: Array<{id:string, content:string}> } | null>}
  */
-export async function downloadFile(ref, remotePath, localPath) {
-  const url = `${RAW_BASE}/${ref}/${remotePath}`;
-
-  let res;
+export async function loadResources(ref) {
+  const url = `${RAW_BASE}/${ref}/${PLUGIN_PACKAGE_ROOT}/installer-manifest.json`;
   try {
-    res = await fetch(url);
-  } catch (err) {
-    throw new Error(`Network error - ${url}\n  ${err.message}`);
+    const res = await httpGet(url, { retry: 2 });
+    if (!res.ok) return null;
+    return normalizeManifest(await res.json());
+  } catch {
+    return null;
   }
-
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} ${res.statusText}\n  ${url}`);
-  }
-
-  const text = await res.text();
-  const dir = path.dirname(localPath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(localPath, text, 'utf-8');
 }
