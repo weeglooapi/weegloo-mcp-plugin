@@ -17,9 +17,9 @@ description: Use when creating or updating Content in any localized or multi-lan
 
 1. **Default locale** is a **space-level** setting: one of the space’s locales is marked **default**.
 2. Each **`localized: true`** **field** is a map of **locale code → value** (locale buckets), not a single scalar at the field root.
-3. On **read** (e.g. CDA with a `locale` query): for **`localized: true`** fields, if the requested locale has **no** entry, the API **falls back** to the **default locale’s** value when one exists.
+3. On **read** (e.g. CDA with a `locale` query): a requested locale resolves through **its own `fallbackCode` chain**, *not* automatically to the default. Each **`Locale`** has an **optional `fallbackCode`** (an arbitrary target locale code; chainable). For a field with no value under the requested locale, the server walks `requested -> fallbackCode -> ...` and returns the **first** locale in that chain that holds a value. **If the requested locale has no `fallbackCode` (chain = itself only), a missing value stays empty and does NOT fall back to the default.** The default locale has **no special privilege on read**.
 4. On **write** (**`localized: true`**): the **default locale** entry is **mandatory** when the field is populated. You cannot leave default empty and only set `fr-FR`, `ko-KR`, etc.
-5. **Single locale for the whole product** (**`localized: true`**): put the value **only under the default locale**; other requested locales still resolve via **fallback** (step 3).
+5. **Single locale for the whole product** (**`localized: true`**): put the value **only under the default locale**. Other requested locales resolve to it **only if their `fallbackCode` chain reaches the default**; without that, they read **empty**. Do not assume automatic fallback to the default.
 
 ## Content creation: default locale on every field
 
@@ -45,6 +45,7 @@ When **creating** **Content** (CMA / MCP), **each field** in the payload must in
 Use this when the stored value **never differs by locale**-same logical value for every language (e.g. opaque **IDs**, **SKUs**, or one global **Refer → Media** like a **profile thumbnail** that is not localized per language).
 
 - **Meaning for Content writes:** the field is **not** a multi-locale map. CMA only allows a value in the **default locale** bucket for that field. You **cannot** set `fields.myField["fr-FR"]` etc.; non-default locale keys are invalid for that field.
+- **Meaning for reads:** the value lives in the **default bucket only**. Under a non-default **`locale=X`** read it appears **only if X's `fallbackCode` chain reaches the default**; otherwise the field reads **empty** for X. It is **not** auto-mirrored into every locale.
 - **Contrast:** **`localized: true`** = per-locale copy (titles, bios); default locale still **required** when you populate the field, plus optional other locales.
 - **CareerResume hindsight:** **`profileImage`** (and similar single global assets) would fit **`localized: false`** on the **resumeProfile** ContentType so editors are not pushed to duplicate the same Media refer across every locale bucket-see **`weegloo-create-content-type`** for where to set the flag in the schema.
 
@@ -72,7 +73,7 @@ The server resolves to the **space default locale** and returns a **flat scalar*
 
 ### 2. `locale={code}` - single locale, **with fallback**
 
-Example: **`?locale=en-US`**. The server returns the value **for that locale**, applying the space’s **fallback chain** (typically falling back to the **default locale** when a `localized: true` field has no entry for the requested locale-see *Read path and fallback*). The shape is still a **flat scalar** per field:
+Example: **`?locale=en-US`**. The server returns the value **for that locale**, applying that locale's **`fallbackCode` chain** (a missing value resolves to the first locale in `requested -> fallbackCode -> ...` that holds a value; **no `fallbackCode` means it stays empty, not the default** - see step 3). The shape is still a **flat scalar** per field:
 
 ```json
 "fields": {
