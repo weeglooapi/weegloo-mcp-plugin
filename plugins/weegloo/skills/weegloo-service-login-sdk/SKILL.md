@@ -183,7 +183,6 @@ Detail: **`weegloo-service-login`** skill and **`weegloo-api-endpoints`** rule.
 When wiring up a new `ServiceLogin` for a Space, an integrator must:
 
 1. **Google Cloud Console → OAuth client:**
-   - Authorized JavaScript origin: `https://auth.weegloo.com`
    - Authorized redirect URI: `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` (note the `/code/` segment - this URI is hit by Google → Weegloo, not by the browser).
 2. **Weegloo Console → ServiceLogin:**
    - `clientId` / `clientSecret` from the Google OAuth client above.
