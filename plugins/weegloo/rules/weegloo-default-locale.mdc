@@ -13,6 +13,7 @@ rules:
       - Every **Content create** payload must include the **space default locale** value for every populated field. Do not submit creates that populate only non-default locales.
       - **`localized: false`** fields accept a value **only under the default locale** — no other locale buckets allowed.
       - **Always** resolve which locale is the space **default** before authoring multi-locale payloads.
+      - **Read fallback is opt-in, not automatic.** A `Locale` falls back only via its **optional `fallbackCode`** (an arbitrary target locale, chainable). A requested locale with **no `fallbackCode`** returns an **empty** value when the field has no entry for it; it does **not** fall back to the default. The default locale is special on **write** (mandatory on create), **not** on read. A `localized: false` field (default bucket only) therefore appears under a non-default locale **only if that locale's `fallbackCode` chain reaches the default**.
 
   - section: Full guidance
     items:
