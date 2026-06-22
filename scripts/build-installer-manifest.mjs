@@ -11,7 +11,7 @@
  */
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SCHEMA_VERSION = 1;
 const DEFAULT_MCP_URL = 'https://ai.weegloo.com/mcp';
@@ -133,7 +133,9 @@ export function serializeManifest(manifest) {
 }
 
 // CLI entry: write the manifest to disk.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Use pathToFileURL so the comparison holds on Windows too (where process.argv[1]
+// is a backslash path that never matches a hand-built `file://` string).
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const rootDir = path.resolve(__dirname, '..');
   const contentPrefix = 'plugins/weegloo';

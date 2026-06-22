@@ -18,10 +18,12 @@ rules:
   - section: Read the right skill BEFORE architecture / ContentType design (hard gate)
     items:
       - These rule files are **safety-net summaries, not a substitute** for the skills. Having the rules in context does **not** satisfy this gate — invoke the skill.
+      - For any **broad, vague, or "just integrate/connect/use Weegloo" request** that does **not** name a specific feature (e.g. "integrate with Weegloo", "manage my data with Weegloo"), invoke **`weegloo-platform-integration`** FIRST. It maps the plain-language need to the correct concrete skill so the user need not know Weegloo's internal feature names. It only routes — it does **not** replace the gates below.
       - Before proposing or finalizing a **service architecture** (which APIs / login / roles a product uses), you **MUST** invoke **`weegloo-service-architecture`** first. Do **not** decide CMA/CDA vs ACMA/ACDA, token type, or role scope from memory or these summaries.
       - Before designing or proposing a **ContentType** (fields, `localized`, ShortText/LongText/RichText, validations, `publishWithAuthor`, `Refer`), you **MUST** invoke **`weegloo-create-content-type`** first — and **`weegloo-default-locale`** whenever any field is multi-locale.
       - If the app is (or may ever become) a **MarketApp / WebHosting** deploy, invoke **`weegloo-marketapp-packaging`** before writing build-time config, and **`weegloo-delivery-access-token`** before provisioning any CDA token.
       - Before provisioning **Webhook + WriteBack** for **external API** work (async job Content, `Content.Create` trigger, poll by `sys.id`, LLM/image/search proxy), you **MUST** invoke **`weegloo-webhook-writeback`** first.
+      - Before implementing a **file-upload feature in product code** (upload a file, then create a **Media** or **WebHosting** from it), you **MUST** invoke **`weegloo-upload-api`** first. **Do not confuse the two upload paths:** the **Upload REST API** is for the **product's own code**; the **`weegloo-upload` MCP** server is **only** for the **agent/LLM** uploading a local file during a chat (e.g. seeding content, deploying a WebHosting ZIP). Never wire a product to the `weegloo-upload` MCP, and never call the raw REST upload endpoints "via MCP".
       - **Do not ask the user to decide** something a skill already specifies (e.g. LongText vs RichText search semantics) until you have read the relevant skill — research first, then surface only the genuine product choice.
 
   - section: HTTP JSON media type (when calling Weegloo APIs from code)

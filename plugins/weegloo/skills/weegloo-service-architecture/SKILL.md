@@ -25,7 +25,7 @@ These identity systems are **completely separate**: a Service User is **not** a 
 ## Mental model (one sentence per API)
 
 - **CMA** — full CRUD as a **Weegloo User**. Bearer from console FE login (or a Personal Access Token).
-- **Upload** — file uploads. Accepts both a **Weegloo User** Bearer (followed by **CMA** Media create) and a **Service User** Bearer (followed by **ACMA** Media create). Same upload endpoint, two follow-up planes that match the caller's identity.
+- **Upload** — file uploads. Accepts both a **Weegloo User** Bearer (followed by **CMA** Media create) and a **Service User** Bearer (followed by **ACMA** Media create). Same upload endpoint, two follow-up planes that match the caller's identity. **REST mechanics (endpoints, Upload id → Media/WebHosting create payloads) live in `weegloo-upload-api`** — invoke it when implementing a product's upload feature. Do not confuse it with the `weegloo-upload` MCP, which is only for the agent uploading local files.
 - **CDA** — public, cache-friendly **reads** of **published** resources. Production sites use a **DeliveryAccessToken** bound to a least-privilege `SpaceRole`; a Weegloo User Bearer also authorizes CDA but is over-privileged for browser distribution.
 - **ACMA** — CRUD as a **Service User**; scoped to **the member's own** resources. Requires a **Bearer Token from ServiceLogin**.
 - **ACDA** — **reads** for a Service User; scoped to **resources assigned to that member**, customizable per-member via `ServiceUser.roleOverride`. Requires a **Bearer Token from ServiceLogin**.
@@ -165,6 +165,7 @@ This chain is the intended path: pick the architecture here, then walk skills 1�
 ## Related
 
 - **`weegloo-api-endpoints`** — base URLs, Accept header, vendor JSON, OpenAPI links, ACMA/ACDA ownership invariants.
+- **`weegloo-upload-api`** — Upload REST API → Media / WebHosting create (the two-step file-upload flow for product code), and the Upload-API-vs-`weegloo-upload`-MCP distinction.
 - **`weegloo-user-login`** — Weegloo User login (PAT + console FE popup) for CMA / Upload / CDA. The admin-side identity model.
 - **`weegloo-service-login`** — ServiceLogin / ServiceUser / ServiceUserRole / `isAdmin` mechanics and Bearer Token scope. The end-user identity model.
 - **`weegloo-service-login-sdk`** — OAuth wire protocol on `auth.weegloo.com` and the official browser SDK for ServiceLogin.
