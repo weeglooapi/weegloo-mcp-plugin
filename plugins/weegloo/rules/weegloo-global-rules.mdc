@@ -60,6 +60,14 @@ rules:
       - To get the current user's space list, use GET /me/space-memberships. Use include=1 to fetch space details (name, code, etc.).
       - Do NOT use /organizations for "my organizations"; use /me/organization-memberships instead.
       
+  - section: ACMA / ACDA Content paths are nested under ContentType (no flat /contents)
+    items:
+      - On **ACMA** and **ACDA**, every Content operation **MUST** address the Content **under its ContentType**: list/create at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**, and get/update/delete at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`**.
+      - **The CMA/CDA-style flat Content paths do NOT exist on ACMA** — never call **`/v1/spaces/{spaceId}/contents`** or **`/v1/spaces/{spaceId}/contents/{contentId}`** on **ACMA** (they return **404**). On **ACDA**, use the same **nested** form for parity and reliability — do **not** assume a flat `/contents` path is available.
+      - You must know the **`contentTypeId`** to address a Content on ACMA/ACDA. If you only hold a `contentId`, resolve its ContentType first (from the resource you already have, or by listing under the ContentType) — do **not** fall back to a flat path.
+      - **Wrong:** `https://acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}`. **Correct:** `https://acma.weegloo.com/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`.
+      - This is an **application-code** rule (ACMA/ACDA are called from product code, not by the agent over MCP). Base URLs and the full ACMA/ACDA contrast live in **`weegloo-api-endpoints`**.
+
   - section: Resource Search
     items:
       - When searching a resource list, the following request parameters can be used:

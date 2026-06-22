@@ -103,6 +103,16 @@ rules:
       - **Caller identity (mandatory):** ACMA and ACDA accept **only** a **Bearer Token issued by `ServiceLogin`** (the Service User sign-in flow). They do **not** accept Weegloo User tokens, Personal Access Tokens, or DeliveryAccessTokens. Detail: **`weegloo-service-login`** skill.
       - **Current `ServiceUser` (ServiceLogin session):** **`GET https://acma.weegloo.com/v1/me`** with that Bearer Token. **Do not** call **`GET .../v1/spaces/{spaceId}/me`** on ACMA — that URL is **incorrect** for the current member profile. **`auth.weegloo.com`** uses **`/v1/spaces/{spaceId}/...`** for OAuth; **ACMA**’s **`/me`** endpoint is **not** under **`/spaces/{spaceId}`**. Narrative: **`weegloo-service-login`** skill.
 
+  - section: ACMA / ACDA — Content is addressed UNDER its ContentType (no flat /contents)
+    items:
+      - **Unlike CMA/CDA, ACMA and ACDA have no flat Content endpoints.** Every Content operation is **nested under the ContentType**. Verified against the live OpenAPI specs (see *API documentation* above).
+      - **ACMA** (Content CRUD): list/create at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**; get/update(PUT/PATCH)/delete at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`**. There is **no** `/v1/spaces/{spaceId}/contents` and **no** `/v1/spaces/{spaceId}/contents/{contentId}` on ACMA — calling them returns **404**.
+      - **ACDA** (Content read): use the same **nested** form — **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`** and **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`**. Even if a flat `/contents` read appears on some ACDA versions, **do not rely on it** — always use the nested form for parity with ACMA and version-independence.
+      - **You need the `contentTypeId`.** ACMA/ACDA Content URLs cannot be built from a `contentId` alone. If you only have a `contentId`, obtain its `contentTypeId` from the resource you already hold (e.g. `sys.contentType`) or by listing under the ContentType — never fall back to a flat path.
+      - **Wrong (does not exist on ACMA):** `https://acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}`.
+      - **Correct:** `https://acma.weegloo.com/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}` (ACDA: same path under `https://acda.weegloo.com`).
+      - **CMA/CDA contrast:** the flat `/v1/spaces/{spaceId}/contents[...]` style is a **CMA/CDA** convenience — do **not** carry it over to ACMA/ACDA.
+
   - section: ACMA — ownership and `isAdmin` (app-managed member CRUD scope)
     items:
       - **Default scope:** a `ServiceUser` may CRUD **only the resources they created**. Resources created by other members are not editable or deletable from this member's session.
@@ -172,6 +182,7 @@ rules:
       - Wrong: `https://cda-weegloo.com` (wrong host pattern), using CMA base URL for CDA traffic.
       - Correct: For CDA content fetch, use `https://cda.weegloo.com/v1/spaces/{spaceId}/...`.
       - Wrong: `Accept: application/json` on Weegloo API requests. Prefer **no** `Accept` header, or **`application/vnd.com.weegloo.v1+json;charset=UTF-8`** if `Accept` is required.
+      - Wrong (ACMA/ACDA): flat Content paths like `https://acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}` — these **do not exist** on ACMA. Use the nested `…/content-types/{contentTypeId}/contents/{contentId}` form (see *ACMA / ACDA — Content is addressed UNDER its ContentType*).
 
   - section: Base URL quick reference
     items:
