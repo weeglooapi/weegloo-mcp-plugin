@@ -123,8 +123,8 @@ The MCP server tool groups are as follows:
 
 ## Documentation & Resources
 
-- [Official Weegloo MCP Server Documentation](https://docs.weegloo.com/ai/tools/mcp)
+- [Official Weegloo MCP Server Documentation](https://docs.weegloo.com/en-US/ai/tools/mcp/)
 
 ## Questions or Issues?
 
-For questions about the Weegloo MCP server or integration issues, please refer to the [official Weegloo documentation](https://docs.weegloo.com/ai/tools/mcp).
+For questions about the Weegloo MCP server or integration issues, please refer to the [official Weegloo documentation](https://docs.weegloo.com/en-US/ai/tools/mcp/).
