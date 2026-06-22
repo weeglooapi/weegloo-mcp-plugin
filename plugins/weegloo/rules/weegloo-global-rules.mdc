@@ -8,6 +8,17 @@ description: >
 ---
 
 rules:
+  - section: Select the working Organization and Space FIRST (hard gate)
+    items:
+      - **Before any Weegloo work, the working `Organization` and `Space` must be decided.** Almost every resource (ContentType, Content, Media, WebHosting, roles, tokens, …) lives **inside a specific Space**, which lives inside an **Organization**. Choosing the wrong one silently scatters work into an arbitrary workspace.
+      - **On the user's FIRST Weegloo request of a session** — any "integrate with Weegloo" / create / update / delete / upload / deploy, or anything that targets a `spaceId` — you **MUST** establish the target Space **before** the first write or space-scoped read. Do **not** start working until it is confirmed.
+      - **Do not guess or auto-pick.** Never assume a default, and never use the **first item** from a list of organizations or spaces. If the user did not name a Space, **ask**.
+      - **Ask the user to choose one of two paths:** (a) **use an existing** Organization + Space, or (b) **create a new** Organization and/or Space for this work.
+      - **To list what the user already has** (so they can choose): organizations via **`GET /me/organization-memberships?include=1`**, spaces via **`GET /me/space-memberships?include=1`** (see *Current User Resources*). Present names/codes and let the user pick — do not pick for them.
+      - **To create new:** a `Space` belongs to an `Organization`, so an Organization must be chosen or created **first** (`cma_CreateOrganization`), then the Space (`cma_CreateSpace`). Confirm names with the user before creating.
+      - **After it is decided, reuse that `spaceId`** (and Organization) for the rest of the work. If a later request implies a **different** Space, **stop and confirm** the switch rather than silently changing workspace.
+      - **Only exempt:** genuinely global, read-only queries that are **not** space-scoped (e.g. listing the user's own organizations/spaces, or `GET /me`). Everything that reads or writes inside a Space is gated.
+
   - section: When unsure, read the docs first (do not guess)
     items:
       - If you are **not certain** how any Weegloo feature works or behaves — a query/filter parameter, `select`/`include` response shape, locale rules, an error code, publish/version semantics, role/permission scope, or any concept — **look it up in the docs before acting**. Do **not** rely on assumptions or memory.
