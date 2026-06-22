@@ -17,6 +17,9 @@ on:
       - 'plugins/weegloo/rules/**'
       - 'plugins/weegloo/.mcp.json'
       - 'scripts/build-installer-manifest.mjs'
+  # Manual re-run for a chosen branch (e.g. to backfill a stale manifest) without
+  # pushing a throwaway commit. Runs the workflow file from the selected branch.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -31,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -50,5 +53,7 @@ jobs:
             exit 0
           fi
           git commit -m "chore(manifest): regenerate installer-manifest.json [skip ci]"
-          git pull --rebase origin "${{ github.ref_name }}"
-          git push origin "HEAD:${{ github.ref_name }}"
+          # Fully-qualify refs (refs/heads/) so a same-named tag never makes the ref
+          # ambiguous — fetch/push always target the branch, never a tag.
+          git pull --rebase origin "refs/heads/${{ github.ref_name }}"
+          git push origin "HEAD:refs/heads/${{ github.ref_name }}"
