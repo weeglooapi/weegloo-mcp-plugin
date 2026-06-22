@@ -1,6 +1,6 @@
 ---
 name: weegloo-platform-integration
-description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or requests ANY capability Weegloo could provide — especially broad, vague, or ambiguous requests that do not name a specific Weegloo feature (e.g. "integrate with Weegloo", "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, file upload/download, public/team sharing, roles, access control, external API/webhook) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work.
+description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or requests ANY capability Weegloo could provide — especially broad, vague, or ambiguous requests that do not name a specific Weegloo feature (e.g. "integrate with Weegloo", "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, file upload/download, web hosting/deploy, public/team sharing, roles, access control, external API/webhook) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work.
 ---
 
 # Weegloo Platform Integration (capability router)
@@ -53,6 +53,12 @@ Each leaf maps to the concrete skill that actually does the work.
     the note below.
   - **Download** (deliver stored files to clients) → published Media via CDA/ACDA;
     see `weegloo-cda-publish`.
+- **Hosting & Deployment**
+  - **Web Hosting** (deploy a website / static site to a Weegloo subdomain over HTTPS) →
+    `weegloo-web-hosting` (uses `weegloo-upload-api` to upload the build ZIP; add
+    `weegloo-delivery-access-token` if the site reads published content from CDA)
+  - **MarketApp packaging** (ship a WebHosting as a distributable MarketApp AppBundle) →
+    `weegloo-marketapp-packaging`
 - **Sharing**
   - **Public Sharing** (anyone can read) → `weegloo-delivery-access-token` + `weegloo-cda-publish`
   - **Team Sharing** (scoped to members) → `weegloo-space-role` + `weegloo-service-login` (ACDA scope)
@@ -76,6 +82,8 @@ Each leaf maps to the concrete skill that actually does the work.
 | Search                       | `weegloo-api-query-optimization` + `weegloo-list-pagination`             |
 | File Upload (product feature)| `weegloo-upload-api` (Upload REST API → CMA/ACMA Media / WebHosting create) |
 | File Download                | `weegloo-cda-publish` (Media via CDA/ACDA)                               |
+| Web Hosting (deploy a site)  | `weegloo-web-hosting` (+ `weegloo-upload-api` for the build upload)      |
+| MarketApp packaging          | `weegloo-marketapp-packaging`                                            |
 | Public Sharing               | `weegloo-delivery-access-token` + `weegloo-cda-publish`                  |
 | Team Sharing                 | `weegloo-space-role` + `weegloo-service-login`                           |
 | Role Management              | `weegloo-space-role`                                                      |
@@ -105,7 +113,8 @@ These are two different things; do not confuse them. Full mechanics and the crea
 - **This skill never implements** — it identifies and routes. The pointed-to skill does the work.
 - **Do not bypass existing gates.** Architecture → `weegloo-service-architecture`; ContentType
   design → `weegloo-create-content-type` (+ `weegloo-default-locale` for multi-locale); CDA tokens
-  → `weegloo-delivery-access-token`; external-API jobs → `weegloo-webhook-writeback`.
+  → `weegloo-delivery-access-token`; external-API jobs → `weegloo-webhook-writeback`; WebHosting
+  deploy → `weegloo-web-hosting` (+ `weegloo-marketapp-packaging` if it may ship as a MarketApp).
 - **Respect the two identity systems.** "Login/Signup" splits into Weegloo User (admin) vs Service
   User (end-user); do not pick one blindly — disambiguate first.
 - **When unsure how a feature behaves, read the docs first** (per `weegloo-global-rules`); do not guess.
