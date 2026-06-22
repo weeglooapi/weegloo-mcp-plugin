@@ -17,6 +17,9 @@ on:
       - 'plugins/weegloo/rules/**'
       - 'plugins/weegloo/.mcp.json'
       - 'scripts/build-installer-manifest.mjs'
+  # Manual re-run for a chosen branch (e.g. to backfill a stale manifest) without
+  # pushing a throwaway commit. Runs the workflow file from the selected branch.
+  workflow_dispatch:
 
 permissions:
   contents: write
