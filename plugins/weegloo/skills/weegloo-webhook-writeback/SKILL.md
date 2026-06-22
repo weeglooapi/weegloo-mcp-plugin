@@ -11,7 +11,7 @@ description: Async external-API jobs on Weegloo using Webhook + WriteBack — jo
 - The user wants **“create a job → wait for result”** from the browser: frontend creates **Content**, then **polls** by `sys.id` until a **response** field is filled.
 - You are provisioning **ContentType + Webhook + WriteBack** together for a new integration.
 
-Canonical behavior and JSON examples: [Webhook — WriteBack](https://docs.weegloo.com/getting-started/core-concepts/integration-and-deployment/webhook#writeback). API shapes: CMA OpenAPI **Webhook** (via **`weegloo-api-endpoints`** docs discovery).
+Canonical behavior and JSON examples: [Webhook — WriteBack](https://docs.weegloo.com/en-US/getting-started/core-concepts/deployment-and-integration/webhook/#feeding-the-response-back-in-writeback). API shapes: CMA OpenAPI **Webhook** (via **`weegloo-api-endpoints`** docs discovery).
 
 ## Mental model
 

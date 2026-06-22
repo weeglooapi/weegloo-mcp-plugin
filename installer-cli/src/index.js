@@ -267,7 +267,7 @@ async function main() {
     await handleCodexMcpLogin();
   }
   console.log(
-    '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/ai/tools/mcp')
+    '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/en-US/ai/tools/mcp/')
   );
   console.log();
 }

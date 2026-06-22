@@ -64,7 +64,7 @@ rules:
       - **`createdBy.sys.id`** limits access to resources created by a specific user. Use a **fixed** id (e.g. `"12345"`) for one known creator; use the reserved value **`:self`** so the filter resolves to the **currently authenticated caller** (Weegloo **User** for CMA/CDA + **SpaceRole**; **`ServiceUser`** for ACMA/ACDA + **ServiceUserRole**) — “only what I created,” not a directory id.
       - **Per-user private Content (Weegloo User):** on the role’s **`content`** map, grant the action (e.g. **`Read`**) with **`Allow`** containing both a **`contentType`** `Refer` and **`createdBy.sys.id": ":self"`**. Full recipes and mistakes: **`weegloo-space-role`** skill.
       - **Webhook job Request/Response Content:** **`Create`** allowed on the job **ContentType** without **`createdBy`**; **`Read`**, **`Edit`**, **`Delete`** (and publish actions you grant) require **`contentType`** + **`createdBy.sys.id": ":self"`** so only the submitting user sees or mutates their job — **WriteBack** still fills **`response`** platform-side. **`weegloo-webhook-writeback`** skill.
-      - **Canonical reference (overview + structure):** `https://docs.weegloo.com/api/reference/cma/space-role` — **ServiceUserRole** uses the same filter keys on ACMA; see CMA **`CreateServiceUserRole`** in OpenAPI above.
+      - **Canonical reference (overview + structure):** `https://docs.weegloo.com/en-US/api/reference/cma/space-role/` — **ServiceUserRole** uses the same filter keys on ACMA; see CMA **`CreateServiceUserRole`** in OpenAPI above.
 
   - section: Weegloo documentation (general, agent-readable) — look here when unsure
     items:

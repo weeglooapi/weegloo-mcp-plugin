@@ -90,5 +90,5 @@ Codex path rationale: Codex discovers persistent instructions from `AGENTS.md` /
 
 ## Links
 
-- [Weegloo Documentation](https://docs.weegloo.com/mcp-server/)
+- [Weegloo Documentation](https://docs.weegloo.com/en-US/ai/tools/mcp/)
 - [GitHub Repository](https://github.com/weeglooapi/weegloo-mcp-plugin)
