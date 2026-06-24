@@ -1,4 +1,8 @@
 # Environment and secrets
+.env
+.env.*
+!.env.example
+.npmrc
 node_modules/
 
 # Local-only design notes (ADR): kept on the author's machine, not in the PR/repo
