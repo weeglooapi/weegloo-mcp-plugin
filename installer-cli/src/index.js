@@ -1,12 +1,13 @@
-import { select, checkbox, password } from '@inquirer/prompts';
+import { select, checkbox, password, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { getPluginRef, listBranches, loadResources } from './github.js';
+import { PKG_PLUGIN_REF, listBranches, loadResources } from './github.js';
 import { orderBranchesForPicker } from './versions.js';
+import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
-import { installCodex, handleCodexMcpLogin } from './codex.js';
+import { installCodex, handleCodexMcpLogin, printCodexLoginNotice } from './codex.js';
 
 const PAT_GENERATION_URL = 'https://console.weegloo.com/account/profile/personal-access-tokens';
 
@@ -50,18 +51,59 @@ function printBanner() {
 }
 
 async function main() {
+  // Parse flags before anything else so --help and parse errors stay clean.
+  let values;
+  try {
+    values = parseCliArgs(process.argv.slice(2));
+  } catch (err) {
+    console.error();
+    console.error(chalk.red('  Error: ') + err.message);
+    console.error(chalk.dim('  Run with --help to see available options.'));
+    console.error();
+    process.exit(1);
+  }
+
+  if (values.help) {
+    console.log(HELP_TEXT);
+    process.exit(0);
+  }
+
+  const isTTY = Boolean(process.stdin.isTTY);
+  const { errors, warnings, config } = resolveConfig({
+    values,
+    env: process.env,
+    isTTY,
+    pkgPluginRef: PKG_PLUGIN_REF,
+  });
+
   printBanner();
 
-  // 1. Select plugin version (branch) - first
-  let pluginRef = getPluginRef();
-  const refFromEnvOrArg = process.argv.includes('--ref') || process.env.WEEGLOO_REF;
-  const showAllBranches =
-    process.argv.includes('-a') || process.argv.includes('--all-branches');
-  if (!refFromEnvOrArg) {
+  if (errors.length > 0) {
+    for (const e of errors) console.log(chalk.red('  ✖  ') + e);
+    console.log();
+    console.log(chalk.dim('  Run with --help to see available options.'));
+    console.log();
+    process.exit(1);
+  }
+
+  for (const w of warnings) console.log(chalk.yellow('  ⚠  ') + chalk.dim(w));
+  if (warnings.length > 0) console.log();
+
+  if (config.nonInteractive) {
+    console.log(
+      chalk.dim(`  Non-interactive mode${isTTY ? '' : ' (no TTY)'} — using flags + defaults.`)
+    );
+    console.log();
+  }
+
+  // 1. Plugin version (branch). Pinned by flag/env → skip the picker; otherwise
+  //    prompt (interactive) or fall back to the baked-in default (non-interactive).
+  let pluginRef = config.pluginRef;
+  if (pluginRef == null) {
     const branchSpinner = ora({ text: '  Fetching plugin versions...', indent: 0 }).start();
     const branches = await listBranches();
     branchSpinner.stop();
-    const sorted = orderBranchesForPicker(branches, { showAll: showAllBranches });
+    const sorted = orderBranchesForPicker(branches, { showAll: config.showAllBranches });
     if (sorted.length > 0) {
       pluginRef = await select({
         message: 'Select plugin version (branch):',
@@ -70,39 +112,62 @@ async function main() {
           value: name,
         })),
       });
+    } else {
+      pluginRef = PKG_PLUGIN_REF;
     }
   }
 
-  // 2. IDE
-  const ide = await select({
-    message: 'Select your IDE:',
-    choices: [
-      { name: 'Cursor', value: 'cursor' },
-      { name: 'Claude Code', value: 'claude' },
-      { name: 'Antigravity', value: 'antigravity' },
-      { name: 'Codex', value: 'codex' },
-    ],
-  });
+  // 2. IDE / agent
+  let ide = config.agent;
+  if (ide == null) {
+    ide = await select({
+      message: 'Select your IDE:',
+      choices: [
+        { name: 'Cursor', value: 'cursor' },
+        { name: 'Claude Code', value: 'claude' },
+        { name: 'Antigravity', value: 'antigravity' },
+        { name: 'Codex', value: 'codex' },
+      ],
+    });
+  }
 
-  // 3. Checkbox: what to install?
-  const installOptions = await checkbox({
-    message: 'What would you like to install?',
-    choices: [
-      {
-        name: `Install MCP server  ${chalk.dim('(weegloo, weegloo-upload)')}`,
-        value: 'mcp',
-        checked: true,
-      },
-      {
-        name: `Install Skills and Rules  ${chalk.dim('(from selected branch)')}`,
-        value: 'skillsRules',
-        checked: true,
-      },
-    ],
-  });
+  // 3. What to install. Flags pin either toggle; otherwise prompt (the combined
+  //    checkbox when both are unknown, to preserve the original UX) or default on.
+  let installMcp = config.installMcp;
+  let installSkillsRules = config.installSkillsRules;
 
-  const installMcp = installOptions.includes('mcp');
-  const installSkillsRules = installOptions.includes('skillsRules');
+  if (config.nonInteractive) {
+    if (installMcp == null) installMcp = true;
+    if (installSkillsRules == null) installSkillsRules = true;
+  } else if (installMcp == null && installSkillsRules == null) {
+    const installOptions = await checkbox({
+      message: 'What would you like to install?',
+      choices: [
+        {
+          name: `Install MCP server  ${chalk.dim('(weegloo, weegloo-upload)')}`,
+          value: 'mcp',
+          checked: true,
+        },
+        {
+          name: `Install Skills and Rules  ${chalk.dim('(from selected branch)')}`,
+          value: 'skillsRules',
+          checked: true,
+        },
+      ],
+    });
+    installMcp = installOptions.includes('mcp');
+    installSkillsRules = installOptions.includes('skillsRules');
+  } else {
+    if (installMcp == null) {
+      installMcp = await confirm({
+        message: 'Install MCP server (weegloo, weegloo-upload)?',
+        default: true,
+      });
+    }
+    if (installSkillsRules == null) {
+      installSkillsRules = await confirm({ message: 'Install Skills and Rules?', default: true });
+    }
+  }
 
   if (!installMcp && !installSkillsRules) {
     console.log();
@@ -113,7 +178,7 @@ async function main() {
 
   let token = '';
   let mcpGroup = '';
-  let scope = 'project';
+  let scope = config.scope ?? 'project';
   let skills = [];
   let rules = [];
 
@@ -134,35 +199,44 @@ async function main() {
   const mcp = resources.mcp;
 
   if (installMcp) {
-    console.log(
-      chalk.dim('  Generate one at: ') +
-      chalk.cyan(PAT_GENERATION_URL)
-    );
-    token = await password({
-      message: 'Enter your Weegloo Personal Access Token:',
-      mask: '*',
-    });
-    if (!token || token.trim().length === 0) {
-      console.log();
-      console.log(chalk.red('  ✖  Personal Access Token is required for MCP server.'));
-      console.log(
-        chalk.dim('     Generate one from the Weegloo console: ') +
-        chalk.cyan(PAT_GENERATION_URL)
-      );
-      console.log();
-      process.exit(1);
+    // Token: flag/env pins it; otherwise prompt (interactive). Non-interactive with no
+    // token + MCP was already rejected by resolveConfig, so we never block on stdin here.
+    if (config.token != null) {
+      token = config.token;
+    } else if (!config.nonInteractive) {
+      console.log(chalk.dim('  Generate one at: ') + chalk.cyan(PAT_GENERATION_URL));
+      const entered = await password({
+        message: 'Enter your Weegloo Personal Access Token:',
+        mask: '*',
+      });
+      token = (entered || '').trim();
+      if (!token) {
+        console.log();
+        console.log(chalk.red('  ✖  Personal Access Token is required for MCP server.'));
+        console.log(
+          chalk.dim('     Generate one from the Weegloo console: ') +
+          chalk.cyan(PAT_GENERATION_URL)
+        );
+        console.log();
+        process.exit(1);
+      }
     }
-    token = token.trim();
-    mcpGroup = await select({
-      message: 'Select the MCP server group:',
-      choices: MCP_GROUP_CHOICES,
-    });
+
+    // MCP group: --mcp <group> pins it (default ⇒ ''); otherwise prompt or default ''.
+    if (config.mcpGroup != null) {
+      mcpGroup = config.mcpGroup;
+    } else if (!config.nonInteractive) {
+      mcpGroup = await select({
+        message: 'Select the MCP server group:',
+        choices: MCP_GROUP_CHOICES,
+      });
+    }
   }
 
   const needsScopePrompt =
     installSkillsRules ||
     ((ide === 'codex' || ide === 'cursor' || ide === 'claude') && installMcp);
-  if (needsScopePrompt) {
+  if (config.scope == null && needsScopePrompt && !config.nonInteractive) {
     const scopeMessages = {
       codex: 'Where would you like to install Codex configuration (MCP / skills / rules)?',
       cursor: 'Where would you like to install Cursor configuration (MCP / skills / rules)?',
@@ -205,23 +279,45 @@ async function main() {
     });
   }
 
+  // Antigravity writes MCP to a fixed path (~/.gemini/antigravity), so `global`
+  // location only affects skills/rules. Warn once everything is resolved (the
+  // values above may have come from prompts, not flags).
+  if (ide === 'antigravity' && scope === 'global' && installMcp && !installSkillsRules) {
+    console.log(
+      chalk.yellow('  ⚠  ') +
+      chalk.dim(
+        'Location \'global\' only affects Skills/Rules for Antigravity; the MCP config path is fixed (~/.gemini/antigravity).'
+      )
+    );
+    console.log();
+  }
+
   if (installSkillsRules) {
-    // Skip an empty checkbox — @inquirer/checkbox throws on zero choices, and a branch
-    // may legitimately have no skills or no rules.
-    if (resources.skills.length > 0) {
-      const chosenSkillIds = await checkbox({
-        message: 'Select skills to install:',
-        choices: resources.skills.map((s) => ({ name: chalk.bold(s.id), value: s.id, checked: true })),
-      });
-      skills = resources.skills.filter((s) => chosenSkillIds.includes(s.id));
+    // --ignore-skill / --ignore-rule skip a kind entirely; otherwise install ALL
+    // (non-interactive) or let the user pick (interactive). Empty lists are skipped —
+    // @inquirer/checkbox throws on zero choices, and a branch may have no skills/rules.
+    if (!config.ignoreSkill && resources.skills.length > 0) {
+      if (config.nonInteractive) {
+        skills = resources.skills;
+      } else {
+        const chosenSkillIds = await checkbox({
+          message: 'Select skills to install:',
+          choices: resources.skills.map((s) => ({ name: chalk.bold(s.id), value: s.id, checked: true })),
+        });
+        skills = resources.skills.filter((s) => chosenSkillIds.includes(s.id));
+      }
     }
 
-    if (resources.rules.length > 0) {
-      const chosenRuleIds = await checkbox({
-        message: 'Select rules to install:',
-        choices: resources.rules.map((r) => ({ name: chalk.bold(r.id), value: r.id, checked: true })),
-      });
-      rules = resources.rules.filter((r) => chosenRuleIds.includes(r.id));
+    if (!config.ignoreRule && resources.rules.length > 0) {
+      if (config.nonInteractive) {
+        rules = resources.rules;
+      } else {
+        const chosenRuleIds = await checkbox({
+          message: 'Select rules to install:',
+          choices: resources.rules.map((r) => ({ name: chalk.bold(r.id), value: r.id, checked: true })),
+        });
+        rules = resources.rules.filter((r) => chosenRuleIds.includes(r.id));
+      }
     }
   }
 
@@ -264,7 +360,12 @@ async function main() {
     );
     console.log();
   } else if (installMcp && ide === 'codex') {
-    await handleCodexMcpLogin();
+    // `codex mcp login` is interactive (inherited stdio); never spawn it without a TTY.
+    if (config.nonInteractive) {
+      printCodexLoginNotice();
+    } else {
+      await handleCodexMcpLogin();
+    }
   }
   console.log(
     '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/en-US/ai/tools/mcp/')
