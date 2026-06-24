@@ -1,0 +1,6 @@
+{
+  "packageDir": "installer-cli",
+  "packageName": "weegloo",
+  "distTag": "latest",
+  "runTests": true
+}

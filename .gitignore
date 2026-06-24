@@ -16,4 +16,7 @@ temp/
 
 .idea/
 
+# Claude Code local-only settings (machine-specific)
+.claude/settings.local.json
+
 evals/
