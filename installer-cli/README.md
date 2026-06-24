@@ -1,6 +1,6 @@
 # weegloo
 
-An interactive CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Antigravity, and Codex.
+A CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Antigravity, and Codex — interactive by default, or fully non-interactive for agents and CI.
 
 ## Usage
 
@@ -13,6 +13,45 @@ Or install globally:
 ```bash
 npm install -g weegloo
 weegloo
+```
+
+## CLI options
+
+Run with no options for the interactive installer. **Any option below pre-fills its choice and skips that prompt.** With `-y` (or in a non-TTY / piped / CI / agent environment) the installer runs fully non-interactively, prompting for nothing.
+
+| Option | Meaning |
+|---|---|
+| `-b, --branch <ref>` | Plugin version/branch to install (default: `latest`). Alias of `--ref`; also reads `WEEGLOO_REF`. |
+| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `antigravity` \| `codex`. |
+| `-l, --location <loc>` | Install location: `project` \| `global` (default: `project`). |
+| `--mcp <group>` | Install the MCP server with group: `default` \| `core` \| `extra` \| `all`. |
+| `--no-mcp` | Do not install the MCP server. |
+| `-t, --token <pat>` | Weegloo Personal Access Token. Also reads `WEEGLOO_TOKEN` (the flag wins). |
+| `--ignore-skill` | Do not install Skills. |
+| `--ignore-rule` | Do not install Rules. |
+| `-y, --yes` | Non-interactive: use defaults for anything not given. |
+| `-d, --all-branches` | Show all branches in the version picker (interactive only). |
+| `-h, --help` | Show this help. |
+
+> **Note:** `-a` is the short flag for `--agent`. The version-picker "show all branches" short flag is `-d` (`--all-branches`).
+
+### Non-interactive mode
+
+Triggered by `-y` **or** a non-TTY environment (piped, CI, or an agent). In this mode:
+
+- **Defaults:** branch `latest`, MCP + Skills + Rules installed, group `default`, location `project`, all Skills and Rules selected.
+- **Required:** `--agent` is always required, and a token (`--token` or `WEEGLOO_TOKEN`) is required whenever MCP is installed. Missing required values exit immediately with an error instead of hanging on a prompt.
+- Conflicting or invalid flags (e.g. `--mcp` together with `--no-mcp`, nothing left to install, or an unknown enum value) also exit with a clear error.
+
+```bash
+# Fully non-interactive: MCP + Skills + Rules for Claude Code
+WEEGLOO_TOKEN=… npx weegloo@latest -y --agent claude
+
+# Skills/Rules only, no MCP (no token needed)
+npx weegloo@latest -y --agent claude --no-mcp
+
+# Pre-fill a couple of choices, get prompted for the rest (interactive)
+npx weegloo@latest --agent cursor --location global
 ```
 
 ### Overriding the ref (branch / tag)
@@ -28,8 +67,8 @@ Skills and Rules files are downloaded in real time from the GitHub branch or tag
 To fetch from a specific branch directly:
 
 ```bash
-# CLI argument
-npx weegloo@latest --ref some-branch
+# CLI argument (-b / --branch / --ref are equivalent)
+npx weegloo@latest --branch some-branch
 
 # Environment variable
 WEEGLOO_REF=some-branch npx weegloo@latest
@@ -37,7 +76,7 @@ WEEGLOO_REF=some-branch npx weegloo@latest
 
 ## Installation Flow
 
-The CLI asks the following questions in order:
+In interactive mode the CLI asks the following questions in order (a flag from [CLI options](#cli-options) can pre-fill any of them, skipping that prompt):
 
 1. **Install location** - Global (`~/.cursor/`) or current project (`.cursor/`)
 2. **IDE** - Cursor / Claude Code / Antigravity / Codex
