@@ -23,23 +23,21 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 |---|---|
 | `-b, --branch <ref>` | Plugin version/branch to install (default: `latest`). Alias of `--ref`; also reads `WEEGLOO_REF`. |
 | `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `antigravity` \| `codex`. |
-| `-l, --location <loc>` | Install location: `project` \| `global` (default: `project`). |
+| `-l, --location <loc>` | Install location: `project` \| `global` (default: `global`). |
 | `--mcp <group>` | Install the MCP server with group: `default` \| `core` \| `extra` \| `all`. |
 | `--no-mcp` | Do not install the MCP server. |
 | `-t, --token <pat>` | Weegloo Personal Access Token. Also reads `WEEGLOO_TOKEN` (the flag wins). |
 | `--ignore-skill` | Do not install Skills. |
 | `--ignore-rule` | Do not install Rules. |
 | `-y, --yes` | Non-interactive: use defaults for anything not given. |
-| `-d, --all-branches` | Show all branches in the version picker (interactive only). |
+| `--all-branches` | Show all branches in the version picker (interactive only). |
 | `-h, --help` | Show this help. |
-
-> **Note:** `-a` is the short flag for `--agent`. The version-picker "show all branches" short flag is `-d` (`--all-branches`).
 
 ### Non-interactive mode
 
 Triggered by `-y` **or** a non-TTY environment (piped, CI, or an agent). In this mode:
 
-- **Defaults:** branch `latest`, MCP + Skills + Rules installed, group `default`, location `project`, all Skills and Rules selected.
+- **Defaults:** branch `latest`, MCP + Skills + Rules installed, group `default`, location `global`, all Skills and Rules selected.
 - **Required:** `--agent` is always required, and a token (`--token` or `WEEGLOO_TOKEN`) is required whenever MCP is installed. Missing required values exit immediately with an error instead of hanging on a prompt.
 - Conflicting or invalid flags (e.g. `--mcp` together with `--no-mcp`, nothing left to install, or an unknown enum value) also exit with a clear error.
 
