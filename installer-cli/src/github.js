@@ -83,20 +83,11 @@ async function firstUsable(strategies, isUsable) {
 }
 
 /**
- * Determines the GitHub ref (branch or tag) to fetch plugin files from.
- *
- * Priority: CLI `--ref <ref>` → env `WEEGLOO_REF` → package.json `pluginRef` → 'latest'.
+ * Default plugin ref baked into this CLI release. The flag/env resolution that used
+ * to read argv here now lives in cli.js (resolveConfig), so there is a single place
+ * that turns flags + env + this default into a pinned ref.
  */
-export function getPluginRef() {
-  const argIdx = process.argv.indexOf('--ref');
-  if (argIdx !== -1 && process.argv[argIdx + 1]) {
-    return process.argv[argIdx + 1];
-  }
-  if (process.env.WEEGLOO_REF) {
-    return process.env.WEEGLOO_REF;
-  }
-  return pkg.pluginRef ?? 'latest';
-}
+export const PKG_PLUGIN_REF = pkg.pluginRef ?? 'latest';
 
 // ── VersionSource: branch list for the picker ────────────────────────────────
 
