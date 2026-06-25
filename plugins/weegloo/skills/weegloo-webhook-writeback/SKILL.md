@@ -19,7 +19,7 @@ Canonical behavior and JSON examples: [Webhook — WriteBack](https://docs.weegl
 2. **WriteBack** — if the external call returns **2xx**, Weegloo runs **`writeBacks`** to **create / update / delete** **Content** or **Media** inside the Space, using **`{ /response/... }`** (API body) and **`{ /payload/... }`** (triggering resource).
 3. **Job record** — declare a **job ContentType** whose fields hold the **request** (what the user sent) and **response** (what came back). The frontend **creates** one Content row, then **polls** that row until **response** is populated.
 
-Sensitive values (API keys) belong in Webhook **`Headers`** (secret entries), **not** in Content fields exposed to end users.
+Sensitive values (API keys) belong in Webhook **`Headers`** as **secret entries** — secret Header values are **encrypted and stored securely** by Weegloo. Put keys there, not in Content fields.
 
 **Role design is part of the integration.** Job rows hold **request** (user input) and **response** (filled by **WriteBack** after the external API succeeds). End users must be able to **create** a job, but must **not** read, edit, or delete **another user’s** job — and must **not** forge a completed **`response`** on their own or others’ rows. Configure **`SpaceRole`** (Weegloo User + CMA/CDA) or **`ServiceUserRole`** (Service User + ACMA/ACDA) accordingly — see **§ Role design for job Request / Response Content** below.
 
@@ -165,7 +165,7 @@ Mirror **`Delete`** (and any other granted actions) with the same **`contentType
 | **Topics** | Subscribe to **exactly one** topic for WriteBack flows — usually **`Content.Create`**. Do **not** also subscribe to `Content.Publish` on the same Webhook (duplicate external calls). |
 | **Filters** | Restrict to the job ContentType: `doc`: `sys.contentType.sys.id`, `op`: `EQ`, `value`: `<job ContentType sys.id>`. |
 | **URL** | External API endpoint. |
-| **Headers** | Auth / API keys here (secret). Never put keys in client-visible Content. |
+| **Headers** | Auth / API keys here as **secret** entries — encrypted and stored securely by Weegloo. Put keys here, not in Content. |
 | **Transformation** | Map `{ /payload/fields/<name>/<default-locale> }` (and `{ /payload/sys/id }`) into the body/URL the external API expects. JSON Pointer syntax matches docs. |
 | **writeBacks** | Almost always **`$content` `action`: `update`** with **`target` omitted** so the **triggering** Content is updated. |
 
