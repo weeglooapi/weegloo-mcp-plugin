@@ -88,8 +88,8 @@ rules:
   - section: Resource Updates
     items:
       - When updating any resource, always include the `x-weegloo-version` header with the current resource's `sys.version`.
-      - **MCP update tools take the version via the parameter named `X-Weegloo-Version`** (matching the HTTP header, capitalized exactly) — NOT `version` or `xWeeglooVersion`. Guessing the wrong param name leaves the version stale and triggers a `409 WGL409005` ("has been modified").
-      - **Updates are FULL REPLACEMENT:** resend ALL fields, not just the changed ones. On `409 WGL409005`, GET the resource to read the current `sys.version`, then retry the update with that fresh version.
+      - **MCP update tools take the version via the parameter named `X-Weegloo-Version`** (matching the HTTP header, capitalized exactly) — NOT `version` or `xWeeglooVersion`. Guessing the wrong param name leaves the version stale and the update is rejected as a version conflict.
+      - **Updates are FULL REPLACEMENT:** resend ALL fields, not just the changed ones. On a version conflict, GET the resource to read the current `sys.version`, then retry the update with that fresh version.
       - All resource updates must use the appropriate MCP tool; direct modifications outside MCP tools are not allowed.
 
   - section: Optional Guidance
@@ -107,4 +107,4 @@ rules:
     items:
       - Filters are direct query params (NOT wrapped in `filter[]`), e.g. `name[prefix]=value`. **Format, the full operator set, and per-field-type support are canonical at https://docs.weegloo.com/api/reference/common/query-parameters — read it rather than guessing operators** (an unsupported operator → `WEB400006`).
       - **Tripwire — Refer fields:** can't filter Content by a Refer field's target via `fields.<refer>.sys.id[eq]` (`WEB400006`). Use `sys.id[in]=…` (`weegloo-api-query-optimization`) or fetch the set and group client-side.
-      - **Tripwire — `fields.*` needs ContentType scope (CDA/ACDA):** to filter or sort a contents list by any `fields.*`, scope the ContentType with `sys.contentType.sys.id=<id>`. A bare `contentType=<id>` is NOT enough for field queries → `WGL400003`. Wrong: `…/contents?contentType=<CT>&fields.status=active`; correct: `…/contents?sys.contentType.sys.id=<CT>&fields.status=active` (`weegloo-api-query-optimization`).
+      - **Tripwire — `fields.*` needs ContentType scope (CDA/ACDA):** to filter or sort a contents list by any `fields.*`, scope the ContentType with `sys.contentType.sys.id=<id>`. A bare `contentType=<id>` is NOT enough for field queries. Wrong: `…/contents?contentType=<CT>&fields.status=active`; correct: `…/contents?sys.contentType.sys.id=<CT>&fields.status=active` (`weegloo-api-query-optimization`).

@@ -69,7 +69,7 @@ Otherwise, **`include`** may undo optimization by enlarging the body with nested
 
 ### Filtering or sorting by `fields.*` requires scoping the ContentType (CDA/ACDA)
 
-To **filter** or **`order`** a contents list by any **`fields.*`** param on **CDA/ACDA**, you **must** scope the ContentType with **`sys.contentType.sys.id=<id>`**. A bare **`contentType=<id>`** is **NOT** enough for field queries — the server cannot resolve the field schema and returns **HTTP 400 `WGL400003`** ("to search 'fields.*' you need ContentType info; add 'sys.contentType.sys.id'").
+To **filter** or **`order`** a contents list by any **`fields.*`** param on **CDA/ACDA**, you **must** scope the ContentType with **`sys.contentType.sys.id=<id>`**. A bare **`contentType=<id>`** is **NOT** enough for field queries — the server cannot resolve the field schema and rejects the request.
 
 - **Wrong:** `GET …/contents?contentType=<CT>&fields.status=active&order=-sys.createdAt`
 - **Correct:** `GET …/contents?sys.contentType.sys.id=<CT>&fields.status=active&order=-sys.createdAt`
