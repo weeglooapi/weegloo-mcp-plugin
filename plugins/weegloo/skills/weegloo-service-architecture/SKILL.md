@@ -104,6 +104,7 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 - **Service User reads (private/personal content):** **ACDA** with **ServiceLogin** Bearer Token.
 - **Service User writes (their own resources):** **ACMA** with the same ServiceLogin Bearer Token.
 - **Weegloo User / staff editing (any resource in the Space):** **Weegloo User login** → **CMA** / **Upload** (**`weegloo-user-login`**).
+- **Owner / admin dashboard reading or editing *all* members' data** (e.g. a salon owner's full booking schedule, an ops console): this is **cross-member** access → **Weegloo User login → CMA** (**`weegloo-user-login`**), built as an **in-app admin UI by default**. It is **not** a public **CDA** read (that would leak every member's data to anyone holding the browser token) and **not** **ACDA** (which is per-member); `isAdmin` only adds cross-member **delete** on ACMA, never cross-member read. Do not implement the owner view as a client-side role-switch in the member app.
 - **Role budget (must be configured):**
   - **`SpaceRole`** (least-privilege) for the **DeliveryAccessToken** used by CDA.
   - **`ServiceUserRole`** (least-privilege) for app-managed members used by ACMA / ACDA, with per-member overrides as needed.
@@ -141,7 +142,7 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 When planning an architecture, answer these in order:
 
 1. **Anonymous read?** → CDA + DeliveryAccessToken with a least-privilege `SpaceRole`.
-2. **Weegloo Users (invited staff) editing through a custom admin UI?** → Weegloo User login (console FE popup) → CMA / Upload. See **`weegloo-user-login`**.
+2. **Does the product have an owner / admin / staff surface (dashboard, settings, moderation, back-office, or any screen that reads/edits *all* members' data)?** → default to an **in-app admin UI**: Weegloo User login (console FE popup) → CMA / Upload. See **`weegloo-user-login`**. This is the default for any admin/owner surface — **do not silently drop it to "the team uses the Weegloo Console,"** and do **not** expose it as a public CDA read or a client-side role-switch. Console-only is an explicit alternative the user must request, not a default.
 3. **Per-end-user accounts in the product itself (open sign-up)?** → enable **ServiceLogin**, define `ServiceUserRole`(s), set `ServiceLogin.sys.defaultRole`. See **`weegloo-service-login`**.
 4. **Service User writes?** → ACMA with Bearer Token. Moderators get `isAdmin: true` so they may additionally **delete** other members' resources within the role's scope (delete only — no cross-member update/read).
 5. **Service User reads of personal/assigned content?** → ACDA with the same Bearer Token.
