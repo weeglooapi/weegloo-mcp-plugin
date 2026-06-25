@@ -95,8 +95,6 @@ Each leaf maps to the concrete skill that actually does the work.
   - **Web Hosting** (deploy a website / static site to a Weegloo subdomain over HTTPS) →
     `weegloo-web-hosting` (uses `weegloo-upload-api` to upload the build ZIP; add
     `weegloo-delivery-access-token` if the site reads published content from CDA)
-  - **MarketApp packaging** (ship a WebHosting as a distributable MarketApp AppBundle) →
-    `weegloo-marketapp-packaging`
 - **Sharing**
   - **Public Sharing** (anyone can read) → `weegloo-delivery-access-token` + `weegloo-cda-publish`
   - **Team Sharing** (scoped to members) → `weegloo-space-role` + `weegloo-service-login` (ACDA scope)
@@ -121,7 +119,6 @@ Each leaf maps to the concrete skill that actually does the work.
 | File Upload (product feature)| `weegloo-upload-api` (Upload REST API → CMA/ACMA Media / WebHosting create) |
 | File Download                | `weegloo-cda-publish` (Media via CDA/ACDA)                               |
 | Web Hosting (deploy a site)  | `weegloo-web-hosting` (+ `weegloo-upload-api` for the build upload)      |
-| MarketApp packaging          | `weegloo-marketapp-packaging`                                            |
 | Public Sharing               | `weegloo-delivery-access-token` + `weegloo-cda-publish`                  |
 | Team Sharing                 | `weegloo-space-role` + `weegloo-service-login`                           |
 | Role Management              | `weegloo-space-role`                                                      |
@@ -156,7 +153,7 @@ These are two different things; do not confuse them. Full mechanics and the crea
 - **Do not bypass existing gates.** Architecture → `weegloo-service-architecture`; ContentType
   design → `weegloo-create-content-type` (+ `weegloo-default-locale` for multi-locale); CDA tokens
   → `weegloo-delivery-access-token`; external-API jobs → `weegloo-webhook-writeback`; WebHosting
-  deploy → `weegloo-web-hosting` (+ `weegloo-marketapp-packaging` if it may ship as a MarketApp).
+  deploy → `weegloo-web-hosting`.
 - **Respect the two identity systems.** "Login/Signup" splits into Weegloo User (admin) vs Service
   User (end-user). Do not ask the user to choose — infer the right identity model from the request
   (and integrate both where both clearly apply), defaulting sensibly rather than prompting.

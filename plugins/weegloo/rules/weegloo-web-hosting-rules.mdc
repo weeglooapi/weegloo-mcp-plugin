@@ -16,7 +16,6 @@ rules:
       - **MCP tools only** for deployment. No deploy scripts, no direct API calls.
       - **Subdomain is auto-chosen by the LLM — never ask the user.** Pick a **distinctive** subdomain that fits the service (not a plain common noun, which collides); the user can change it anytime later. After deploy, inform the user of the chosen subdomain and that it is changeable.
       - **`CheckSubdomain` before `CreateWebHosting`.** Always. On collision, auto-pick another distinctive variant and re-check — do not ask the user.
-      - **MarketApp packaging:** if this WebHosting may *ever* ship as a MarketApp, inline the source Space's `sys.id`, `DeliveryAccessToken`, and referenced resource `sys.id`s into the build as **verbatim, intact literal strings** (no placeholders / env-var indirection / runtime concat / blanks). Consult **`weegloo-marketapp-packaging`** before writing build-time config. N/A for direct deploys.
 
   - section: Full workflow
     items:

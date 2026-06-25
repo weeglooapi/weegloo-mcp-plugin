@@ -158,9 +158,8 @@ Choosing the API / login / role combination is only step 1. **Before** writing a
 1. **`weegloo-create-content-type`** — define each `ContentType`'s fields, `localized` flags, **ShortText / LongText / RichText** choice (search semantics drive this), validations, `publishWithAuthor`, and `Refer` relationships. A field-type question (e.g. "store the body as LongText or RichText?") is **answered here first**, then only the genuine product trade-off goes to the user.
 2. **`weegloo-default-locale`** — whenever any field is multi-locale: per-locale bucket rules, read fallback, and the mandatory default-locale value on every Content create.
 3. **`weegloo-delivery-access-token`** — provision the least-privilege DeliveryAccessToken for any CDA path (never Administrator / first list item).
-4. **`weegloo-marketapp-packaging`** — if this ships (or may ever ship) as a MarketApp / WebHosting deploy: inline the source Space `sys.id`, DeliveryAccessToken, and referenced resource `sys.id`s as verbatim literal strings at build time.
 
-This chain is the intended path: pick the architecture here, then walk skills 1–4 before implementation.
+This chain is the intended path: pick the architecture here, then walk skills 1–3 before implementation.
 
 ## Related
 

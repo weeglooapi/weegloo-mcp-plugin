@@ -113,8 +113,7 @@ upload (with `index.html` at root, relative asset paths) is referenced the same 
 }
 ```
 
-Build-time / packaging constraints (max 100 files, static-only, literal `sys.id`s for MarketApp):
-see `weegloo-web-hosting` and `weegloo-marketapp-packaging`.
+Build-time / packaging constraints (max 100 files, static-only): see `weegloo-web-hosting`.
 
 ## Plane selection (which Media create to call)
 
@@ -140,4 +139,4 @@ only the follow-up Media-create plane differs by identity.
 - `weegloo-api-endpoints` — base URLs, Accept/vendor JSON, OpenAPI links.
 - `weegloo-media-lifecycle` — Media `sys.status`, file processing, wait-before-reference.
 - `weegloo-service-architecture` — identity → API/plane selection (CMA vs ACMA Media).
-- `weegloo-web-hosting` / `weegloo-marketapp-packaging` — WebHosting deploy specifics.
+- `weegloo-web-hosting` — WebHosting deploy specifics.
