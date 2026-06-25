@@ -67,14 +67,14 @@ When you **do not** need those linked details:
 
 Otherwise, **`include`** may undo optimization by enlarging the body with nested resource graphs.
 
-### Filtering or sorting by `fields.*` requires scoping the ContentType (CDA/ACDA)
+### Filtering or sorting a flat `/contents` list by `fields.*` requires scoping the ContentType
 
-To **filter** or **`order`** a contents list by any **`fields.*`** param on **CDA/ACDA**, you **must** scope the ContentType with **`sys.contentType.sys.id=<id>`**. A bare **`contentType=<id>`** is **NOT** enough for field queries — the server cannot resolve the field schema and rejects the request.
+On the **flat `/contents` list** (**CDA** and **CMA**), to **filter** or **`order`** by any **`fields.*`** param you **must** scope the ContentType with **`sys.contentType.sys.id=<id>`**. A bare **`contentType=<id>`** is **NOT** enough for field queries — the server cannot resolve the field schema and rejects the request.
 
 - **Wrong:** `GET …/contents?contentType=<CT>&fields.status=active&order=-sys.createdAt`
 - **Correct:** `GET …/contents?sys.contentType.sys.id=<CT>&fields.status=active&order=-sys.createdAt`
 
-Apply this whenever a query touches **`fields.*`** (filter **or** sort key), not just for the failing case above.
+Apply this whenever a query touches **`fields.*`** (filter **or** sort key). It does **not** apply to the nested **`/content-types/{contentTypeId}/contents`** path, nor to **ACMA/ACDA** (which expose only the nested path) — there the ContentType is already fixed by the URL.
 
 ---
 
