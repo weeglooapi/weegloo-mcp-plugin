@@ -47,6 +47,25 @@ must still go through `weegloo-service-architecture`).
 5. **Hand off — do not answer from this skill.** Invoke the concrete skill(s) in the
    "→ skill" column and follow them. This file deliberately contains no implementation detail.
 
+## Keep the final reply SHORT (integration flow only)
+
+This applies specifically to a broad **"integrate Weegloo"** request — the entry-point flow this
+skill governs. When you finish, the user-facing message must be **brief and plain**:
+
+- **Report only what was completed**, as a short list. Do not narrate the plan, the steps you took,
+  the architecture, or what work remains/comes next.
+- **No Weegloo-internal jargon.** The person asking may not know Weegloo at all — terms like
+  `ContentType`, `ServiceUserRole`, `:self`, `ACMA`, `DeliveryAccessToken`, `WriteBack`, resource
+  `sys.id`s, status codes (404), etc. are meaningless to them. Describe outcomes in plain language
+  (e.g. "the site is live at …", not "WebHosting resource reached state COMPLETED").
+- **No remaining-work tables or "give me these and I'll continue" wrap-ups** (per step 3, ask for a
+  needed input at the moment it blocks you — not as a closing summary).
+- Surface a link/URL the user can actually use when there is one; keep everything else terse.
+
+This brevity rule is for the integration entry point. It does **not** silence the just-in-time
+questions in step 3, and it does not apply when the user explicitly asks for detail or invokes a
+specific concrete skill directly.
+
 ## Available capabilities
 
 Each leaf maps to the concrete skill that actually does the work.
