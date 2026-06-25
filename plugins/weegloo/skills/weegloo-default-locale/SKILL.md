@@ -1,6 +1,6 @@
 ---
 name: weegloo-default-locale
-description: Use when creating or updating Content in any localized or multi-language scenario. Covers localized vs localized-false fields, per-locale buckets, read fallback, mandatory default-locale values on Content create, and the CDA `locale` URL parameter shapes.
+description: Use when creating or updating Content in any localized or multi-language scenario, OR when a read returns undefined/empty fields and you suspect a locale-shape mismatch. Covers localized vs localized-false fields, per-locale buckets, read fallback, mandatory default-locale values on Content create, and the CDA/ACDA `locale` URL parameter shapes. Critically: management (CMA/ACMA) returns fields as per-locale buckets (`fields.x[locale]`) while delivery (CDA/ACDA) flattens to a scalar by default (`fields.x`) — for both list and single-content detail reads — plus the `include.Media` expansion shape. Use when debugging "fields.x[locale] is undefined" against CDA/ACDA.
 ---
 
 # Weegloo - default locale and localized fields
@@ -20,6 +20,7 @@ description: Use when creating or updating Content in any localized or multi-lan
 3. On **read** (e.g. CDA with a `locale` query): a requested locale resolves through **its own `fallbackCode` chain**, *not* automatically to the default. Each **`Locale`** has an **optional `fallbackCode`** (an arbitrary target locale code; chainable). For a field with no value under the requested locale, the server walks `requested -> fallbackCode -> ...` and returns the **first** locale in that chain that holds a value. **If the requested locale has no `fallbackCode` (chain = itself only), a missing value stays empty and does NOT fall back to the default.** The default locale has **no special privilege on read**.
 4. On **write** (**`localized: true`**): the **default locale** entry is **mandatory** when the field is populated. You cannot leave default empty and only set `fr-FR`, `ko-KR`, etc.
 5. **Single locale for the whole product** (**`localized: true`**): put the value **only under the default locale**. Other requested locales resolve to it **only if their `fallbackCode` chain reaches the default**; without that, they read **empty**. Do not assume automatic fallback to the default.
+6. **Read response SHAPE depends on the API plane — this is the #1 source of locale bugs.** The locale *buckets* in points 2-4 are how the **management plane (CMA / ACMA)** returns fields: **`fields.{name}` is ALWAYS a per-locale map**, so you read **`fields.{name}.{locale}`**. The **delivery plane (CDA / ACDA)** is different: by default it **flattens** to one locale, so **`fields.{name}` is the value itself** (a scalar or a Refer object) — indexing it by `[locale]` yields `undefined`. Only **`locale=*`** makes delivery return buckets. So `fields.prompt["en-US"]` is correct against CMA but **wrong** against a default CDA/ACDA read, where it must be `fields.prompt`. See *Management vs delivery* below.
 
 ## Content creation: default locale on every field
 
@@ -49,13 +50,20 @@ Use this when the stored value **never differs by locale**-same logical value fo
 - **Contrast:** **`localized: true`** = per-locale copy (titles, bios); default locale still **required** when you populate the field, plus optional other locales.
 - **CareerResume hindsight:** **`profileImage`** (and similar single global assets) would fit **`localized: false`** on the **resumeProfile** ContentType so editors are not pushed to duplicate the same Media refer across every locale bucket-see **`weegloo-create-content-type`** for where to set the flag in the schema.
 
-## CDA list endpoints - `locale` URL parameter (read shape)
+## Delivery reads (CDA **and** ACDA) - `locale` URL parameter (read shape)
 
-CDA **list** endpoints accept a **`locale`** query parameter that controls **which locale(s)** appear in `fields` **and** the **shape** of `fields` in the response. This applies to **both** Content and Media list endpoints:
+> **Applies to every delivery read, not just lists.** The **`locale`** parameter and the flattening
+> below behave **identically** for **CDA and ACDA**, and for both the **list** endpoint **and the
+> single-content-by-id (detail) GET** (`…/contents/{contentId}`). Do not assume "this is only about
+> CDA lists" — a detail fetch on ACDA flattens exactly the same way. (Confirmed in the CDA content
+> reference: list and single-content reads share one locale shape.)
 
-- **Content lists:**
-  - **`GET /v1/spaces/{spaceId}/contents`**
-  - **`GET /v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**
+Delivery endpoints accept a **`locale`** query parameter that controls **which locale(s)** appear in `fields` **and** the **shape** of `fields` in the response. This applies to Content (list and detail) and Media:
+
+- **Content:**
+  - **`GET /v1/spaces/{spaceId}/contents`** (CDA list)
+  - **`GET /v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`** (CDA/ACDA list)
+  - **`GET /v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`** (CDA/ACDA **detail** — same shape)
 - **Media list:**
   - **`GET /v1/spaces/{spaceId}/medias`**
 
@@ -100,6 +108,52 @@ Example: **`?locale=*`**. The server returns **every locale’s** stored value f
 - **Multi-language UI on one page** (language switcher with no extra fetch, locale picker, admin previews): use **`?locale=*`** and read **`fields.<id>[<localeCode>]`**. Be ready for **missing entries** (no fallback).
 - **`localized: false` fields:** there is no per-locale split to expand-those fields are stored under the **default locale only** (see *`localized: false`* section). Treat the response shape per the API contract; do not expect a multi-locale map for them under `locale=*`.
 - **Pagination, `select`, `order`:** the `locale` choice is **orthogonal**-keep `locale` consistent across `links.next` calls so the response shape does not change mid-iteration (see **`weegloo-list-pagination`** and **`weegloo-api-query-optimization`**).
+
+## Management vs delivery: where to read a field value (avoid the `[locale]` bug)
+
+The single most common locale mistake is reading a **delivery** response with **management**-shaped
+field access (or vice-versa). They are not the same:
+
+| Plane | Endpoint examples | `fields.{name}` shape | How to read |
+|-------|-------------------|-----------------------|-------------|
+| **Management** — CMA / ACMA | `cma.…`, `acma.…` | **always a per-locale bucket** | `fields.{name}[locale]` |
+| **Delivery** — CDA / ACDA (default, `locale` omitted or a code) | `cda.…`, `acda.…` | **flat — the value itself** | `fields.{name}` (do **NOT** index `[locale]`) |
+| **Delivery** with **`locale=*`** | `cda.…?locale=*` | per-locale bucket | `fields.{name}[locale]` |
+
+So code that does `doc.fields.prompt["en-US"]` works on CMA but returns `undefined` on a default
+ACDA read — there the value is at `doc.fields.prompt`. A `localized: false` field follows the same
+plane rule (bucket on management, flat on default delivery).
+
+### Expanded references (`include`) on a delivery read
+
+When you pass **`include`** to expand a `Refer` (e.g. an image field → a Media), the expanded
+resources are returned in a **sibling `include` object on the response** (singular **`include`**,
+not `includes`), keyed by **PascalCase resource type** (e.g. **`include.Media`**). The field on the
+content holds only the reference (`fields.image1.sys.id`); resolve it against `include.Media` by id.
+**The expanded Media's own fields obey the same flattening** — on a default delivery read the file
+URL is at **`media.fields.file.url`**, **not** `media.fields.file[locale].url`. (Read the exact key
+names from the actual response; do not hard-code an assumed casing without checking.)
+
+### Defensive accessor (survives both shapes)
+
+When a helper may run against either plane, or against an unknown `locale` mode, read locale-tolerantly
+instead of assuming one shape:
+
+```js
+// Returns the value whether `fields[name]` is a flat scalar/Refer (delivery default)
+// or a per-locale bucket (CMA/ACMA, or delivery with locale=*).
+function readField(fields, name, locale) {
+  const f = fields && fields[name];
+  if (f == null) return undefined;
+  // bucket only if it's a plain object that actually carries the locale key
+  if (typeof f === "object" && !Array.isArray(f) && !f.sys && (locale in f)) return f[locale];
+  return f; // already flat (scalar, or a Refer object with sys)
+}
+```
+
+This is a guard, not a license to stay vague: still know which plane you are calling (the table
+above) and prefer the correct single shape. The accessor just keeps a wrong assumption from silently
+producing `undefined` everywhere.
 
 ## Why “fallback” does not relax writes
 
