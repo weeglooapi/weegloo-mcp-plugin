@@ -202,6 +202,10 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 
 - **RichText**: value is a **string**. Any string content is accepted (plain text, markdown, HTML — depends on the product). Do NOT send a JSON object (e.g. `{ "type": "doc", "content": [...] }`).
 - **Date**: value is an **ISO 8601 datetime string in UTC** (e.g. `"2026-05-28T00:00:00.000Z"`). Only UTC (`Z` suffix) is accepted. Do NOT send date-only strings (`"2026-05-28"`), timestamps (`1716854400000`), or non-UTC offsets (`+09:00`).
+- **Location**: `{ "latitude": <number>, "longitude": <number> }` — use the **full** keys; **`lat`/`lng`/`lon` are rejected**. Example: `{ "ko-KR": { "latitude": 37.5662, "longitude": 126.9910 } }`.
+- **Refer**: the Refer shape `{ "sys": { "type": "Refer", "id": "<id>", "targetType": "Content" | "Media" } }` — **not** a bare id string.
+
+**The canonical, complete field-value spec lives in the API reference — read it rather than relying on this list:** https://docs.weegloo.com/api/reference/cma/content (the `fields` per-locale map and `Refer` shape; locale-key rules in **`weegloo-default-locale`**). The notes above are only the high-frequency gotchas, not the full spec.
 
 ---
 
