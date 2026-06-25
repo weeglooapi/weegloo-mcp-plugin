@@ -1,6 +1,6 @@
 ---
 name: weegloo-api-query-optimization
-description: Weegloo list APIs - projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call.
+description: Weegloo list APIs - projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call. ALSO covers the master/detail pattern (lightweight list/sidebar + on-click single-Content detail fetch) and resolving a Refer→Media image/file field to a displayable URL — use when building a history list, gallery, inbox, or any list-then-open-item UI.
 ---
 
 # Weegloo - query optimization for list APIs
@@ -122,6 +122,42 @@ Filter syntax (**`sys.id`**, **`sys.id[in]`**, delimiters) is defined per API in
 On **CMA** **`GET .../spaces/{spaceId}/medias`**, add **`fields.file.{locale}.mimeGroups={MimeGroup}`** so the API returns only assets in that **category** (e.g. **`Image`**, **`Video`**, **`Audio`**, **`Code`**)-smaller **`items`** than an unfiltered list. Use the same **`{locale}`** you use for **`fields.file`** (often the space default locale).
 
 **Allowed `MimeGroup` values** and full URL examples: **`weegloo-api-endpoints`** rule → *CMA Media list - filter by `mimeGroups`*.
+
+---
+
+## 6. Master/detail UIs: lightweight list + on-select detail fetch (do NOT render a detail from the list)
+
+§2–§3 optimize **bulk** loading (one list instead of many GETs). They do **NOT** mean "render a
+detail or image view straight from the list response." A **list/sidebar → open an item** UI
+(history list, gallery, inbox, search results → item page) uses the **opposite** split, and getting
+this wrong is a common mistake:
+
+- **List (sidebar): fetch a lightweight projection per row** — `sys.id` plus the human-readable
+  **label field you will display** (e.g. `fields.prompt`, `fields.title`). Use `select` to keep rows
+  small, and **always project and render a meaningful label**, never just an id or a thumbnail. A
+  sidebar/list that shows no title/prompt text is a defect, not an optimization.
+- **Detail (on click): fetch that ONE Content by id, lazily.** Hit the single-Content endpoint for
+  the selected item — `…/content-types/{contentTypeId}/contents/{contentId}` (on ACMA/ACDA always
+  nested under the ContentType; see **`weegloo-api-endpoints`**). This lazy by-id GET is **correct
+  and expected**. The "avoid N GETs" guidance in §3 is about loading a *batch* up front — it is
+  **not** a reason to skip the detail fetch for the *one* item the user actually opened, nor to try
+  to cram every row's full detail into the initial list call.
+
+### Rendering a referenced Media (image / file fields)
+
+A field that points at an asset (e.g. `fields.image1`…`fields.image4`, `fields.file`) is a
+**Refer → Media**, **not** a ready-to-use URL string. To show it you must **resolve the Media to its
+file URL**:
+
+- On the **detail** fetch, expand the reference (`?include=1`) — or follow up with a Media fetch —
+  and read the file URL from the **Media's** `fields.file.{locale}` per-locale bucket (default-locale
+  rules: **`weegloo-default-locale`**). Confirm the Media is deliverable first
+  (**`weegloo-media-lifecycle`**).
+- **Do NOT assume the list response already carries usable image URLs.** List-level expansion is not
+  guaranteed to resolve every Refer→Media into a deliverable URL, and pulling all rows' media up
+  front defeats the lightweight-list goal above. The reliable place to read image/file fields for
+  rendering is the **detail fetch of the selected item** — exactly the per-item
+  `…/contents/{contentId}` call, reading `fields.image1..N` → Media → file URL.
 
 ---
 
