@@ -178,7 +178,7 @@ async function main() {
 
   let token = '';
   let mcpGroup = '';
-  let scope = config.scope ?? 'project';
+  let scope = config.scope ?? 'global';
   let skills = [];
   let rules = [];
 
@@ -261,7 +261,7 @@ async function main() {
 
     scope = await select({
       message: ideKey ? scopeMessages[ideKey] : 'Where would you like to install Skills / Rules?',
-      default: 'project',
+      default: 'global',
       choices: [
         {
           name: ideKey

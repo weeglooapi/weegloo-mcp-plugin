@@ -31,7 +31,7 @@ export const HELP_TEXT = `
     -b, --branch <ref>   Plugin version/branch to install (default: latest)
                          (alias of --ref; also reads WEEGLOO_REF)
     -a, --agent <id>     Target IDE/agent: ${AGENTS.join(' | ')}
-    -l, --location <loc> Install location: ${LOCATIONS.join(' | ')} (default: project)
+    -l, --location <loc> Install location: ${LOCATIONS.join(' | ')} (default: global)
         --mcp <group>    Install the MCP server with group: ${MCP_GROUPS.join(' | ')}
         --no-mcp         Do not install the MCP server
     -t, --token <pat>    Weegloo Personal Access Token (also reads WEEGLOO_TOKEN)
@@ -42,7 +42,7 @@ export const HELP_TEXT = `
     -h, --help           Show this help
 
   Non-interactive defaults: branch=latest, MCP+Skills+Rules on, group=default,
-  location=project, all Skills and Rules selected. --agent is always required,
+  location=global, all Skills and Rules selected. --agent is always required,
   and a token (--token / WEEGLOO_TOKEN) is required whenever MCP is installed.
 `;
 
