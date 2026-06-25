@@ -32,8 +32,6 @@ description: Use before any deploy to Weegloo WebHosting. Static-only (max 100 f
 
 **Weegloo WebHosting has no per-request server or platform-managed runtime env file.** Anything the browser needs (CDA base URL, Space id, locale, Delivery Access Token, etc.) must be supplied by **your build** (e.g. `NEXT_PUBLIC_*` at build time), **separate builds per deploy**, or another **project-defined** pattern. Document the real approach in **`.env.example`** and the project README—see **`weegloo-api-endpoints`** for API bases and token rules.
 
-> **MarketApp packaging — special build-time rules apply.** If this WebHosting may *ever* be packaged into a MarketApp later, the source Space's `sys.id`, `DeliveryAccessToken`, and any other resource `sys.id`s the client code references must be inlined into the build output as **verbatim, intact literal strings** — do not use placeholder syntax, do not hide them behind env-var indirection or runtime concatenation, do not leave them blank "because hard-coding the author's Space looks wrong". Read **`weegloo-marketapp-packaging`** **before** writing build-time config. These rules do not apply to direct deploys (the workflow below).
-
 ---
 
 ## Workflow (deploy)
@@ -79,4 +77,3 @@ description: Use before any deploy to Weegloo WebHosting. Static-only (max 100 f
 ## Related skills
 
 - **Weegloo User login** — admin sign-in (PAT for servers, console FE popup → `postMessage` → `sessionStorage` + CMA `/me` + Space-membership check for browsers): **`weegloo-user-login`**.
-- **MarketApp packaging** — build-time rules for a WebHosting that will (or may) be packaged into a MarketApp AppBundle (inline Space `sys.id` / `DeliveryAccessToken` / resource ids as verbatim literals): **`weegloo-marketapp-packaging`**.
