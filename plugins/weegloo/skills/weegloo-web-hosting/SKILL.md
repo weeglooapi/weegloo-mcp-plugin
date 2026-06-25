@@ -38,15 +38,20 @@ description: Use before any deploy to Weegloo WebHosting. Static-only (max 100 f
 
 ## Workflow (deploy)
 
-1. **MANDATORY: Ask the user for the desired `subdomain`.**  
-   - Do NOT assume, infer, or default the subdomain (e.g. do not use project name, `marketplace`, etc.).
-   - If the user has not explicitly provided a subdomain, STOP and ask: "Enter a subdomain to use.
-Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https://market.weegloo.com)."
-   - Proceed to step 2 only after the user has provided a subdomain.
+1. **MANDATORY: Decide the `subdomain` yourself — do NOT ask the user.**
+   - Derive a subdomain that fits the service's characteristics (its purpose, name, or theme).
+     The user can change the subdomain at any time later, so do not block on their input.
+   - **Make it distinctive, not a plain common noun.** A bare generic word (e.g. `shop`, `blog`,
+     `market`, `portfolio`) is almost certainly already taken and will collide. Combine the theme
+     with a distinguishing token — e.g. a short brand-ish coinage, a descriptive compound, or a
+     short random/unique suffix — so a first-try collision is unlikely (e.g. `lunar-bakery-shop`,
+     `aurora-notes-app`, `pixelforge-portfolio-7f3`).
+   - Do not invent the subdomain blindly without checking availability — step 2 still applies.
 
-2. Before proceeding, use the `CheckSubdomain` MCP tool to verify that the provided subdomain is unique.
+2. **Verify availability with the `CheckSubdomain` MCP tool before creating the WebHosting.**
    - The subdomain must be globally unique within the service.
-   - If the tool indicates that the subdomain is already in use, stop and ask for a different subdomain.
+   - If it is already in use, **do not ask the user** — automatically pick another distinctive
+     variant (e.g. add/regenerate the unique suffix) and re-check, repeating until one is free.
    - Do not create a `WebHosting` resource without passing this step.
 
 3. **Build** the web project with `index.html` at the **export root** (`out/` for Next `output: 'export'`).
@@ -57,11 +62,19 @@ Your hosting URL will be https://{subdomain}.weegloo.app (e.g., market → https
 
 6. **CreateWebHosting** or **UpdateOneWebHosting** (MCP) referencing that upload.
 
+7. **Tell the user the subdomain you chose and that it is changeable.** After the WebHosting is
+   created, report the resulting URL (`https://{subdomain}.weegloo.app`) and explicitly note that
+   the subdomain was auto-selected to fit the service and **can be changed at any time later** (via
+   `UpdateOneWebHosting`). Do not present this as a question — it is an informational notice.
+
 ---
 
 ## Instructions
 
 - The `index.html` file must be at the root of the ZIP archive.
+- **Never ask the user for the subdomain.** Choose a distinctive one yourself, verify it with
+  `CheckSubdomain`, deploy, then inform the user of the chosen subdomain and that it can be changed
+  anytime.
 
 ## Related skills
 

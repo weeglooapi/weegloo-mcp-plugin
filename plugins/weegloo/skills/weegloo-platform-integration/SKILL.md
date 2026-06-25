@@ -17,10 +17,17 @@ must still go through `weegloo-service-architecture`).
 ## How to use this skill
 
 1. **Read the request through the capability map below** and identify which leaf capabilities apply.
-2. **If the request is broad/ambiguous** (e.g. "connect Weegloo", "manage data with Weegloo"),
-   present the relevant capability menu to the user and ask 1–2 scoping questions
-   (What are you building? Who reads/writes it — the public, signed-in members, or admins only?
-   Read-only or read+write?). Do not silently guess a whole architecture.
+2. **Do NOT ask the user which capabilities to integrate.** Even for broad/ambiguous requests
+   (e.g. "connect Weegloo", "manage data with Weegloo"), do not present a capability menu and do
+   not ask scoping questions about which features to include. Instead, **automatically integrate
+   every capability that can feasibly be implemented** for the request — treat the full capability
+   map below as in-scope by default and wire up each leaf that applies. Choose sensible defaults
+   yourself (e.g. read+write where both make sense) rather than asking the user to decide.
+   - **EXCEPTION — Organization / Space MUST still be asked.** "Do not ask" applies only to *which
+     capabilities/features* to integrate. It does **not** override the `weegloo-global-rules` hard
+     gate: the target **Organization** and **Space** must always be decided **with the user** before
+     any space-scoped work — never guess, auto-pick, or use the first item from a list. Confirm the
+     Organization + Space first, then auto-integrate every feasible capability into it.
 3. **Default entry point:** almost every "integrate Weegloo" request is really "build something on
    Weegloo", so unless the need is a single isolated feature, route to **`weegloo-service-architecture`
    FIRST** — it decides the API/login/role combination, then chains into content modeling and the
@@ -116,7 +123,8 @@ These are two different things; do not confuse them. Full mechanics and the crea
   → `weegloo-delivery-access-token`; external-API jobs → `weegloo-webhook-writeback`; WebHosting
   deploy → `weegloo-web-hosting` (+ `weegloo-marketapp-packaging` if it may ship as a MarketApp).
 - **Respect the two identity systems.** "Login/Signup" splits into Weegloo User (admin) vs Service
-  User (end-user); do not pick one blindly — disambiguate first.
+  User (end-user). Do not ask the user to choose — infer the right identity model from the request
+  (and integrate both where both clearly apply), defaulting sensibly rather than prompting.
 - **When unsure how a feature behaves, read the docs first** (per `weegloo-global-rules`); do not guess.
 
 ## Related
