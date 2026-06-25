@@ -16,8 +16,42 @@ must still go through `weegloo-service-architecture`).
 
 ## How to use this skill
 
-1. **Read the request through the capability map below** and identify which leaf capabilities apply.
-2. **Do NOT ask the user which capabilities to integrate.** Even for broad/ambiguous requests
+1. **FIRST, reverse-engineer the service intent from the existing frontend — never skip this.**
+   "Integrate Weegloo" almost always means "wire Weegloo into an app whose UI and code already
+   exist." Treat that **UI + code as the spec** for what the backend must provide, and read it
+   systematically *before* routing or creating anything. The single most common failure is not
+   grasping the service's full intent from the frontend — work through these in order:
+   - **a. What features does the product need?** Inspect pages/routes, components, forms, buttons,
+     lists, modals, app state, mock/seed/fixture data, hard-coded sample values, `fetch`/API stubs,
+     `config`/env placeholders, and comments/TODOs. From those, infer the capabilities in play:
+     auth (login/signup), per-user vs shared data, list+detail views, search/filter, file
+     upload/download, **calls to an external API** (e.g. an AI/LLM/image endpoint behind a key),
+     public vs members-only sharing, deploy/hosting. Map each to the capability list below.
+   - **b. Which Weegloo resources does each feature imply?** e.g. a Google sign-in button + a
+     personal "history" list → ServiceLogin + ServiceUser + a per-user-scoped ContentType; a
+     "generate image from a prompt" flow that calls a third-party API → a job ContentType +
+     Webhook/WriteBack; an image grid → Media + delivery.
+   - **c. Design each ContentType FROM the UI, not from a guess.** Read the actual inputs and
+     outputs the UI binds to and derive fields, types, and validations: each form control → a field;
+     a fixed set of choices (a ratio/size selector, status chips, a category dropdown) → an
+     enum/allowed-values validation whose options **exactly match the UI's**; required inputs →
+     required fields; observe max lengths, number ranges, referenced assets (→ Refer/Media), and
+     per-item ownership (per-user → `:self`). Mismatched validations silently break writes, so align
+     them to the code. Then build it via `weegloo-create-content-type`.
+   - **d. Plan the per-page API calls so each screen renders as the user intended.** For every view,
+     decide exactly which endpoint and shape to call and when — list vs on-click **detail** fetch,
+     reference expansion to resolve a Media field into a real image URL, publish/poll timing. A
+     list/sidebar shows a lightweight label; opening an item fetches its detail (see
+     `weegloo-api-query-optimization`). The test is: would a real user see what the UI promises?
+   - **Fill gaps by reasoning — do not model only what is literally spelled out.** Frontends are
+     usually partial: mock data, TODOs, a field shown but never wired, an action with no backend.
+     When the UI implies something the code doesn't fully express, infer the **complete, sensible**
+     design and build that — capture the service's *intent*, not just its current stubs. Prefer a
+     reasoned default over a question; reserve questions for the unavoidable user-only inputs
+     (secrets/credentials and the Organization/Space choice — see steps 4–5).
+2. **Read the request through the capability map below** and confirm which leaf capabilities apply,
+   using what step 1 surfaced.
+3. **Do NOT ask the user which capabilities to integrate.** Even for broad/ambiguous requests
    (e.g. "connect Weegloo", "manage data with Weegloo"), do not present a capability menu and do
    not ask scoping questions about which features to include. Instead, **automatically integrate
    every capability that can feasibly be implemented** for the request — treat the full capability
@@ -28,7 +62,7 @@ must still go through `weegloo-service-architecture`).
      gate: the target **Organization** and **Space** must always be decided **with the user** before
      any space-scoped work — never guess, auto-pick, or use the first item from a list. Confirm the
      Organization + Space first, then auto-integrate every feasible capability into it.
-3. **Ask for required external inputs JUST-IN-TIME — never batch them into a final wrap-up.**
+4. **Ask for required external inputs JUST-IN-TIME — never batch them into a final wrap-up.**
    Some capabilities need a value only the user can supply (e.g. a Google OAuth Client ID/Secret
    for ServiceLogin, a third-party API key for a Webhook). Do **not** plow through everything and
    then conclude with a summary table that asks the user to "provide all of these and I'll finish"
@@ -38,13 +72,13 @@ must still go through `weegloo-service-architecture`).
    at the exact point it blocks the next concrete action, and ask only for what that step needs.
    - Do **not** defer a needed secret/credential just to keep working on other parts — ask when it
      is needed so the flow stays interactive, not a deferred batch of homework for the user.
-   - This does not reintroduce capability menus or scoping questions (step 2 still holds). It only
+   - This does not reintroduce capability menus or scoping questions (step 3 still holds). It only
      governs *how* you collect the unavoidable per-capability inputs: incrementally, in context.
-4. **Default entry point:** almost every "integrate Weegloo" request is really "build something on
+5. **Default entry point:** almost every "integrate Weegloo" request is really "build something on
    Weegloo", so unless the need is a single isolated feature, route to **`weegloo-service-architecture`
    FIRST** — it decides the API/login/role combination, then chains into content modeling and the
    rest. Do not bypass it.
-5. **Hand off — do not answer from this skill.** Invoke the concrete skill(s) in the
+6. **Hand off — do not answer from this skill.** Invoke the concrete skill(s) in the
    "→ skill" column and follow them. This file deliberately contains no implementation detail.
 
 ## Keep the final reply SHORT (integration flow only)
@@ -58,12 +92,12 @@ skill governs. When you finish, the user-facing message must be **brief and plai
   `ContentType`, `ServiceUserRole`, `:self`, `ACMA`, `DeliveryAccessToken`, `WriteBack`, resource
   `sys.id`s, status codes (404), etc. are meaningless to them. Describe outcomes in plain language
   (e.g. "the site is live at …", not "WebHosting resource reached state COMPLETED").
-- **No remaining-work tables or "give me these and I'll continue" wrap-ups** (per step 3, ask for a
+- **No remaining-work tables or "give me these and I'll continue" wrap-ups** (per step 4, ask for a
   needed input at the moment it blocks you — not as a closing summary).
 - Surface a link/URL the user can actually use when there is one; keep everything else terse.
 
 This brevity rule is for the integration entry point. It does **not** silence the just-in-time
-questions in step 3, and it does not apply when the user explicitly asks for detail or invokes a
+questions in step 4, and it does not apply when the user explicitly asks for detail or invokes a
 specific concrete skill directly.
 
 ## Available capabilities
@@ -146,6 +180,11 @@ These are two different things; do not confuse them. Full mechanics and the crea
 ## Hard rules
 
 - **This skill never implements** — it identifies and routes. The pointed-to skill does the work.
+- **Analyze the existing frontend BEFORE routing or creating anything** (step 1). Derive features,
+  required resources, ContentType fields/validations, and per-page API calls from the actual UI and
+  code — and fill the inevitable gaps by reasoning about the service's intent, not by modeling only
+  the literal stubs. Do not design from the user's request sentence alone — base every decision on
+  the analyzed frontend (UI + code), treating that as the real spec.
 - **Collect required inputs just-in-time, never as a closing batch.** When a step needs a
   user-only value (OAuth credentials, API keys, etc.), stop and ask for that one value at that
   point, then continue. Do not finish with a summary that hands the user a list of secrets to
