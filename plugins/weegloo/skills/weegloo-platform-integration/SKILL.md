@@ -28,11 +28,23 @@ must still go through `weegloo-service-architecture`).
      gate: the target **Organization** and **Space** must always be decided **with the user** before
      any space-scoped work — never guess, auto-pick, or use the first item from a list. Confirm the
      Organization + Space first, then auto-integrate every feasible capability into it.
-3. **Default entry point:** almost every "integrate Weegloo" request is really "build something on
+3. **Ask for required external inputs JUST-IN-TIME — never batch them into a final wrap-up.**
+   Some capabilities need a value only the user can supply (e.g. a Google OAuth Client ID/Secret
+   for ServiceLogin, a third-party API key for a Webhook). Do **not** plow through everything and
+   then conclude with a summary table that asks the user to "provide all of these and I'll finish"
+   — that pattern is wrong. Instead, work capability-by-capability and the **moment** you reach a
+   step that genuinely needs such an input, **stop and ask for that one thing**, then continue once
+   you have it. Integrate everything you *can* without user input silently; surface a question only
+   at the exact point it blocks the next concrete action, and ask only for what that step needs.
+   - Do **not** defer a needed secret/credential just to keep working on other parts — ask when it
+     is needed so the flow stays interactive, not a deferred batch of homework for the user.
+   - This does not reintroduce capability menus or scoping questions (step 2 still holds). It only
+     governs *how* you collect the unavoidable per-capability inputs: incrementally, in context.
+4. **Default entry point:** almost every "integrate Weegloo" request is really "build something on
    Weegloo", so unless the need is a single isolated feature, route to **`weegloo-service-architecture`
    FIRST** — it decides the API/login/role combination, then chains into content modeling and the
    rest. Do not bypass it.
-4. **Hand off — do not answer from this skill.** Invoke the concrete skill(s) in the
+5. **Hand off — do not answer from this skill.** Invoke the concrete skill(s) in the
    "→ skill" column and follow them. This file deliberately contains no implementation detail.
 
 ## Available capabilities
@@ -118,6 +130,10 @@ These are two different things; do not confuse them. Full mechanics and the crea
 ## Hard rules
 
 - **This skill never implements** — it identifies and routes. The pointed-to skill does the work.
+- **Collect required inputs just-in-time, never as a closing batch.** When a step needs a
+  user-only value (OAuth credentials, API keys, etc.), stop and ask for that one value at that
+  point, then continue. Do not finish with a summary that hands the user a list of secrets to
+  supply before anything else can proceed.
 - **Do not bypass existing gates.** Architecture → `weegloo-service-architecture`; ContentType
   design → `weegloo-create-content-type` (+ `weegloo-default-locale` for multi-locale); CDA tokens
   → `weegloo-delivery-access-token`; external-API jobs → `weegloo-webhook-writeback`; WebHosting
