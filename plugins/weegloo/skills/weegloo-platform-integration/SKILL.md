@@ -27,6 +27,11 @@ must still go through `weegloo-service-architecture`).
      auth (login/signup), per-user vs shared data, list+detail views, search/filter, file
      upload/download, **calls to an external API** (e.g. an AI/LLM/image endpoint behind a key),
      public vs members-only sharing, deploy/hosting. Map each to the capability list below.
+     An **owner / admin / staff / dashboard / back-office** surface in the UI (e.g. a "manage
+     bookings", "settings", "moderation", or full-data overview screen, including a prototype's
+     `role`-switch "admin" mode) is itself a capability — an **in-app admin login** for a Weegloo
+     User (`weegloo-user-login`). Recognize it and auto-integrate it like any other leaf; do **not**
+     silently assume "the team will use the Weegloo Console."
    - **b. Which Weegloo resources does each feature imply?** e.g. a Google sign-in button + a
      personal "history" list → ServiceLogin + ServiceUser + a per-user-scoped ContentType; a
      "generate image from a prompt" flow that calls a third-party API → a job ContentType +
@@ -110,6 +115,14 @@ Each leaf maps to the concrete skill that actually does the work.
     If unsure which, route to `weegloo-service-architecture` to disambiguate.
   - **Signup** (open end-user sign-up) → `weegloo-service-login`
   - **Social Login** (Google OAuth, browser SDK / wire protocol) → `weegloo-service-login-sdk`
+  - **Admin / Owner / Staff surface** (an in-product dashboard, settings, moderation, or
+    back-office screen — anything where staff read or edit *all* members' data, not just their own)
+    → `weegloo-user-login` (console FE login popup → CMA, an **in-app admin UI**). **Auto-integrate
+    by default**, exactly like any other capability: it needs **no** user-supplied secret (the admin
+    signs in against the live Weegloo console), so it adds **no** question. Do **not** silently
+    downgrade an admin/owner surface to "managed in the Weegloo Console" — build it in-app unless the
+    user **explicitly** asks for Console-only. Cross-member reads/edits belong here (CMA), **not** on
+    a public CDA token or per-member ACDA.
 - **Data Management**
   - **User Data** (per-user / private, member-owned) → `weegloo-service-architecture` +
     `weegloo-create-content-type` + `weegloo-space-role` (`createdBy :self` scoping)
@@ -147,6 +160,7 @@ Each leaf maps to the concrete skill that actually does the work.
 | Login                        | `weegloo-user-login` (admin) / `weegloo-service-login` (end-user); disambiguate via `weegloo-service-architecture` |
 | Signup                       | `weegloo-service-login`                                                   |
 | Social Login                 | `weegloo-service-login-sdk`                                               |
+| Admin / Owner / Staff UI (dashboard, settings, moderation, all-member data) | `weegloo-user-login` (in-app admin via console FE popup → CMA) |
 | User Data (private/per-user) | `weegloo-service-architecture` + `weegloo-create-content-type` + `weegloo-space-role` |
 | Application Data             | `weegloo-create-content-type` + `weegloo-cma-json-patch` + `weegloo-cda-publish` |
 | Search                       | `weegloo-api-query-optimization` + `weegloo-list-pagination`             |
