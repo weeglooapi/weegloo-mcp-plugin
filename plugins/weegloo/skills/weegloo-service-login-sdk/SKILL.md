@@ -7,6 +7,8 @@ description: How to add Weegloo ServiceLogin (Google OAuth 2.0) sign-in to a bro
 
 This skill covers the **implementation layer** of Weegloo ServiceLogin: the official browser SDK, the exact HTTP endpoints on `auth.weegloo.com`, and the browser-specific gotchas that bite first-time integrators.
 
+> **Prerequisite gate:** this is the *implementation* skill. If you have **not** yet invoked **`weegloo-service-login`** (the conceptual model — `ServiceLogin` / `ServiceUserRole` / `ServiceUser`, `defaultRole` / `roleOverride` / `isAdmin`, ACMA/ACDA scope, the CMA/CDA token boundary), **read it first**. Landing here for a concrete question (e.g. "what redirect URI?") does **not** mean the design decisions are settled — do not create a `ServiceLogin` / `ServiceUserRole` having only read this skill.
+
 For the **conceptual model** - what `ServiceLogin` / `ServiceUserRole` / `ServiceUser` are, how `roleOverride` and `isAdmin` work, ACMA/ACDA scope rules - see the **`weegloo-service-login`** skill.
 
 For Weegloo base-URL conventions and the vendor JSON media type - see the **`weegloo-api-endpoints`** rule.
@@ -178,16 +180,27 @@ After sign-in, to load the signed-in **`ServiceUser`** (same role as **CMA** **`
 
 Detail: **`weegloo-service-login`** skill and **`weegloo-api-endpoints`** rule.
 
+### G. Two URLs, two lifetimes — the Google redirect URI is deploy-independent; `callbackUrl` is not
+
+A first integrator wiring an **app that is not deployed yet** routinely stalls on "which URL do I give Google?" — because the OAuth flow has **two** URLs that depend on different things:
+
+| URL | Depends on the app's deploy address? | Set it when |
+|---|---|---|
+| **Google "Authorized redirect URIs"** = `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` | **No** — it always points at `auth.weegloo.com` with your `spaceId` + provider | **Now.** It is fully known the moment the Space and provider exist; nothing about it changes after you deploy. |
+| **`ServiceLogin.callbackUrl`** = a page on **your product** that receives `?exchangeToken=...` | **Yes** — it is your app's own origin/path | **After the deploy URL is known.** Until then use a placeholder and patch it (and re-run codegen / config) once the subdomain is final. |
+
+So the deploy chicken-and-egg is only apparent: you can **always** finish the Google side and create the `ServiceLogin` immediately (placeholder `callbackUrl`), then update only `callbackUrl` post-deploy via `cma_UpdateOneServiceLogin` / `cma_PatchOneServiceLogin`. Do **not** block ServiceLogin creation on having a deployed URL, and do **not** put your app's `callbackUrl` into Google's redirect-URI field (that is pitfall **A** again).
+
 ## Configuration responsibilities (Google Cloud + Weegloo Console)
 
 When wiring up a new `ServiceLogin` for a Space, an integrator must:
 
 1. **Google Cloud Console → OAuth client:**
-   - Authorized redirect URI: `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` (note the `/code/` segment - this URI is hit by Google → Weegloo, not by the browser).
+   - Authorized redirect URI: `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` (note the `/code/` segment - this URI is hit by Google → Weegloo, not by the browser). **Deploy-independent — set it now** (see pitfall **G**).
 2. **Weegloo Console → ServiceLogin:**
    - `clientId` / `clientSecret` from the Google OAuth client above.
    - `defaultRole` → `Refer` to a least-privilege `ServiceUserRole` (create it first).
-   - `callbackUrl` → a URL on **your product** that the SDK can intercept (Weegloo will redirect the browser there with `?exchangeToken=...`).
+   - `callbackUrl` → a URL on **your product** that the SDK can intercept (Weegloo will redirect the browser there with `?exchangeToken=...`). **Deploy-dependent** — if the app is not deployed yet, set a placeholder and patch it after deploy (pitfall **G**).
 3. **Product code:** call the SDK's `auth.handleCallback()` on the callback URL page. Do not roll your own exchange unless you cannot use the SDK.
 
 ## When the SDK cannot be used
