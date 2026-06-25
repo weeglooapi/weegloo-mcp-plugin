@@ -65,6 +65,18 @@ description: Use before any deploy to Weegloo WebHosting. Static-only (max 100 f
    the subdomain was auto-selected to fit the service and **can be changed at any time later** (via
    `UpdateOneWebHosting`). Do not present this as a question — it is an informational notice.
 
+> **Hosting domain is `.weegloo.app`, NOT `.weegloo.com`.** Do not assume `.com`. Always read the
+> actual host from the **`url`** field of the `CreateWebHosting` / `GetOneWebHosting` response —
+> don't construct it by hand.
+>
+> **If the deployed app uses ServiceLogin (Google OAuth), align the callback to this real host:**
+> after deploy, set **`ServiceLogin.callbackUrl`** to the WebHosting `url` (e.g.
+> `https://{subdomain}.weegloo.app/`) and register the Google **Authorized redirect URI**
+> `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google`. Setting `callbackUrl` to
+> a guessed `.com` host breaks login. If you must create the `ServiceLogin` before the URL is known,
+> update `callbackUrl` once the WebHosting `url` is returned (full PUT `cma_UpdateOneServiceLogin`;
+> note `providers` is preserved and need not be resent). See `weegloo-service-login-sdk`.
+
 ---
 
 ## Instructions

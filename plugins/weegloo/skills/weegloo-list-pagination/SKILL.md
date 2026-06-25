@@ -33,6 +33,7 @@ Values are typically **relative** paths starting with **`/v1/...`** (not absolut
 ## How to paginate
 
 1. **First request:** call the list endpoint with your desired **`limit`**, **`order`**, filters, **`select`**, etc. (see OpenAPI - base URLs in **`weegloo-api-endpoints`**).  
+   - **`limit` max is 100 (default 15)** on every list endpoint; a larger value is rejected. This is the whole reason pagination exists: to read more than 100, **page through `links.next`** — never bump `limit` to 200/500/1000. The cap is enforced on the raw HTTP API, so clamp it in application code too. (Full param reference: https://docs.weegloo.com/api/reference/common/query-parameters)
    - **Media (CMA):** to restrict e.g. to images or videos, add **`fields.file.{locale}.mimeGroups={MimeGroup}`** on this first URL (allowed values and examples: **`weegloo-api-endpoints`** rule → *CMA Media list - filter by mimeGroups*).
 2. **Read** `items` (and optionally `totalCount`) from the JSON body.
 3. **Next page:** if **`links.next`** is present, issue **GET** to  

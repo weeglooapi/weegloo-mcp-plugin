@@ -70,13 +70,11 @@ rules:
 
   - section: Resource Search
     items:
-      - When searching a resource list, the following request parameters can be used:
-          - limit: The number of items to return per list request.
-          - skip: The number of items to skip before starting to return results in a list request.
-          - order: The order in which the list of items is sorted. Multiple fields can be separated by commas for multi-level ordering (e.g., order=sys.createdAt,sys.id). If the field name starts with 'fields.', locale information (e.g., order=fields.title.en-US) must be included.
-          - include: Include related resources. For example, to retrieve the creator (createdBy) or other related user information, set include=1. Use include=1 when the user asks who created it or requests additional details.
-          - select: Comma-separated string of fields to include (e.g., select=sys.id,sys.createdAt) or exclude (e.g., select=-sys.id,-sys.createdAt) from the result; do not mix inclusion and exclusion, each element is treated as a string.
-       - Do NOT use `skip` for pagination. Use cursor-based pagination via `links.next` and `links.prev` instead (see Pagination Handling).
+      - List endpoints share common query params — `limit`, `skip`, `order`, `include`, `select`, `filter`. **Shapes, defaults, and examples are canonical at https://docs.weegloo.com/api/reference/common/query-parameters — read it rather than guessing.**
+      - Tripwires for application code (enforced server-side, easy to get wrong):
+          - `limit`: **hard max 100** — a larger value is rejected. To read more, page via `links.next`; never hardcode 200/500/1000.
+          - `skip`: do NOT use for paging — use cursors (`next`/`prev`, see Pagination Handling).
+          - `include=1` resolves related resources (e.g. `createdBy`); `select` projects fields — see the reference above.
 
   - section: Pagination Handling
     items:
@@ -104,6 +102,5 @@ rules:
 
   - section: Filter Parameters (API List Endpoints)
     items:
-      - Filter conditions are sent as direct query parameters, NOT wrapped in filter[].
-      - Correct: name[prefix]=value. Wrong: filter[name[prefix]]=value.
-      - Format: {fieldName}[{op}]={value}. Operators: eq, ne, prefix, match, gt, gte, lt, lte etc...
+      - Filters are direct query params (NOT wrapped in `filter[]`), e.g. `name[prefix]=value`. **Format, the full operator set, and per-field-type support are canonical at https://docs.weegloo.com/api/reference/common/query-parameters — read it rather than guessing operators** (an unsupported operator → `WEB400006`).
+      - **Tripwire — Refer fields:** can't filter Content by a Refer field's target via `fields.<refer>.sys.id[eq]` (`WEB400006`). Use `sys.id[in]=…` (`weegloo-api-query-optimization`) or fetch the set and group client-side.
