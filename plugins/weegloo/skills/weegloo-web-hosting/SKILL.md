@@ -8,6 +8,11 @@ description: Use before any deploy to Weegloo WebHosting. Static-only (max 100 f
 ## When to use
 
 - When deploying a website via Weegloo WebHosting (MCP upload + WebHosting resource).
+- **Deploy is the default finish for an "integrate Weegloo" web app.** When the integration target is
+  a runnable static/SPA site and the user has **not** named another host, deploying it here — and
+  reporting the live `…weegloo.app` URL — is part of *completing* the integration, not an optional
+  extra. **Do not leave the app running only locally.** Skip the deploy only if the user specified
+  another host, or the app genuinely cannot build to a static export.
 
 ## MANDATORY: MCP Tools Only
 
