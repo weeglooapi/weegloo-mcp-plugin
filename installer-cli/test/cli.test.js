@@ -11,9 +11,9 @@ function resolve(argv, { env = {}, isTTY = true } = {}) {
 // ── parsing ───────────────────────────────────────────────────────────────
 
 test('parseCliArgs: short aliases and booleans', () => {
-  const v = parseCliArgs(['-b', '1.0.2', '-a', 'claude', '-l', 'global', '-y', '-d']);
+  const v = parseCliArgs(['-b', '1.0.2', '-a', 'claude-cli', '-l', 'global', '-y', '-d']);
   assert.deepEqual(v.branch, ['1.0.2']);
-  assert.equal(v.agent, 'claude');
+  assert.equal(v.agent, 'claude-cli');
   assert.equal(v.location, 'global');
   assert.equal(v.yes, true);
   assert.equal(v['all-branches'], true);
@@ -41,11 +41,11 @@ test('parseCliArgs: --mcp requires a value (missing / flag-like value both throw
 // ── happy-path resolution ───────────────────────────────────────────────────
 
 test('resolveConfig: fully non-interactive MCP install needs only agent + token', () => {
-  const { errors, config } = resolve(['-y', '-a', 'claude'], { env: { WEEGLOO_TOKEN: 'pat' } });
+  const { errors, config } = resolve(['-y', '-a', 'claude-cli'], { env: { WEEGLOO_TOKEN: 'pat' } });
   assert.deepEqual(errors, []);
   assert.equal(config.nonInteractive, true);
   assert.equal(config.pluginRef, 'latest'); // baked-in default, no picker
-  assert.equal(config.agent, 'claude');
+  assert.equal(config.agent, 'claude-cli');
   assert.equal(config.token, 'pat');
   assert.equal(config.installMcp, null); // unset ⇒ defaults to on downstream
   assert.equal(config.installSkillsRules, null);
@@ -111,13 +111,13 @@ test('resolveConfig: non-interactive requires --agent', () => {
 });
 
 test('resolveConfig: non-interactive + MCP needs a token', () => {
-  assert.ok(resolve(['-y', '-a', 'claude']).errors.some((e) => /Personal Access Token is required/.test(e)));
+  assert.ok(resolve(['-y', '-a', 'claude-cli']).errors.some((e) => /Personal Access Token is required/.test(e)));
   // --no-mcp removes the requirement
-  assert.deepEqual(resolve(['-y', '-a', 'claude', '--no-mcp']).errors, []);
+  assert.deepEqual(resolve(['-y', '-a', 'claude-cli', '--no-mcp']).errors, []);
 });
 
 test('resolveConfig: non-TTY auto-enables non-interactive (same requirements)', () => {
-  const { config, errors } = resolve(['-a', 'claude', '--no-mcp'], { isTTY: false });
+  const { config, errors } = resolve(['-a', 'claude-cli', '--no-mcp'], { isTTY: false });
   assert.equal(config.nonInteractive, true);
   assert.deepEqual(errors, []);
   // missing agent under non-TTY still errors

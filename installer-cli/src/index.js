@@ -125,7 +125,7 @@ async function main() {
       message: 'Select your IDE:',
       choices: [
         { name: 'Cursor', value: 'cursor' },
-        { name: 'Claude Code', value: 'claude' },
+        { name: 'Claude Code (CLI)', value: 'claude-cli' },
         { name: 'Claude Desktop', value: 'claude-desktop' },
         { name: 'Antigravity', value: 'antigravity' },
         { name: 'Codex', value: 'codex' },
@@ -255,12 +255,12 @@ async function main() {
 
   const needsScopePrompt =
     installSkillsRules ||
-    ((ide === 'codex' || ide === 'cursor' || ide === 'claude') && installMcp);
+    ((ide === 'codex' || ide === 'cursor' || ide === 'claude-cli') && installMcp);
   if (config.scope == null && needsScopePrompt && !config.nonInteractive) {
     const scopeMessages = {
       codex: 'Where would you like to install Codex configuration (MCP / skills / rules)?',
       cursor: 'Where would you like to install Cursor configuration (MCP / skills / rules)?',
-      claude: 'Where would you like to install Claude Code configuration (MCP / skills / rules)?',
+      'claude-cli': 'Where would you like to install Claude Code (CLI) configuration (MCP / skills / rules)?',
       // Antigravity MCP is always written to ~/.gemini/antigravity (scope-independent),
       // so the scope choice only affects skills / rules.
       antigravity: 'Where would you like to install Antigravity skills / rules?',
@@ -268,16 +268,16 @@ async function main() {
     const projectHints = {
       codex: '(./.codex/ in current folder)',
       cursor: '(./.cursor/ in current folder)',
-      claude: '(./.mcp.json and ./.claude/ in current folder)',
+      'claude-cli': '(./.mcp.json and ./.claude/ in current folder)',
       antigravity: '(./.agent/ in current folder)',
     };
     const globalHints = {
       codex: '(~/.codex/)',
       cursor: '(Cursor app data mcp.json)',
-      claude: '(~/.claude.json)',
+      'claude-cli': '(~/.claude.json)',
       antigravity: '(~/.gemini/antigravity/ and GEMINI.md)',
     };
-    const ideKey = ['codex', 'cursor', 'claude', 'antigravity'].includes(ide) ? ide : null;
+    const ideKey = ['codex', 'cursor', 'claude-cli', 'antigravity'].includes(ide) ? ide : null;
 
     scope = await select({
       message: ideKey ? scopeMessages[ideKey] : 'Where would you like to install Skills / Rules?',
@@ -357,7 +357,7 @@ async function main() {
 
   if (ide === 'cursor') {
     await installCursor(answers);
-  } else if (ide === 'claude') {
+  } else if (ide === 'claude-cli') {
     await installClaude(answers);
   } else if (ide === 'claude-desktop') {
     await installClaudeDesktop(answers);

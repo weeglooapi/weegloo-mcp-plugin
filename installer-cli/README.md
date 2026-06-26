@@ -22,7 +22,7 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 | Option | Meaning |
 |---|---|
 | `-b, --branch <ref>` | Plugin version/branch to install (default: `latest`). Alias of `--ref`; also reads `WEEGLOO_REF`. |
-| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `claude-desktop` \| `antigravity` \| `codex`. (`claude` = Claude Code CLI; `claude-desktop` = the Claude Desktop app.) |
+| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude-cli` \| `claude-desktop` \| `antigravity` \| `codex`. (`claude-cli` = Claude Code CLI; `claude-desktop` = the Claude Desktop app.) |
 | `-l, --location <loc>` | Install location: `project` \| `global` (default: `global`). |
 | `--mcp <group>` | Install the MCP server with group: `default` \| `core` \| `extra` \| `all`. |
 | `--no-mcp` | Do not install the MCP server. |
@@ -42,11 +42,11 @@ Triggered by `-y` **or** a non-TTY environment (piped, CI, or an agent). In this
 - Conflicting or invalid flags (e.g. `--mcp` together with `--no-mcp`, nothing left to install, or an unknown enum value) also exit with a clear error.
 
 ```bash
-# Fully non-interactive: MCP + Skills + Rules for Claude Code
-WEEGLOO_TOKEN=… npx weegloo@latest -y --agent claude
+# Fully non-interactive: MCP + Skills + Rules for Claude Code (CLI)
+WEEGLOO_TOKEN=… npx weegloo@latest -y --agent claude-cli
 
 # Skills/Rules only, no MCP (no token needed)
-npx weegloo@latest -y --agent claude --no-mcp
+npx weegloo@latest -y --agent claude-cli --no-mcp
 
 # Pre-fill a couple of choices, get prompted for the rest (interactive)
 npx weegloo@latest --agent cursor --location global
@@ -92,7 +92,7 @@ In interactive mode the CLI asks the following questions in order (a flag from [
 | Skills | `~/.cursor/skills/<skill-name>/` | `.cursor/skills/<skill-name>/` |
 | Rules | `~/.cursor/rules/<rule-name>.mdc` | `.cursor/rules/<rule-name>.mdc` |
 
-### Claude Code
+### Claude Code (CLI)
 | Item | Path (Global) | Path (Project) |
 |------|---------------|----------------|
 | MCP config | `~/.claude.json` | `.mcp.json` (project root) |

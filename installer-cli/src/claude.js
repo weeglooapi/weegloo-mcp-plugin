@@ -55,7 +55,7 @@ export async function installClaude({
   const rulesDir = path.join(baseDir, 'rules');
   const mcpPath = getClaudeMcpPath(scope);
 
-  console.log(chalk.bold('  ▶  Installing for Claude Code...'));
+  console.log(chalk.bold('  ▶  Installing for Claude Code (CLI)...'));
   console.log(chalk.dim(`     github: ${REPO} @ ${chalk.cyan(pluginRef)}`));
   console.log();
 
