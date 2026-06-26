@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-sdk
-description: How to add Weegloo ServiceLogin (OAuth 2.0 — Google, GitHub, or Facebook) sign-in to a browser app — the official npm SDK `weegloo-service-user` (vanilla JS, 0 deps) and the underlying `auth.weegloo.com` HTTP wire protocol (login redirect, exchangeToken POST, refresh, logout), all parameterized by `{provider}` (inferred from the product, not asked; Google is the default when none is indicated — the rule is only: don't apply Google's console steps to a GitHub/Facebook product). Covers the entry-URL vs provider redirect-URI confusion, ACMA current user at GET https://acma.weegloo.com/v1/me (not /spaces/{spaceId}/me), the browser GET-with-body limitation, and the `exchangeToken` URL-stripping security pattern. This is the provider-agnostic spine; Google's detailed console steps live in `weegloo-service-login-google` (GitHub/Facebook follow the same generic shape described here — no dedicated skill yet). Use when wiring sign-in for a Weegloo Space's product, debugging the OAuth callback flow, or implementing the protocol where the JS SDK cannot run (server-side, native mobile, scripts).
+description: How to add Weegloo ServiceLogin (OAuth 2.0 — Google, GitHub, or Facebook) sign-in to a browser app — the official npm SDK `weegloo-service-user` (vanilla JS, 0 deps) and the underlying `auth.weegloo.com` HTTP wire protocol (login redirect, exchangeToken POST, refresh, logout), all parameterized by `{provider}`, inferred from the product (not asked, and with no built-in default — never reflexively reach for Google, and never apply one provider's console steps to another). Covers the entry-URL vs provider redirect-URI confusion, ACMA current user at GET https://acma.weegloo.com/v1/me (not /spaces/{spaceId}/me), the browser GET-with-body limitation, and the `exchangeToken` URL-stripping security pattern. This is the provider-agnostic spine; Google's detailed console steps live in `weegloo-service-login-google` (GitHub/Facebook follow the same generic shape described here — no dedicated skill yet). Use when wiring sign-in for a Weegloo Space's product, debugging the OAuth callback flow, or implementing the protocol where the JS SDK cannot run (server-side, native mobile, scripts).
 ---
 
 # Weegloo - ServiceLogin SDK / OAuth wire protocol
@@ -82,7 +82,7 @@ All paths are under `/v1/spaces/{spaceId}/...`. All bodies and responses are JSO
 GET https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/{provider}
 ```
 
-- `{provider}` is one of Weegloo's supported providers — currently **`google`**, **`github`**, **`facebook`**. **Infer it from the product; do NOT ask the user to pick a provider.** If the product names/implies a specific one (e.g. a "Sign in with GitHub" button), use that; if nothing indicates otherwise, **`google` is a fine default — just proceed.** The only thing to avoid is wiring a different provider's flow as `google`, or giving Google's console steps for a non-Google product. (Confirm the current set from the `ServiceLogin` schema / docs if unsure.)
+- `{provider}` is one of Weegloo's supported providers — currently **`google`**, **`github`**, **`facebook`**. **Infer it from the product; do NOT ask the user to pick a provider, and do NOT treat any provider as the built-in default** (don't reflexively reach for `google`). If the product names/implies a specific one (e.g. a "Sign in with GitHub" button), use that; if nothing indicates a provider, **reason about which fits this product best and choose that** — then **surface the choice when you ask for its `clientId`/`clientSecret`** (that request reveals which provider you picked and lets the user redirect), so no separate "which provider?" question is needed. The only thing to avoid is wiring one provider's flow as another's, or giving Google's console steps for a non-Google product. (Confirm the current set from the `ServiceLogin` schema / docs if unsure.)
 - This is a **navigation** target, not an XHR/fetch call - assign it to `window.location` so the browser follows the OAuth redirect chain.
 - After provider sign-in, Weegloo redirects the browser to the `callbackUrl` registered on the `ServiceLogin` resource, appending `?exchangeToken=<one-time-code>`.
 
@@ -227,7 +227,9 @@ only the console-specific clicks differ, and those live in a per-provider skill.
 
 **Infer the provider from the product — do not ask the user to pick one** (per `weegloo-platform-integration`'s
 no-scoping-questions policy). If the product names/implies a specific provider, use it; if it doesn't,
-**Google is a fine default — just proceed.** For Google, follow
+**reason about the best-fit provider for this product and choose it — there is no built-in default, so
+don't reach for Google by reflex.** The choice is surfaced — and stays correctable — at the
+`clientId`/`clientSecret` ask, so you needn't ask separately. For Google, follow
 `weegloo-service-login-google`. For GitHub/Facebook, apply the shape above and look up that provider's
 current console specifics rather than pasting a hardcoded/possibly-stale URL.
 
