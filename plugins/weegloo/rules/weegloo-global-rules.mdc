@@ -105,6 +105,6 @@ rules:
 
   - section: Filter Parameters (API List Endpoints)
     items:
-      - Filters are direct query params (NOT wrapped in `filter[]`), e.g. `name[prefix]=value`. **Format, the full operator set, and per-field-type support are canonical at https://docs.weegloo.com/api/reference/common/query-parameters — read it rather than guessing operators** (an unsupported operator → `WEB400006`).
-      - **Tripwire — Refer fields:** can't filter Content by a Refer field's target via `fields.<refer>.sys.id[eq]` (`WEB400006`). Use `sys.id[in]=…` (`weegloo-api-query-optimization`) or fetch the set and group client-side.
+      - Filters are direct query params (NOT wrapped in `filter[]`), e.g. `name[prefix]=value`. **Format, the full operator set, and per-field-type support are canonical at https://docs.weegloo.com/api/reference/common/query-parameters — read it rather than guessing operators** (an unsupported operator is rejected).
+      - **Tripwire — Refer fields:** can't filter Content by a Refer field's target via `fields.<refer>.sys.id[eq]`. Use `sys.id[in]=…` (`weegloo-api-query-optimization`) or fetch the set and group client-side.
       - **Tripwire — `fields.*` on the flat `/contents` list needs ContentType scope (CDA & CMA):** to filter or sort the flat `/contents` list by any `fields.*`, scope the type with `sys.contentType.sys.id=<id>` (a bare `contentType=<id>` is not enough). NOT needed on the nested `/content-types/{id}/contents` form or on ACMA/ACDA (the path already carries the type). Wrong: `…/contents?contentType=<CT>&fields.status=active`; correct: `…/contents?sys.contentType.sys.id=<CT>&fields.status=active` (`weegloo-api-query-optimization`).
