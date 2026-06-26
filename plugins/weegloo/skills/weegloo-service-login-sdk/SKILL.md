@@ -191,16 +191,36 @@ A first integrator wiring an **app that is not deployed yet** routinely stalls o
 
 So the deploy chicken-and-egg is only apparent: you can **always** finish the Google side and create the `ServiceLogin` immediately (placeholder `callbackUrl`), then update only `callbackUrl` post-deploy via `cma_UpdateOneServiceLogin` / `cma_PatchOneServiceLogin`. Do **not** block ServiceLogin creation on having a deployed URL, and do **not** put your app's `callbackUrl` into Google's redirect-URI field (that is pitfall **A** again).
 
-**But `callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` are blocking user-only inputs** — they come from the user's own Google Cloud OAuth client and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.)
+**But `callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` are blocking user-only inputs** — they come from the user's own Google Cloud OAuth client and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.) **When you ask, don't ask bare** — hand the user the step-by-step Google Cloud Console walkthrough in *Configuration responsibilities* below, with the real `{spaceId}` already filled into the redirect URI and the Credentials-page pointer from step 1 (the **APIs & Services → Credentials** menu path — plus a current link if you look one up, not a hardcoded URL) included, so they can produce the `clientId` / `clientSecret` without guessing.
 
 ## Configuration responsibilities (Google Cloud + Weegloo Console)
 
 When wiring up a new `ServiceLogin` for a Space, an integrator must:
 
-1. **Google Cloud Console → OAuth client:**
-   - Authorized redirect URI: `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` (note the `/code/` segment - this URI is hit by Google → Weegloo, not by the browser). **Deploy-independent — set it now** (see pitfall **G**).
+1. **Google Cloud Console → create an OAuth 2.0 Client ID** (this is what produces the `clientId` /
+   `clientSecret`). When you ask the user for these, **walk them through it step by step** — do not
+   just say "create an OAuth client and send me the id/secret." Hand them this, with the real
+   `{spaceId}` already substituted into the redirect URI:
+   - Go to **Google Cloud Console → APIs & Services → Credentials** (create or select a project
+     first). Give the user **this menu path** — it is the durable anchor. If you also want to hand
+     them a clickable link, **find the current one at that moment rather than pasting a
+     hardcoded/memorized URL** — Google relocates console pages, so a literal URL embedded here would
+     go stale; look it up (e.g. Google's official "Create OAuth client ID" / OAuth 2.0 setup docs).
+   - **First time only:** configure the **OAuth consent screen** (User type **External**; set an app
+     name + support email). While the app stays in *Testing*, add the signing-in Google account under
+     **Test users**, otherwise sign-in is blocked.
+   - **+ Create Credentials → OAuth client ID**, Application type **Web application**, give it a name.
+   - Under **Authorized redirect URIs**, **Add URI** and paste **exactly**:
+     `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google`
+     — the `/code/` segment is required (it is the Google → Weegloo callback, not the browser entry;
+     pitfall **A**). **No "Authorized JavaScript origins" are needed** — the browser navigates to
+     `auth.weegloo.com`, never to Google directly.
+   - Click **Create**, then copy the **Client ID** and **Client Secret** from the dialog and send both
+     back.
+   - This redirect URI is **deploy-independent — it can be set now**, before the app is deployed
+     (see pitfall **G**).
 2. **Weegloo Console → ServiceLogin:**
-   - `clientId` / `clientSecret` from the Google OAuth client above. **Blocking user-only inputs — ask the user for them and do not report sign-in as done without them (pitfall G).**
+   - `clientId` / `clientSecret` from the Google OAuth client above. **Blocking user-only inputs — ask the user for them by walking through step 1 (menu path + filled-in redirect URI), and do not report sign-in as done without them (pitfall G).**
    - `defaultRole` → `Refer` to a least-privilege `ServiceUserRole` (create it first).
    - `callbackUrl` → a URL on **your product** that the SDK can intercept (Weegloo will redirect the browser there with `?exchangeToken=...`). **Deploy-dependent** — if the app is not deployed yet, set a placeholder and patch it after deploy (pitfall **G**).
 3. **Product code:** call the SDK's `auth.handleCallback()` on the callback URL page. Do not roll your own exchange unless you cannot use the SDK.
