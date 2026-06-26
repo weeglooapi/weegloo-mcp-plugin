@@ -14,6 +14,27 @@ This skill is a **router/dispatcher**. Its job is to translate a plain-language 
 does **not** replace the existing hard gates in `weegloo-global-rules` (e.g. architecture work
 must still go through `weegloo-service-architecture`).
 
+## Definition of done — what "integrate Weegloo" means (read this FIRST)
+
+"Integrate Weegloo" is **not** finished when the pieces are *scaffolded* — it is finished when every
+capability the frontend implies is **actually wired and live**. Hold the whole flow to this contract:
+
+- **A capability counts as done only when it is switched on and works end-to-end** — not when its
+  supporting resource exists but the feature is inert. Creating a `ServiceUserRole` but never creating
+  the `ServiceLogin` (so sign-in does nothing), or modelling a ContentType the UI never gets wired to
+  call, is **incomplete work** — not "done, finish the rest later." **Never report an inert capability
+  as completed.**
+- **A deployable web app gets deployed.** If the integration target is a runnable static/SPA site and
+  the user has not named another host, deploying it to **Weegloo WebHosting** and reporting the live
+  `…weegloo.app` URL is part of finishing — running it only locally is **not** a deliverable. (Skip the
+  deploy *only* if the user specified another host, or the app genuinely cannot build to a static
+  export — see `weegloo-web-hosting`.)
+- **The only legitimate reason to stop short of a wired-and-live capability is a blocking user-only
+  input** (step 4). When that happens, **end the turn by asking for that one value** and naming the
+  capability it unblocks — do **not** end with a "done" report that lists the missing input as optional
+  future homework. Asking and waiting is the correct finish here; silently deferring is the failure to
+  avoid.
+
 ## How to use this skill
 
 1. **FIRST, reverse-engineer the service intent from the existing frontend — never skip this.**
@@ -75,8 +96,20 @@ must still go through `weegloo-service-architecture`).
    step that genuinely needs such an input, **stop and ask for that one thing**, then continue once
    you have it. Integrate everything you *can* without user input silently; surface a question only
    at the exact point it blocks the next concrete action, and ask only for what that step needs.
-   - Do **not** defer a needed secret/credential just to keep working on other parts — ask when it
-     is needed so the flow stays interactive, not a deferred batch of homework for the user.
+   - **Two kinds of missing input — handle them differently:**
+     - **Blocking (only the user can supply it):** OAuth `clientId` / `clientSecret`, third-party API
+       keys, etc. When you reach the step that needs one, **stop, ask for it, and wait** — the
+       capability is **not done** until you have the value and have actually created the resource with
+       it. Do **not** downgrade to "I set up the role; add the key later" and move on: an inert
+       auth/login/webhook feature is *incomplete* (see *Definition of done*). So if this is where the
+       turn ends, it ends **with the question**, not with a completion report.
+     - **Self-resolving (you can supply a placeholder and fix it yourself):** e.g. a ServiceLogin
+       `callbackUrl` before the deploy URL exists — set a placeholder, deploy, then patch it. **Do not
+       ask the user** for these; resolve them yourself.
+   - **Just-in-time means *at the step that needs it* — not earlier, not at the end.** Do not
+     front-load a blocking question during analysis before you actually reach the step, and do not
+     push it past the step into a closing summary. Between those points, integrate everything you
+     *can* without user input silently.
    - This does not reintroduce capability menus or scoping questions (step 3 still holds). It only
      governs *how* you collect the unavoidable per-capability inputs: incrementally, in context.
 5. **Default entry point:** almost every "integrate Weegloo" request is really "build something on
@@ -199,10 +232,16 @@ These are two different things; do not confuse them. Full mechanics and the crea
   code — and fill the inevitable gaps by reasoning about the service's intent, not by modeling only
   the literal stubs. Do not design from the user's request sentence alone — base every decision on
   the analyzed frontend (UI + code), treating that as the real spec.
+- **Finish the job — done means wired-and-live, not scaffolded (see *Definition of done*).** A
+  capability whose resource exists but whose feature is inert (e.g. a role created but no
+  `ServiceLogin`) is **incomplete**, and a runnable static/SPA app left running only locally is
+  **not deployed**: with no other host named, deploy it to Weegloo WebHosting and report the live URL.
 - **Collect required inputs just-in-time, never as a closing batch.** When a step needs a
-  user-only value (OAuth credentials, API keys, etc.), stop and ask for that one value at that
-  point, then continue. Do not finish with a summary that hands the user a list of secrets to
-  supply before anything else can proceed.
+  user-only **blocking** value (OAuth `clientId`/`clientSecret`, API keys), stop and **ask for that
+  one value and wait** — the capability is not done until you have it and create the resource; do not
+  downgrade to "scaffolded the role, add the key later," and do not finish with a summary that hands
+  the user a list of secrets to supply. **Self-resolving** values (e.g. a pre-deploy `callbackUrl`)
+  you fix yourself with a placeholder — never ask the user for those.
 - **Do not bypass existing gates.** Architecture → `weegloo-service-architecture`; ContentType
   design → `weegloo-create-content-type` (+ `weegloo-default-locale` for multi-locale); CDA tokens
   → `weegloo-delivery-access-token`; external-API jobs → `weegloo-webhook-writeback`; WebHosting
