@@ -143,6 +143,26 @@ A valid **`/me`** token is **not** enough for a **space-scoped** admin UI. The u
 2. Call **`GET {CMA_BASE}/v1/me/space-memberships`** with **`Authorization: Bearer`** and filter so the result includes membership for **`SPACE_ID`** (query params or client-side filter per CMA docs — e.g. filter by space id if supported).
 3. If **no membership** exists for that **Space**: the user must **not** be treated as admin for this product — **clear `sessionStorage` `access_token`** (logout) and show an appropriate message.
 
+> **Response shape — the `space` ref is nested under `sys`, not at the item root.** Each `items[]` element is a **`SpaceMembership`** whose target Space lives at **`item.sys.space.sys.id`**:
+>
+> ```json
+> { "items": [
+>   { "sys": { "type": "SpaceMembership", "space": { "sys": { "id": "i4ZfqXFL" } } } }
+> ] }
+> ```
+>
+> **Correct membership check** (gate to this Space):
+> ```js
+> const isMember = (resp.items || []).some(
+>   m => m.sys && m.sys.space && m.sys.space.sys && m.sys.space.sys.id === SPACE_ID
+> );
+> ```
+> **Wrong — `m.space` is `undefined`, so this is always `false` and every real member is rejected:**
+> ```js
+> (resp.items || []).some(m => m.space && m.space.sys && m.space.sys.id === SPACE_ID) // ❌
+> ```
+> This is a Weegloo-wide convention: on membership resources the related resource (`space` / `organization`) is carried under **`sys`** (alongside `sys.type`), not flattened onto the item. **`/me/organization-memberships`** follows the same pattern (`item.sys.organization.sys.id`). Don't guess the path — read `item.sys.*`.
+
 This matches the rule in **`weegloo-global-rules`**: use **`/me/space-memberships`**, not **`/organizations`**, for "my spaces".
 
 ### 6. Logout
@@ -164,7 +184,7 @@ There is no server-side session to revoke unless the product also calls a CMA re
 | 2 | **`window.open`** → `{console}/login?origin=encodeURIComponent(location.origin)` |
 | 3 | On message: **`event.data.accessToken`** → **`sessionStorage.setItem("access_token", …)`** |
 | 4 | **`GET /v1/me`** with Bearer → **200** ⇒ token valid as a Weegloo User |
-| 5 | **`GET /v1/me/space-memberships`** → must include **target `SPACE_ID`**; else remove token |
+| 5 | **`GET /v1/me/space-memberships`** → must include **target `SPACE_ID`** at **`item.sys.space.sys.id`** (nested under `sys`, **not** `item.space`); else remove token |
 | 6 | Logout ⇒ **`sessionStorage.removeItem("access_token")`** |
 
 ---

@@ -60,7 +60,8 @@ rules:
       - To get the current user's organization list, use GET /me/organization-memberships (NOT /organizations). Use include=1 to fetch organization details (name, code, etc.).
       - To get the current user's space list, use GET /me/space-memberships. Use include=1 to fetch space details (name, code, etc.).
       - Do NOT use /organizations for "my organizations"; use /me/organization-memberships instead.
-      
+      - **Response shape — the related resource is nested under `sys`, NOT at the item root.** On a `SpaceMembership` the Space id is at **`item.sys.space.sys.id`** (and on an `OrganizationMembership`, **`item.sys.organization.sys.id`**). Reading the flat path `item.space.sys.id` yields **`undefined`** — a common membership-gate bug where every real member is wrongly rejected. To gate "is this user a member of *this* Space?", match `SPACE_ID` against `item.sys.space.sys.id`. Detail + correct/wrong snippets: **`weegloo-user-login`** skill.
+
   - section: ACMA / ACDA Content paths are nested under ContentType (no flat /contents)
     items:
       - On **ACMA** and **ACDA**, every Content operation **MUST** address the Content **under its ContentType**: list/create at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**, and get/update/delete at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`**.
@@ -76,6 +77,7 @@ rules:
           - `limit`: **hard max 100** — a larger value is rejected. To read more, page via `links.next`; never hardcode 200/500/1000.
           - `skip`: do NOT use for paging — use cursors (`next`/`prev`, see Pagination Handling).
           - `include=1` resolves related resources (e.g. `createdBy`); `select` projects fields — see the reference above.
+          - **References are NEVER embedded.** A Content does **not** carry its Media (or any linked Content/Space/Organization/User) inline — a reference field holds only a stub `{ "sys": { "id": "abc", "type": "Refer", "targetType": "Media" } }`. To get the real resource: (a) read `sys.id` and fetch it (e.g. `GET .../medias/{id}`), or (b) pass `?include=1` and read it from the response's **singular `include` object keyed by PascalCase `targetType`** (`include.Media`, `include.Content`, `include.User`, …). Do **not** assume `fields.image`/`fields.file`/an author already hold the asset URL or the linked document. Detail: **`weegloo-api-query-optimization`** / **`weegloo-default-locale`** skills.
 
   - section: Pagination Handling
     items:

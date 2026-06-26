@@ -152,11 +152,32 @@ this wrong is a common mistake:
   **not** a reason to skip the detail fetch for the *one* item the user actually opened, nor to try
   to cram every row's full detail into the initial list call.
 
+### Content never embeds a Media — it holds a `Refer` stub (resolve it)
+
+**A Content does not contain the Media (or any other linked resource) inline. A reference field
+always holds only a stub**, never the full document:
+
+```json
+{ "sys": { "id": "abc", "type": "Refer", "targetType": "Media" } }
+```
+
+So `fields.image1`, `fields.file`, an author `Refer → User`, a `Refer → Content`, etc. give you an
+**id + `targetType`**, not the asset's URL or the linked document's fields. Two ways to get the real
+resource — **do not** assume it is already inside the Content:
+
+1. **Follow the id.** Read `…sys.id` from the Refer and fetch the target directly, e.g.
+   `GET /v1/spaces/{spaceId}/medias/{id}` for a `Refer → Media`.
+2. **Expand on read with `?include=1`.** The response then carries every referenced resource in a
+   **sibling, singular `include` object keyed by PascalCase `targetType`** — `include.Media`,
+   `include.Content`, `include.Space`, `include.Organization`, `include.User`, … . Resolve a field's
+   `sys.id` against the matching `include.<Type>` array by id. (Shape detail + a both-shapes accessor:
+   **`weegloo-default-locale`**.)
+
 ### Rendering a referenced Media (image / file fields)
 
 A field that points at an asset (e.g. `fields.image1`…`fields.image4`, `fields.file`) is a
 **Refer → Media**, **not** a ready-to-use URL string. To show it you must **resolve the Media to its
-file URL**:
+file URL** (per the two paths above):
 
 - On the **detail** fetch, expand the reference (`?include=1`) — or follow up with a Media fetch —
   and read the file URL from the **Media's** `fields.file.{locale}` per-locale bucket (default-locale
