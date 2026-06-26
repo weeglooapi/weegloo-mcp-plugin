@@ -161,8 +161,13 @@ Each leaf maps to the concrete skill that actually does the work.
     `weegloo-create-content-type` + `weegloo-space-role` (`createdBy :self` scoping)
   - **Application Data** (shared content models, CRUD, updates) → `weegloo-create-content-type` +
     `weegloo-cma-json-patch` + `weegloo-cda-publish`
-  - **Search** (list filtering, projection, pagination) → `weegloo-api-query-optimization` +
-    `weegloo-list-pagination`
+  - **Search** (a search box / filter over content or Media) → first decide the **locus**: filtering
+    an already-loaded in-memory array is correct **only when that array is the whole dataset**; if the
+    data is paginated, large, or of **unknown size** (e.g. *all* Media in a Space — visible items are
+    not the full set), search **server-side** via the list API, not `Array.filter`. Full-text search
+    over `fields.*` text (e.g. a title) needs the **Advanced Search** header
+    `X-Weegloo-Advanced-Search: true` (plain `eq` is exact-match only); RichText/Json aren't
+    searchable. → `weegloo-api-query-optimization` + `weegloo-list-pagination`
 - **File Storage**
   - **Upload** (a file-upload feature in the user's own product) → `weegloo-upload-api` (the app's
     code calls the **Weegloo Upload REST API**, then creates Media/WebHosting from the returned
@@ -196,7 +201,7 @@ Each leaf maps to the concrete skill that actually does the work.
 | Admin / Owner / Staff UI (dashboard, settings, moderation, all-member data) | `weegloo-user-login` (in-app admin via console FE popup → CMA) |
 | User Data (private/per-user) | `weegloo-service-architecture` + `weegloo-create-content-type` + `weegloo-space-role` |
 | Application Data             | `weegloo-create-content-type` + `weegloo-cma-json-patch` + `weegloo-cda-publish` |
-| Search                       | `weegloo-api-query-optimization` + `weegloo-list-pagination`             |
+| Search (over content/Media)  | decide in-memory vs server-side (loaded array ≠ dataset); full-text `fields.*` → `X-Weegloo-Advanced-Search: true` → `weegloo-api-query-optimization` + `weegloo-list-pagination` |
 | File Upload (product feature)| `weegloo-upload-api` (Upload REST API → CMA/ACMA Media / WebHosting create) |
 | File Download                | `weegloo-cda-publish` (Media via CDA/ACDA)                               |
 | Web Hosting (deploy a site)  | `weegloo-web-hosting` (+ `weegloo-upload-api` for the build upload)      |

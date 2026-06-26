@@ -1,6 +1,6 @@
 ---
 name: weegloo-api-query-optimization
-description: Weegloo list APIs - projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call. ALSO covers the master/detail pattern (lightweight list/sidebar + on-click single-Content detail fetch) and resolving a Refer→Media image/file field to a displayable URL — use when building a history list, gallery, inbox, or any list-then-open-item UI.
+description: Weegloo list APIs - projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call. ALSO covers the master/detail pattern (lightweight list/sidebar + on-click single-Content detail fetch) and resolving a Refer→Media image/file field to a displayable URL — use when building a history list, gallery, inbox, or any list-then-open-item UI. ALSO covers implementing a SEARCH feature: deciding in-memory vs server-side search (filtering the loaded array only works when it is the whole dataset) and full-text search over fields.* text via the Advanced Search header (X-Weegloo-Advanced-Search) — use when a UI has a search box over content/Media.
 ---
 
 # Weegloo - query optimization for list APIs
@@ -188,6 +188,40 @@ file URL** (per the two paths above):
   front defeats the lightweight-list goal above. The reliable place to read image/file fields for
   rendering is the **detail fetch of the selected item** — exactly the per-item
   `…/contents/{contentId}` call, reading `fields.image1..N` → Media → file URL.
+
+---
+
+## 7. Search: pick WHERE you search, and use Advanced Search for `fields.*` text
+
+When a UI has a search box, first decide the **locus** of the search — getting this wrong is a
+common, silent bug:
+
+- **In-memory filtering is correct ONLY when the array you filter already holds the ENTIRE dataset**
+  — a small, fully-loaded set (e.g. one user's handful of items fetched in full). Filtering
+  `items.filter(i => i.title.includes(q))` over a **paginated or partial** list searches **only the
+  rows currently loaded** and silently misses everything not yet fetched. If the list is large,
+  paged, or of **unknown size** (e.g. *all* Media in a Space — the visible thumbnails are not the
+  whole set), in-memory search is **wrong**.
+- **Server-side search hits the list API with filter params** so the **whole** dataset is searched,
+  then page the results with `links.next` (`weegloo-list-pagination`). What is loaded on screen is
+  not the dataset.
+
+Content data lives in **`fields.*`**, not `sys.*` — search the right place, the right way:
+
+- **Filtering `fields.*` needs the locale segment** (`fields.title.en-US[...]`) and, on the flat
+  Content list, the **ContentType scope** `sys.contentType.sys.id=<id>` (see the Filter Parameters
+  rule). `sys.*` filters (`sys.id`, `sys.createdAt`) need neither.
+- **Plain `eq` on a text field is EXACT match.** For real text search — partial + fuzzy "contains"
+  matching, plus the `regex` and geo `near`/`within` operators — send the **Advanced Search** header
+  **`X-Weegloo-Advanced-Search: true`**; then `eq` on a full-text-enabled **LongText** field matches
+  items that *contain* the term. Without the header you get only exact equality, so a substring query
+  returns nothing — do **not** react to that by falling back to filtering in memory.
+- **RichText and Json fields are not searchable.** If a field must be searched, model it as
+  ShortText/LongText with the right search setting **at design time** — search is decided when you
+  model the data, not bolted on after (`weegloo-create-content-type`).
+
+Exact operator list, per-field-type support, and request format are canonical at the query-parameters
+reference (linked from `weegloo-api-endpoints`). Don't guess operators.
 
 ---
 
