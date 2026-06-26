@@ -6,6 +6,7 @@ import { orderBranchesForPicker } from './versions.js';
 import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
+import { installClaudeDesktop } from './claude-desktop.js';
 import { installAntigravity } from './antigravity.js';
 import { installCodex, handleCodexMcpLogin, printCodexLoginNotice } from './codex.js';
 
@@ -125,6 +126,7 @@ async function main() {
       choices: [
         { name: 'Cursor', value: 'cursor' },
         { name: 'Claude Code', value: 'claude' },
+        { name: 'Claude Desktop', value: 'claude-desktop' },
         { name: 'Antigravity', value: 'antigravity' },
         { name: 'Codex', value: 'codex' },
       ],
@@ -135,6 +137,24 @@ async function main() {
   //    checkbox when both are unknown, to preserve the original UX) or default on.
   let installMcp = config.installMcp;
   let installSkillsRules = config.installSkillsRules;
+
+  // Claude Desktop is MCP-only: it does not read ~/.claude/skills or ~/.claude/rules
+  // (those are Claude Code's). Force Skills/Rules off so we neither prompt for nor
+  // write files the app will never load. With the toggle pinned false, the combined
+  // install-checkbox below collapses to "MCP only" automatically.
+  if (ide === 'claude-desktop') {
+    if (installSkillsRules === true) {
+      console.log(
+        chalk.yellow('  ⚠  ') +
+        chalk.dim(
+          'Claude Desktop has no filesystem Skills/Rules; installing the MCP server only.'
+        )
+      );
+      console.log();
+    }
+    installSkillsRules = false;
+    if (installMcp == null) installMcp = true;
+  }
 
   if (config.nonInteractive) {
     if (installMcp == null) installMcp = true;
@@ -339,6 +359,8 @@ async function main() {
     await installCursor(answers);
   } else if (ide === 'claude') {
     await installClaude(answers);
+  } else if (ide === 'claude-desktop') {
+    await installClaudeDesktop(answers);
   } else if (ide === 'antigravity') {
     await installAntigravity(answers);
   } else if (ide === 'codex') {
@@ -348,7 +370,9 @@ async function main() {
   console.log();
   console.log(chalk.bold.green('  ✔  Installation complete!'));
   console.log();
-  if (installMcp && ide !== 'codex') {
+  // Claude Desktop signs in via the mcp-remote browser flow (or Custom Connectors),
+  // not a "Connect" button — installClaudeDesktop() prints its own auth guidance.
+  if (installMcp && ide !== 'codex' && ide !== 'claude-desktop') {
     console.log(chalk.bgYellow.black.bold('  ⚠  IMPORTANT  '));
     console.log(
       chalk.yellow.bold('  The weegloo MCP server requires login/authentication.')

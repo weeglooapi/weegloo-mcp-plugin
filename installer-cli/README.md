@@ -1,6 +1,6 @@
 # weegloo
 
-A CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Antigravity, and Codex — interactive by default, or fully non-interactive for agents and CI.
+A CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Claude Desktop, Antigravity, and Codex — interactive by default, or fully non-interactive for agents and CI.
 
 ## Usage
 
@@ -22,7 +22,7 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 | Option | Meaning |
 |---|---|
 | `-b, --branch <ref>` | Plugin version/branch to install (default: `latest`). Alias of `--ref`; also reads `WEEGLOO_REF`. |
-| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `antigravity` \| `codex`. |
+| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `claude-desktop` \| `antigravity` \| `codex`. (`claude` = Claude Code CLI; `claude-desktop` = the Claude Desktop app.) |
 | `-l, --location <loc>` | Install location: `project` \| `global` (default: `global`). |
 | `--mcp <group>` | Install the MCP server with group: `default` \| `core` \| `extra` \| `all`. |
 | `--no-mcp` | Do not install the MCP server. |
@@ -77,7 +77,7 @@ WEEGLOO_REF=some-branch npx weegloo@latest
 In interactive mode the CLI asks the following questions in order (a flag from [CLI options](#cli-options) can pre-fill any of them, skipping that prompt):
 
 1. **Install location** - Global (`~/.cursor/`) or current project (`.cursor/`)
-2. **IDE** - Cursor / Claude Code / Antigravity / Codex
+2. **IDE** - Cursor / Claude Code / Claude Desktop / Antigravity / Codex
 3. **Personal Access Token** - Generate from the Weegloo console
 4. **MCP server group** - `default` / `core` / `extra` / `all`
 5. **Skills** - Select skills to install (multi-select)
@@ -98,6 +98,23 @@ In interactive mode the CLI asks the following questions in order (a flag from [
 | MCP config | `~/.claude.json` | `.mcp.json` (project root) |
 | Skills | `~/.claude/skills/<skill-name>/` | `.claude/skills/<skill-name>/` |
 | Rules | `~/.claude/rules/<rule-name>.md` | `.claude/rules/<rule-name>.md` |
+
+### Claude Desktop
+
+The Claude Desktop **app** is a separate target from Claude Code (`-a claude-desktop`). It uses a different config file, a different MCP transport, and does **not** read filesystem Skills/Rules — so this target installs the **MCP server only**.
+
+| Item | Path |
+|------|------|
+| MCP config | macOS: `~/Library/Application Support/Claude/claude_desktop_config.json` · Windows: `%APPDATA%\Claude\claude_desktop_config.json` · Linux: `~/.config/Claude/claude_desktop_config.json` |
+| Skills / Rules | _Not installed_ — Claude Desktop does not read `~/.claude/skills` or `~/.claude/rules` (those are Claude Code's). Use `-a claude` for those. |
+
+Why it differs from Claude Code:
+
+- **Config file is global-only** (no project `.mcp.json`), and Claude Desktop ignores `~/.claude.json` entirely.
+- **stdio-only transport.** `claude_desktop_config.json` cannot reference a remote HTTP MCP server as `{ "type": "http", "url": … }`. The remote `weegloo` server is therefore registered through the [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) stdio bridge (`npx -y mcp-remote <url>`), which runs the OAuth sign-in in the browser on first launch. `weegloo-upload` is a local stdio server and is written as-is.
+- **Alternative sign-in:** Claude Pro/Max/Team/Enterprise users can instead add the `weegloo` server as a **Custom Connector** in *Settings → Connectors* (paste the server URL) rather than using `mcp-remote`.
+
+After installing, **restart Claude Desktop** to load the servers.
 
 ### Codex
 | Item | Path (Global) | Path (Project) |

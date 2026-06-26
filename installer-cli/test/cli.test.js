@@ -100,6 +100,12 @@ test('resolveConfig: invalid enum values are rejected with valid list', () => {
   assert.ok(resolve(['--mcp', 'mega']).errors.some((e) => /Invalid --mcp group/.test(e)));
 });
 
+test('resolveConfig: claude-desktop is a valid agent (distinct from claude)', () => {
+  const { errors, config } = resolve(['-y', '-a', 'claude-desktop'], { env: { WEEGLOO_TOKEN: 'pat' } });
+  assert.deepEqual(errors, []);
+  assert.equal(config.agent, 'claude-desktop');
+});
+
 test('resolveConfig: non-interactive requires --agent', () => {
   assert.ok(resolve(['-y'], { env: { WEEGLOO_TOKEN: 'pat' } }).errors.some((e) => /--agent is required/.test(e)));
 });

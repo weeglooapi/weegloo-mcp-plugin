@@ -10,8 +10,12 @@
 
 import { parseArgs } from 'node:util';
 
-/** Selectable IDE/agent targets (the installer internally calls this `ide`). */
-export const AGENTS = ['cursor', 'claude', 'antigravity', 'codex'];
+/**
+ * Selectable IDE/agent targets (the installer internally calls this `ide`).
+ * `claude` is Claude Code (the CLI); `claude-desktop` is the Claude Desktop app —
+ * a different config path, transport, and feature set (see src/claude-desktop.js).
+ */
+export const AGENTS = ['cursor', 'claude', 'claude-desktop', 'antigravity', 'codex'];
 /** Install scopes (maps to `scope`). */
 export const LOCATIONS = ['project', 'global'];
 /** MCP server groups. `default` is the user-facing alias for the empty group ''. */
