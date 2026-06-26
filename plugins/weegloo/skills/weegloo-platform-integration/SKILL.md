@@ -147,7 +147,10 @@ Each leaf maps to the concrete skill that actually does the work.
     admin/staff = `weegloo-user-login`; product end-users = `weegloo-service-login`.
     If unsure which, route to `weegloo-service-architecture` to disambiguate.
   - **Signup** (open end-user sign-up) → `weegloo-service-login`
-  - **Social Login** (Google OAuth, browser SDK / wire protocol) → `weegloo-service-login-sdk`
+  - **Social Login** (OAuth providers — Google / GitHub / Facebook; browser SDK / wire protocol) →
+    `weegloo-service-login-sdk` (provider-agnostic spine) + the chosen provider's setup skill
+    `weegloo-service-login-<provider>` (e.g. `weegloo-service-login-google`). Pick the provider from
+    the product's need; never assume Google.
   - **Admin / Owner / Staff surface** (an in-product dashboard, settings, moderation, or
     back-office screen — anything where staff read or edit *all* members' data, not just their own)
     → `weegloo-user-login` (console FE login popup → CMA, an **in-app admin UI**). **Auto-integrate
@@ -197,7 +200,7 @@ Each leaf maps to the concrete skill that actually does the work.
 |------------------------------|--------------------------------------------------------------------------|
 | Login                        | `weegloo-user-login` (admin) / `weegloo-service-login` (end-user); disambiguate via `weegloo-service-architecture` |
 | Signup                       | `weegloo-service-login`                                                   |
-| Social Login                 | `weegloo-service-login-sdk`                                               |
+| Social Login                 | `weegloo-service-login-sdk` (spine) + `weegloo-service-login-<provider>` (e.g. `-google`) |
 | Admin / Owner / Staff UI (dashboard, settings, moderation, all-member data) | `weegloo-user-login` (in-app admin via console FE popup → CMA) |
 | User Data (private/per-user) | `weegloo-service-architecture` + `weegloo-create-content-type` + `weegloo-space-role` |
 | Application Data             | `weegloo-create-content-type` + `weegloo-cma-json-patch` + `weegloo-cda-publish` |
