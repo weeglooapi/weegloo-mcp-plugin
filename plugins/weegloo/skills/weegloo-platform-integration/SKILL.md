@@ -149,8 +149,8 @@ Each leaf maps to the concrete skill that actually does the work.
   - **Signup** (open end-user sign-up) → `weegloo-service-login`
   - **Social Login** (OAuth providers — Google / GitHub / Facebook; browser SDK / wire protocol) →
     `weegloo-service-login-sdk` (provider-agnostic spine); for Google, also `weegloo-service-login-google`
-    (GitHub/Facebook: follow the spine's generic shape — no dedicated skill yet). Pick the provider from
-    the product's need; never assume Google.
+    (GitHub/Facebook: follow the spine's generic shape — no dedicated skill yet). Infer the provider
+    from the product — don't ask; if none is indicated, Google is a fine default.
   - **Admin / Owner / Staff surface** (an in-product dashboard, settings, moderation, or
     back-office screen — anything where staff read or edit *all* members' data, not just their own)
     → `weegloo-user-login` (console FE login popup → CMA, an **in-app admin UI**). **Auto-integrate
