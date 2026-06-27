@@ -201,7 +201,7 @@ Each leaf maps to the concrete skill that actually does the work.
 |------------------------------|--------------------------------------------------------------------------|
 | Login                        | `weegloo-user-login` (admin) / `weegloo-service-login` (end-user); disambiguate via `weegloo-service-architecture` |
 | Signup                       | `weegloo-service-login`                                                   |
-| Social Login                 | `weegloo-service-login-sdk` (spine) + `weegloo-service-login-google` for Google (other providers: spine's generic shape) |
+| Social Login                 | `weegloo-service-login-sdk` (spine) + `weegloo-service-login-google` for Google (other providers: spine's generic shape). Infer provider from product; no default; don't ask. |
 | Admin / Owner / Staff UI (dashboard, settings, moderation, all-member data) | `weegloo-user-login` (in-app admin via console FE popup → CMA) |
 | User Data (private/per-user) | `weegloo-service-architecture` + `weegloo-create-content-type` + `weegloo-space-role` |
 | Application Data             | `weegloo-create-content-type` + `weegloo-cma-json-patch` + `weegloo-cda-publish` |

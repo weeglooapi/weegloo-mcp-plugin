@@ -40,7 +40,7 @@ Minimal usage (latest alias - dev / prototype):
 ```html
 <script src="https://weegloo-media.com/static/libs/service-login/service-login.min.js"></script>
 <script>
-  const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID' });
+  const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID', provider: 'google' }); // provider = the one you inferred
 
   // On the callback page:
   if (location.search.includes('exchangeToken=')) {
@@ -67,10 +67,12 @@ npm install weegloo-service-user
 ```
 ```js
 import WeeglooServiceLogin from 'weegloo-service-user';
-const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID' });
+const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID', provider: 'google' }); // provider = the one you inferred
 ```
 
 **Decision aid:** if the integration runs in a browser at all, prefer the SDK. Re-implement the protocol manually only when the platform makes it impossible (e.g. a native mobile app, a server-to-server token swap, or a scripted backfill).
+
+> **Provider selection:** the **`provider`** init option chooses the OAuth provider — its SDK default is **`'google'`**, but that default is the SDK's, not a design default. **Set `provider` explicitly to the one you inferred for the product** (see *Configuration responsibilities*); don't rely on the default, and don't ask the user merely to pick one.
 
 ## OAuth wire protocol on `auth.weegloo.com`
 
@@ -197,7 +199,7 @@ So the deploy chicken-and-egg is only apparent: you can **always** finish the pr
 
 Weegloo ServiceLogin is **provider-agnostic** — `ServiceLogin` is the system, a provider (Google,
 GitHub, Facebook) is a pluggable choice. The setup below is the **same shape for every provider**;
-only the console-specific clicks differ, and those live in a per-provider skill.
+only the console-specific clicks differ — those live in a per-provider skill **when one exists** (today only Google); for any other provider, follow the generic shape below and look up that provider's current console steps.
 
 **The shape (any provider):**
 
