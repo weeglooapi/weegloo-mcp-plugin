@@ -74,8 +74,14 @@ conservative free-tier floor; paid tiers are larger.
   file may upload partially and then fail. On exceed it returns **HTTP `429`** with error code
   **`WGL429004`** ("current Plan's max file size exceeded") — **not** a generic rate-limit, so do
   **not** blindly retry it.
-- **App code MUST handle the `429` / `WGL429004` rejection** — surface a clear "file too large for
-  your plan" message and guide the user to compress the file or upgrade the plan.
+- **App code MUST handle the `429` / `WGL429004` rejection** — show a clear "file too large"
+  message, **tailored to who is uploading**:
+  - **Weegloo User / admin (CMA path):** they can act on billing — offer compress **or** upgrade
+    the plan.
+  - **Service User / end-user (ACMA path):** the uploader is a **third party** who **cannot**
+    change the Space's plan or see its billing. Tell them only to **reduce / compress** the file
+    (ideally state the max size). Do **not** surface "upgrade your plan" or plan/billing wording to
+    them — raising the cap is the **product operator's** decision, not the end-user's.
 - **Recommended: client-side pre-validation.** Check `file.size` before uploading to fail fast and
   avoid a long upload that dies mid-stream. Since the exact cap is plan-specific, gate on a
   configured limit (or the free-tier floor) rather than guessing.
@@ -148,7 +154,8 @@ only the follow-up Media-create plane differs by identity.
 1. Pick the plane by identity (Weegloo User → CMA; Service User → ACMA).
 2. `POST` the bytes to the Upload API (multipart or binary). Keep `Upload.sys.id`.
 3. Handle the plan size cap: pre-validate `file.size`, and on **`429` / `WGL429004`** show a
-   "too large for your plan" message (compress or upgrade) — don't hardcode a limit or blind-retry.
+   "file too large" message — admins may compress **or** upgrade; for Service-User uploads tell the
+   end-user only to compress (no "upgrade plan" wording). Don't hardcode a limit or blind-retry.
 4. Create the **Media** (or **WebHosting**) referencing `upload.sys.id` **before `expiresAt`**.
 5. For Media: wait until `sys.status === Published` (and file state clear) before using it from Content.
 6. Building product code? Use the REST Upload API. Agent uploading a local file in-chat? Use the
