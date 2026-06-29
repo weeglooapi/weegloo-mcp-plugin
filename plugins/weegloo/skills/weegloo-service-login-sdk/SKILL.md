@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-sdk
-description: How to add Weegloo ServiceLogin (Google OAuth 2.0) sign-in to a browser app — the official npm SDK `weegloo-service-user` (vanilla JS, 0 deps) and the underlying `auth.weegloo.com` HTTP wire protocol (login redirect, exchangeToken POST, refresh, logout). Covers the entry-URL vs Google redirect-URI confusion, ACMA current user at GET https://acma.weegloo.com/v1/me (not /spaces/{spaceId}/me), the browser GET-with-body limitation, and the `exchangeToken` URL-stripping security pattern. Use when wiring sign-in for a Weegloo Space's product, debugging the OAuth callback flow, or implementing the protocol where the JS SDK cannot run (server-side, native mobile, scripts).
+description: How to add Weegloo ServiceLogin (OAuth 2.0 — Google, GitHub, or Facebook) sign-in to a browser app — the official npm SDK `weegloo-service-user` (vanilla JS, 0 deps) and the underlying `auth.weegloo.com` HTTP wire protocol (login redirect, exchangeToken POST, refresh, logout), all parameterized by `{provider}`, inferred from the product (not asked, and with no built-in default — never reflexively reach for Google, and never apply one provider's console steps to another). Covers the entry-URL vs provider redirect-URI confusion, ACMA current user at GET https://acma.weegloo.com/v1/me (not /spaces/{spaceId}/me), the browser GET-with-body limitation, and the `exchangeToken` URL-stripping security pattern. This is the provider-agnostic spine; Google's detailed console steps live in `weegloo-service-login-google` (GitHub/Facebook follow the same generic shape described here — no dedicated skill yet). Use when wiring sign-in for a Weegloo Space's product, debugging the OAuth callback flow, or implementing the protocol where the JS SDK cannot run (server-side, native mobile, scripts).
 ---
 
 # Weegloo - ServiceLogin SDK / OAuth wire protocol
@@ -40,7 +40,7 @@ Minimal usage (latest alias - dev / prototype):
 ```html
 <script src="https://weegloo-media.com/static/libs/service-login/service-login.min.js"></script>
 <script>
-  const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID' });
+  const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID', provider: 'google' }); // provider = the one you inferred
 
   // On the callback page:
   if (location.search.includes('exchangeToken=')) {
@@ -67,10 +67,12 @@ npm install weegloo-service-user
 ```
 ```js
 import WeeglooServiceLogin from 'weegloo-service-user';
-const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID' });
+const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID', provider: 'google' }); // provider = the one you inferred
 ```
 
 **Decision aid:** if the integration runs in a browser at all, prefer the SDK. Re-implement the protocol manually only when the platform makes it impossible (e.g. a native mobile app, a server-to-server token swap, or a scripted backfill).
+
+> **Provider selection:** the **`provider`** init option chooses the OAuth provider — its SDK default is **`'google'`**, but that default is the SDK's, not a design default. **Set `provider` explicitly to the one you inferred for the product** (see *Configuration responsibilities*); don't rely on the default, and don't ask the user merely to pick one.
 
 ## OAuth wire protocol on `auth.weegloo.com`
 
@@ -82,7 +84,7 @@ All paths are under `/v1/spaces/{spaceId}/...`. All bodies and responses are JSO
 GET https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/{provider}
 ```
 
-- `{provider}` is `google` (and any other future provider Weegloo adds).
+- `{provider}` is one of Weegloo's supported providers — currently **`google`**, **`github`**, **`facebook`**. **Infer it from the product; do NOT ask the user to pick a provider, and do NOT treat any provider as the built-in default** (don't reflexively reach for `google`). If the product names/implies a specific one (e.g. a "Sign in with GitHub" button), use that; if nothing indicates a provider, **reason about which fits this product best and choose that** — then **surface the choice when you ask for its `clientId`/`clientSecret`** (that request reveals which provider you picked and lets the user redirect), so no separate "which provider?" question is needed. The only thing to avoid is wiring one provider's flow as another's, or giving Google's console steps for a non-Google product. (Confirm the current set from the `ServiceLogin` schema / docs if unsure.)
 - This is a **navigation** target, not an XHR/fetch call - assign it to `window.location` so the browser follows the OAuth redirect chain.
 - After provider sign-in, Weegloo redirects the browser to the `callbackUrl` registered on the `ServiceLogin` resource, appending `?exchangeToken=<one-time-code>`.
 
@@ -135,16 +137,16 @@ Sending `refreshToken` is **strongly recommended** so the server can revoke it. 
 
 ## Critical pitfalls
 
-### A. Login entry URL ≠ Google redirect URI
+### A. Login entry URL ≠ the provider redirect URI
 
 These two URLs differ by one path segment and are routinely confused:
 
 | URL | Who calls it | Where it is configured |
 |---|---|---|
 | `…/login/oauth2/{provider}` | The end user's **browser** (the SDK's `auth.login()` navigates here) | - |
-| `…/login/oauth2/code/{provider}` | **Google → Weegloo** as the OAuth code callback | Google Cloud Console → "Authorized redirect URIs" |
+| `…/login/oauth2/code/{provider}` | **The provider → Weegloo** as the OAuth code callback | The provider's developer console → "Authorized redirect URIs" |
 
-If you put `/code/` in the user-facing entry URL, Google rejects the request as an unrecognised origin and the user never reaches a sign-in screen.
+If you put `/code/` in the user-facing entry URL, the provider rejects the request as an unrecognised origin and the user never reaches a sign-in screen.
 
 ### B. The token-exchange endpoint must be called via POST, not GET
 
@@ -180,30 +182,58 @@ After sign-in, to load the signed-in **`ServiceUser`** (same role as **CMA** **`
 
 Detail: **`weegloo-service-login`** skill and **`weegloo-api-endpoints`** rule.
 
-### G. Two URLs, two lifetimes — the Google redirect URI is deploy-independent; `callbackUrl` is not
+### G. Two URLs, two lifetimes — the provider redirect URI is deploy-independent; `callbackUrl` is not
 
-A first integrator wiring an **app that is not deployed yet** routinely stalls on "which URL do I give Google?" — because the OAuth flow has **two** URLs that depend on different things:
+A first integrator wiring an **app that is not deployed yet** routinely stalls on "which URL do I give the provider?" — because the OAuth flow has **two** URLs that depend on different things:
 
 | URL | Depends on the app's deploy address? | Set it when |
 |---|---|---|
-| **Google "Authorized redirect URIs"** = `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` | **No** — it always points at `auth.weegloo.com` with your `spaceId` + provider | **Now.** It is fully known the moment the Space and provider exist; nothing about it changes after you deploy. |
+| **Provider "Authorized redirect URIs"** = `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` | **No** — it always points at `auth.weegloo.com` with your `spaceId` + provider | **Now.** It is fully known the moment the Space and provider exist; nothing about it changes after you deploy. |
 | **`ServiceLogin.callbackUrl`** = a page on **your product** that receives `?exchangeToken=...` | **Yes** — it is your app's own origin/path | **After the deploy URL is known.** Until then use a placeholder and patch it (and re-run codegen / config) once the subdomain is final. |
 
-So the deploy chicken-and-egg is only apparent: you can **always** finish the Google side and create the `ServiceLogin` immediately (placeholder `callbackUrl`), then update only `callbackUrl` post-deploy via `cma_UpdateOneServiceLogin` / `cma_PatchOneServiceLogin`. Do **not** block ServiceLogin creation on having a deployed URL, and do **not** put your app's `callbackUrl` into Google's redirect-URI field (that is pitfall **A** again).
+So the deploy chicken-and-egg is only apparent: you can **always** finish the provider side and create the `ServiceLogin` immediately (placeholder `callbackUrl`), then update only `callbackUrl` post-deploy via `cma_UpdateOneServiceLogin` / `cma_PatchOneServiceLogin`. Do **not** block ServiceLogin creation on having a deployed URL, and do **not** put your app's `callbackUrl` into the provider's redirect-URI field (that is pitfall **A** again).
 
-**But `callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` are blocking user-only inputs** — they come from the user's own Google Cloud OAuth client and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.)
+**But `callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` are blocking user-only inputs** — they come from the user's own OAuth client at the chosen provider and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.) **When you ask, don't ask bare** — hand the user the step-by-step console walkthrough for *their* provider, with the real `{spaceId}` filled into the redirect URI. If a dedicated provider skill exists (today only **`weegloo-service-login-google`**), invoke and follow it; for any other provider follow the generic shape in *Configuration responsibilities* below and look up that provider's current console steps. Do **not** give Google's steps for a non-Google provider, and do **not** try to load a provider skill that doesn't exist.
 
-## Configuration responsibilities (Google Cloud + Weegloo Console)
+## Configuration responsibilities (provider console + Weegloo Console)
 
-When wiring up a new `ServiceLogin` for a Space, an integrator must:
+Weegloo ServiceLogin is **provider-agnostic** — `ServiceLogin` is the system, a provider (Google,
+GitHub, Facebook) is a pluggable choice. The setup below is the **same shape for every provider**;
+only the console-specific clicks differ — those live in a per-provider skill **when one exists** (today only Google); for any other provider, follow the generic shape below and look up that provider's current console steps.
 
-1. **Google Cloud Console → OAuth client:**
-   - Authorized redirect URI: `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` (note the `/code/` segment - this URI is hit by Google → Weegloo, not by the browser). **Deploy-independent — set it now** (see pitfall **G**).
+**The shape (any provider):**
+
+1. **Provider's developer console → create an OAuth 2.0 client (Web application).** Register the
+   **Authorized redirect URI** = `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}`
+   (the `/code/` form — hit by the provider → Weegloo, not the browser; pitfall **A**).
+   **Deploy-independent — set it now** (pitfall **G**). Then copy that provider's `clientId` /
+   `clientSecret`.
 2. **Weegloo Console → ServiceLogin:**
-   - `clientId` / `clientSecret` from the Google OAuth client above. **Blocking user-only inputs — ask the user for them and do not report sign-in as done without them (pitfall G).**
+   - `clientId` / `clientSecret` from the provider's OAuth client above. **Blocking user-only inputs —
+     ask the user for them (via the per-provider walkthrough) and do not report sign-in as done without
+     them (pitfall G).**
    - `defaultRole` → `Refer` to a least-privilege `ServiceUserRole` (create it first).
-   - `callbackUrl` → a URL on **your product** that the SDK can intercept (Weegloo will redirect the browser there with `?exchangeToken=...`). **Deploy-dependent** — if the app is not deployed yet, set a placeholder and patch it after deploy (pitfall **G**).
-3. **Product code:** call the SDK's `auth.handleCallback()` on the callback URL page. Do not roll your own exchange unless you cannot use the SDK.
+   - `callbackUrl` → a URL on **your product** that the SDK can intercept (Weegloo will redirect the
+     browser there with `?exchangeToken=...`). **Deploy-dependent** — if the app is not deployed yet,
+     set a placeholder and patch it after deploy (pitfall **G**).
+3. **Product code:** call the SDK's `auth.handleCallback()` on the callback URL page. Do not roll your
+   own exchange unless you cannot use the SDK.
+
+**Per-provider console steps (only Google has a dedicated skill today; do not invoke a provider skill that doesn't exist):**
+
+| Provider | `{provider}` | Console-setup skill |
+|---|---|---|
+| Google   | `google`   | **`weegloo-service-login-google`** (detailed walkthrough) |
+| GitHub   | `github`   | follow *the shape* above; look up GitHub's current OAuth-app console steps (no detailed sub-skill yet) |
+| Facebook | `facebook` | follow *the shape* above; look up Facebook's current app-console steps (no detailed sub-skill yet) |
+
+**Infer the provider from the product — do not ask the user to pick one** (per `weegloo-platform-integration`'s
+no-scoping-questions policy). If the product names/implies a specific provider, use it; if it doesn't,
+**reason about the best-fit provider for this product and choose it — there is no built-in default, so
+don't reach for Google by reflex.** The choice is surfaced — and stays correctable — at the
+`clientId`/`clientSecret` ask, so you needn't ask separately. For Google, follow
+`weegloo-service-login-google`. For GitHub/Facebook, apply the shape above and look up that provider's
+current console specifics rather than pasting a hardcoded/possibly-stale URL.
 
 ## When the SDK cannot be used
 
@@ -217,6 +247,7 @@ If a server, CLI, or native app needs to exchange tokens, follow the wire protoc
 ## Related
 
 - **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser, permission rules):** **`weegloo-service-login`** skill.
+- **Per-provider console setup (the clicks to obtain `clientId`/`clientSecret`):** **`weegloo-service-login-google`** (Google; GitHub/Facebook follow the same shape — see *Configuration responsibilities*).
 - **Role filters (`createdBy`, `:self`):** **`weegloo-space-role`** skill.
 - **Base URLs and Accept-header rules:** **`weegloo-api-endpoints`** rule.
 - **Picking the right API per service type:** **`weegloo-service-architecture`** skill.
