@@ -64,6 +64,39 @@ Both return **`201`** with an **`Upload`** resource:
 - `GET /v1/spaces/{spaceId}/uploads/{uploadId}` and `DELETE /v1/spaces/{spaceId}/uploads/{uploadId}`
   are available for inspection / cleanup.
 
+## Plan-based upload size limit — app code MUST handle it
+
+The Space's **plan caps the per-file upload size**. The cap is **plan-policy driven** (it can be
+overridden per Space), so **do not hardcode a number** as if it were universal — 50 MB is only the
+conservative free-tier floor; paid tiers are larger.
+
+- **Enforced server-side, mid-stream.** The server validates as bytes stream in, so an oversized
+  file may upload partially and then fail. On exceed it returns **HTTP `429`** with error code
+  **`WGL429004`** ("current Plan's max file size exceeded") — **not** a generic rate-limit, so do
+  **not** blindly retry it.
+- **App code MUST handle the `429` / `WGL429004` rejection** — show a clear "file too large"
+  message (ideally state the max size) and steer the user toward a **smaller file within the
+  limit**. *How* to get there depends on the asset, so don't hardcode "compress it" — judge per
+  file type (resize / re-encode an image or video, optimize a PDF, trim or split a ZIP, or simply
+  pick a smaller file; for already-compressed or irreducible files, compressing won't help).
+- **Tailor the plan-upgrade angle to who is uploading:**
+  - **Weegloo User / admin (CMA path):** they control billing — may also raise the cap via a plan
+    upgrade.
+  - **Service User / end-user (ACMA path):** the uploader is a **third party** who **cannot**
+    change the Space's plan or see its billing. Keep the message to the smaller-file path only; do
+    **not** surface "upgrade your plan" or plan/billing wording — raising the cap is the **product
+    operator's** decision, not the end-user's.
+- **Recommended: client-side pre-validation.** Check `file.size` before uploading to fail fast and
+  avoid a long upload that dies mid-stream. Since the exact cap is plan-specific, gate on a
+  configured limit (or the free-tier floor) rather than guessing.
+- Exact per-plan limits are plan-defined and may change — confirm via the docs / pricing page
+  (`https://docs.weegloo.com/pricing/pricing/`), don't assume.
+- The plan **tier** is readable from the **Organization** (`sys.plan.sys.id`, e.g. `free`) — a Space
+  has no plan field, so go Space → its Organization. But the tier id does **not** carry the numeric
+  size cap, and per-Space overrides can diverge from the tier's nominal limit, so use it only as a
+  rough hint — never as a hardcoded limit. Exact caps/usage need the Usage/Limits tools (Weegloo MCP
+  installed with `?group=extra` or `?group=all`) or the docs/pricing page.
+
 ## Step 2a — Create a Media from the Upload
 
 `POST https://cma.weegloo.com/v1/spaces/{spaceId}/medias` (Weegloo User) **or**
@@ -129,9 +162,13 @@ only the follow-up Media-create plane differs by identity.
 
 1. Pick the plane by identity (Weegloo User → CMA; Service User → ACMA).
 2. `POST` the bytes to the Upload API (multipart or binary). Keep `Upload.sys.id`.
-3. Create the **Media** (or **WebHosting**) referencing `upload.sys.id` **before `expiresAt`**.
-4. For Media: wait until `sys.status === Published` (and file state clear) before using it from Content.
-5. Building product code? Use the REST Upload API. Agent uploading a local file in-chat? Use the
+3. Handle the plan size cap: pre-validate `file.size`, and on **`429` / `WGL429004`** show a
+   "file too large" message steering to a **smaller file** (advice fits the asset type, not always
+   "compress"). Admins may also upgrade the plan; for Service-User uploads omit "upgrade plan"
+   wording. Don't hardcode a limit or blind-retry.
+4. Create the **Media** (or **WebHosting**) referencing `upload.sys.id` **before `expiresAt`**.
+5. For Media: wait until `sys.status === Published` (and file state clear) before using it from Content.
+6. Building product code? Use the REST Upload API. Agent uploading a local file in-chat? Use the
    `weegloo-upload` MCP instead.
 
 ## Related
