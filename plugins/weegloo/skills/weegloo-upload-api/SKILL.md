@@ -75,13 +75,17 @@ conservative free-tier floor; paid tiers are larger.
   **`WGL429004`** ("current Plan's max file size exceeded") — **not** a generic rate-limit, so do
   **not** blindly retry it.
 - **App code MUST handle the `429` / `WGL429004` rejection** — show a clear "file too large"
-  message, **tailored to who is uploading**:
-  - **Weegloo User / admin (CMA path):** they can act on billing — offer compress **or** upgrade
-    the plan.
+  message (ideally state the max size) and steer the user toward a **smaller file within the
+  limit**. *How* to get there depends on the asset, so don't hardcode "compress it" — judge per
+  file type (resize / re-encode an image or video, optimize a PDF, trim or split a ZIP, or simply
+  pick a smaller file; for already-compressed or irreducible files, compressing won't help).
+- **Tailor the plan-upgrade angle to who is uploading:**
+  - **Weegloo User / admin (CMA path):** they control billing — may also raise the cap via a plan
+    upgrade.
   - **Service User / end-user (ACMA path):** the uploader is a **third party** who **cannot**
-    change the Space's plan or see its billing. Tell them only to **reduce / compress** the file
-    (ideally state the max size). Do **not** surface "upgrade your plan" or plan/billing wording to
-    them — raising the cap is the **product operator's** decision, not the end-user's.
+    change the Space's plan or see its billing. Keep the message to the smaller-file path only; do
+    **not** surface "upgrade your plan" or plan/billing wording — raising the cap is the **product
+    operator's** decision, not the end-user's.
 - **Recommended: client-side pre-validation.** Check `file.size` before uploading to fail fast and
   avoid a long upload that dies mid-stream. Since the exact cap is plan-specific, gate on a
   configured limit (or the free-tier floor) rather than guessing.
@@ -154,8 +158,9 @@ only the follow-up Media-create plane differs by identity.
 1. Pick the plane by identity (Weegloo User → CMA; Service User → ACMA).
 2. `POST` the bytes to the Upload API (multipart or binary). Keep `Upload.sys.id`.
 3. Handle the plan size cap: pre-validate `file.size`, and on **`429` / `WGL429004`** show a
-   "file too large" message — admins may compress **or** upgrade; for Service-User uploads tell the
-   end-user only to compress (no "upgrade plan" wording). Don't hardcode a limit or blind-retry.
+   "file too large" message steering to a **smaller file** (advice fits the asset type, not always
+   "compress"). Admins may also upgrade the plan; for Service-User uploads omit "upgrade plan"
+   wording. Don't hardcode a limit or blind-retry.
 4. Create the **Media** (or **WebHosting**) referencing `upload.sys.id` **before `expiresAt`**.
 5. For Media: wait until `sys.status === Published` (and file state clear) before using it from Content.
 6. Building product code? Use the REST Upload API. Agent uploading a local file in-chat? Use the
