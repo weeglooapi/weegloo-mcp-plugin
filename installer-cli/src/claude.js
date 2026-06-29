@@ -5,6 +5,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
 import { writeContentFile } from './io.js';
+import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from './self-update.js';
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -41,6 +42,7 @@ export function getClaudeMcpPath(scope = 'project') {
 export async function installClaude({
   token,
   pluginRef,
+  version,
   mcpGroup,
   skills,
   rules,
@@ -49,6 +51,8 @@ export async function installClaude({
   installMcp,
   installSkillsRules,
 }) {
+  // Bake this install's version + refresh command into the self-update rule (option B).
+  rules = applySelfUpdateTemplate(rules, { version, agent: 'claude', ref: pluginRef, scope });
   const claudeHome = path.join(os.homedir(), '.claude');
   const baseDir = scope === 'global' ? claudeHome : path.join(process.cwd(), '.claude');
   const skillsDir = path.join(baseDir, 'skills');
@@ -136,6 +140,12 @@ export async function installClaude({
     } catch (err) {
       rulesSpinner.fail(`  Failed to install rules: ${err.message}`);
     }
+  }
+
+  // Arm the version-check throttle stamp so the weegloo-version rule's 14-day window starts.
+  if (installSkillsRules && rules.some((r) => r.id === SELF_UPDATE_RULE_ID)) {
+    const stampPath = writeVersionStamp(scope);
+    if (stampPath) console.log(chalk.dim(`  - Version check armed  → ${stampPath}`));
   }
 
   // ── Next steps ──────────────────────────────────────────────

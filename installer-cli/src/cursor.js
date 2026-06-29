@@ -5,6 +5,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
 import { writeContentFile } from './io.js';
+import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from './self-update.js';
 
 const CURSOR_HOME = path.join(os.homedir(), '.cursor');
 
@@ -57,6 +58,7 @@ function buildMcpUrlWithGroup(baseUrl, group) {
 export async function installCursor({
   token,
   pluginRef,
+  version,
   mcpGroup,
   skills,
   rules,
@@ -65,6 +67,8 @@ export async function installCursor({
   installMcp,
   installSkillsRules,
 }) {
+  // Bake this install's version + refresh command into the self-update rule (option B).
+  rules = applySelfUpdateTemplate(rules, { version, agent: 'cursor', ref: pluginRef, scope });
   const baseDir = scope === 'global' ? CURSOR_HOME : path.join(process.cwd(), '.cursor');
   const skillsDir = path.join(baseDir, 'skills');
   const rulesDir = path.join(baseDir, 'rules');
@@ -151,6 +155,12 @@ export async function installCursor({
     } catch (err) {
       rulesSpinner.fail(`  Failed to install rules: ${err.message}`);
     }
+  }
+
+  // Arm the version-check throttle stamp so the weegloo-version rule's 14-day window starts.
+  if (installSkillsRules && rules.some((r) => r.id === SELF_UPDATE_RULE_ID)) {
+    const stampPath = writeVersionStamp(scope);
+    if (stampPath) console.log(chalk.dim(`  - Version check armed  → ${stampPath}`));
   }
 
   console.log();

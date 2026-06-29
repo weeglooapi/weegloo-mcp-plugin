@@ -173,6 +173,9 @@ function normalizeManifest(data) {
 
   return {
     source: 'manifest',
+    // Optional: older manifests (pre-self-update) have no `version`. Absent ⇒ null, which the
+    // installer bakes into the self-update rule as `unknown` so the rule skips the check.
+    version: typeof data.version === 'string' ? data.version : null,
     repoContentPrefix: data.repoContentPrefix,
     mcp: { weeglooUrl: data.mcp.weeglooUrl, uploadApiUrl: data.mcp.uploadApiUrl },
     skills,
@@ -190,7 +193,7 @@ function normalizeManifest(data) {
  * unsupported schemaVersion) so the caller can fail fast rather than install a degraded set.
  *
  * @param {string} ref
- * @returns {Promise<{ source: string, repoContentPrefix: string, mcp: {weeglooUrl:string, uploadApiUrl:string}, skills: Array<{id:string, files:Record<string,string>}>, rules: Array<{id:string, content:string}> } | null>}
+ * @returns {Promise<{ source: string, version: string|null, repoContentPrefix: string, mcp: {weeglooUrl:string, uploadApiUrl:string}, skills: Array<{id:string, files:Record<string,string>}>, rules: Array<{id:string, content:string}> } | null>}
  */
 export async function loadResources(ref) {
   const url = `${RAW_BASE}/${ref}/${PLUGIN_PACKAGE_ROOT}/installer-manifest.json`;
