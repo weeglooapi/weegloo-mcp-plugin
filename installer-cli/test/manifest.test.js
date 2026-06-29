@@ -42,6 +42,9 @@ test('buildManifest is deterministic and embeds skill/rule text + MCP urls', () 
   const manifest = buildManifest({ rootDir: REPO_ROOT });
 
   assert.equal(manifest.schemaVersion, 1);
+  // Content fingerprint: non-empty, and a pure function of content (verified by the
+  // byte-identical re-build below) so the regenerate-on-push idempotence guard holds.
+  assert.ok(typeof manifest.version === 'string' && manifest.version.length > 0, 'has version');
   assert.equal(manifest.repoContentPrefix, 'plugins/weegloo');
   assert.ok(manifest.mcp.weeglooUrl.length > 0 && manifest.mcp.uploadApiUrl.length > 0);
   assert.ok(manifest.skills.length > 0, 'has skills');

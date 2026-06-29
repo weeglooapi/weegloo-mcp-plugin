@@ -326,6 +326,7 @@ async function main() {
   const answers = {
     token: installMcp ? token : undefined,
     pluginRef,
+    version: resources.version,
     mcpGroup,
     skills,
     rules,

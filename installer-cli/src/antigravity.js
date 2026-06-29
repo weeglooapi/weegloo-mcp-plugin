@@ -5,6 +5,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
 import { writeContentFile } from './io.js';
+import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from './self-update.js';
 
 const ANTIGRAVITY_HOME = path.join(os.homedir(), '.gemini', 'antigravity');
 const ANTIGRAVITY_MCP_PATH = path.join(ANTIGRAVITY_HOME, 'mcp_config.json');
@@ -50,6 +51,7 @@ function appendToGeminiMd(ruleName, content) {
 export async function installAntigravity({
   token,
   pluginRef,
+  version,
   mcpGroup,
   skills,
   rules,
@@ -58,6 +60,8 @@ export async function installAntigravity({
   installMcp,
   installSkillsRules,
 }) {
+  // Bake this install's version + refresh command into the self-update rule (option B).
+  rules = applySelfUpdateTemplate(rules, { version, agent: 'antigravity', ref: pluginRef, scope });
   const skillsDir = scope === 'global'
     ? path.join(ANTIGRAVITY_HOME, 'skills')
     : path.join(process.cwd(), '.agent', 'skills');
@@ -157,6 +161,12 @@ export async function installAntigravity({
     } catch (err) {
       rulesSpinner.fail(`  Failed to install rules: ${err.message}`);
     }
+  }
+
+  // Arm the version-check throttle stamp so the weegloo-version rule's 14-day window starts.
+  if (installSkillsRules && rules.some((r) => r.id === SELF_UPDATE_RULE_ID)) {
+    const stampPath = writeVersionStamp(scope);
+    if (stampPath) console.log(chalk.dim(`  - Version check armed  → ${stampPath}`));
   }
 
   console.log();

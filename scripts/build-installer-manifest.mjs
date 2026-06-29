@@ -10,6 +10,7 @@
  * order is sorted so output is identical across platforms and CI runs.
  */
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -109,17 +110,33 @@ function buildMcp(contentRoot, rootDir) {
 }
 
 /**
+ * Short, deterministic fingerprint of the embedded content (mcp + skills + rules).
+ * It is a PURE FUNCTION of repo content — no timestamps / shas — so the regenerate-on-push
+ * idempotence guard (`git diff --quiet`) still holds: identical content ⇒ identical version.
+ * The value changes iff the installed skills/rules/mcp change, which is exactly the signal
+ * the self-update flow needs (installer records it; the `weegloo-self-update` rule compares
+ * it against the branch's latest). Unrelated commits (e.g. README) do NOT move it.
+ */
+function contentVersion(content) {
+  return createHash('sha256').update(JSON.stringify(content)).digest('hex').slice(0, 12);
+}
+
+/**
  * @param {{ rootDir: string, contentPrefix?: string }} opts
- * @returns {{ schemaVersion: number, repoContentPrefix: string, mcp: object, skills: object[], rules: object[] }}
+ * @returns {{ schemaVersion: number, version: string, repoContentPrefix: string, mcp: object, skills: object[], rules: object[] }}
  */
 export function buildManifest({ rootDir, contentPrefix = 'plugins/weegloo' }) {
   const contentRoot = path.join(rootDir, contentPrefix);
+  const mcp = buildMcp(contentRoot, rootDir);
+  const skills = buildSkills(path.join(contentRoot, 'skills'));
+  const rules = buildRules(path.join(contentRoot, 'rules'));
   return {
     schemaVersion: SCHEMA_VERSION,
+    version: contentVersion({ mcp, skills, rules }),
     repoContentPrefix: contentPrefix,
-    mcp: buildMcp(contentRoot, rootDir),
-    skills: buildSkills(path.join(contentRoot, 'skills')),
-    rules: buildRules(path.join(contentRoot, 'rules')),
+    mcp,
+    skills,
+    rules,
   };
 }
 
