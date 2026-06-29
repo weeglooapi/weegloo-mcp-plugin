@@ -64,6 +64,24 @@ Both return **`201`** with an **`Upload`** resource:
 - `GET /v1/spaces/{spaceId}/uploads/{uploadId}` and `DELETE /v1/spaces/{spaceId}/uploads/{uploadId}`
   are available for inspection / cleanup.
 
+## Plan-based upload size limit — app code MUST handle it
+
+The Space's **plan caps the per-file upload size**. The cap is **plan-policy driven** (it can be
+overridden per Space), so **do not hardcode a number** as if it were universal — 50 MB is only the
+conservative free-tier floor; paid tiers are larger.
+
+- **Enforced server-side, mid-stream.** The server validates as bytes stream in, so an oversized
+  file may upload partially and then fail. On exceed it returns **HTTP `429`** with error code
+  **`WGL429004`** ("current Plan's max file size exceeded") — **not** a generic rate-limit, so do
+  **not** blindly retry it.
+- **App code MUST handle the `429` / `WGL429004` rejection** — surface a clear "file too large for
+  your plan" message and guide the user to compress the file or upgrade the plan.
+- **Recommended: client-side pre-validation.** Check `file.size` before uploading to fail fast and
+  avoid a long upload that dies mid-stream. Since the exact cap is plan-specific, gate on a
+  configured limit (or the free-tier floor) rather than guessing.
+- Exact per-plan limits are plan-defined and may change — confirm via the docs / pricing page
+  (`https://docs.weegloo.com/pricing/pricing/`), don't assume.
+
 ## Step 2a — Create a Media from the Upload
 
 `POST https://cma.weegloo.com/v1/spaces/{spaceId}/medias` (Weegloo User) **or**
@@ -129,9 +147,11 @@ only the follow-up Media-create plane differs by identity.
 
 1. Pick the plane by identity (Weegloo User → CMA; Service User → ACMA).
 2. `POST` the bytes to the Upload API (multipart or binary). Keep `Upload.sys.id`.
-3. Create the **Media** (or **WebHosting**) referencing `upload.sys.id` **before `expiresAt`**.
-4. For Media: wait until `sys.status === Published` (and file state clear) before using it from Content.
-5. Building product code? Use the REST Upload API. Agent uploading a local file in-chat? Use the
+3. Handle the plan size cap: pre-validate `file.size`, and on **`429` / `WGL429004`** show a
+   "too large for your plan" message (compress or upgrade) — don't hardcode a limit or blind-retry.
+4. Create the **Media** (or **WebHosting**) referencing `upload.sys.id` **before `expiresAt`**.
+5. For Media: wait until `sys.status === Published` (and file state clear) before using it from Content.
+6. Building product code? Use the REST Upload API. Agent uploading a local file in-chat? Use the
    `weegloo-upload` MCP instead.
 
 ## Related
