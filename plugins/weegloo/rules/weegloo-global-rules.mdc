@@ -8,6 +8,15 @@ description: >
 ---
 
 rules:
+  - section: Confirm the Weegloo MCP tools are loaded before starting (hard gate)
+    items:
+      - **Before doing any Weegloo work, check that the management tools are actually available in this session.** These are the **`mcp__weegloo__cma_*`** tools (ContentType, Content, Media, Role, DeliveryAccessToken, ServiceLogin, WebHosting, Organization/Space create, …). Do this **first**, before writing any code — including local scaffolding, app code, and config. Do **not** build a local app and only hit the blocker later.
+      - **If those tools are missing, the Weegloo MCP is not loaded — do not decide the task is impossible, and do not quietly build a local-only app instead.** The usual cause is that the Weegloo MCP needs **sign-in (OAuth) and a restart** before its tools load, and that has not been done yet. Seeing only **`mcp__weegloo-upload__CreateUpload`** is the typical symptom — that is a separate upload server, not the management tools.
+      - **Stop and tell the user, in their language:** the Weegloo management tools are not loaded, so real resources can't be created yet, and it most likely needs sign-in and a restart to enable. Then ask whether to (a) set that up and continue, or (b) proceed local-only — making clear that **no real Weegloo resources will be created** in that case. Do **not** pick for them.
+      - **Once the tools are confirmed, settle the target Organization + Space (see the next section) before the first build** — not after.
+      - **Report the Weegloo result first.** Lead the status with what actually happened on Weegloo ("real resources: N created / 0 — reason"), not with the local build. Do **not** headline "Weegloo integration done" when nothing was created on Weegloo.
+      - **This works from these rules alone** — it does not rely on invoking any skill, so it still applies in harnesses without skills (e.g. Codex).
+
   - section: Select the working Organization and Space FIRST (hard gate)
     items:
       - **Before any Weegloo work, the working `Organization` and `Space` must be decided.** Almost every resource (ContentType, Content, Media, WebHosting, roles, tokens, …) lives **inside a specific Space**, which lives inside an **Organization**. Choosing the wrong one silently scatters work into an arbitrary workspace.
