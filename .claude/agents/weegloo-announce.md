@@ -77,6 +77,25 @@ use the defaults above.
 
 # Writing rules (important)
 
+- **Frame everything as a Weegloo MCP update — make the subject of each change
+  unambiguous.** These are release notes for the **Weegloo MCP** (the Weegloo integration
+  the user works through), NOT the Weegloo server or the web console. A bare line like
+  "You can now package a WebHosting site as a MarketApp" is wrong here — the reader can't
+  tell *what* gained the ability. Instead:
+  - Begin every `body` with a **neutral** one-line localized framing lead before the
+    first group — neutral because a release may be only changes/fixes, not new features.
+    Use e.g. en-US `_Weegloo MCP update_`, ko-KR `_Weegloo MCP 업데이트_`. Do NOT use
+    "What's new" as the lead (it presumes new features that may not exist).
+  - Attribute each item to the Weegloo MCP, with wording that fits its group — don't
+    force "you can now" onto a change or a fix:
+    - New: "**With the Weegloo MCP**, you can now …" / "**Weegloo MCP로** 이제 …"
+    - Changed/Improved: "The Weegloo MCP now …" / "이제 Weegloo MCP는 …"
+    - Fixed: "Fixed in the Weegloo MCP: …" / "Weegloo MCP에서 … 문제를 해결했습니다"
+  - Only say the Weegloo **server** or **console** changed if the source explicitly says
+    so; otherwise describe it as Weegloo MCP behavior/guidance.
+  - Keep the term **"Weegloo MCP"** as-is across all locales (don't translate "MCP").
+  - Titles stay short feature headlines — the MCP framing lives in the body lead and the
+    summary, not crammed into every title.
 - **Audience = Weegloo users**, e.g. people building content models, publishing
   content, uploading media, configuring web hosting — NOT plugin developers.
 - **User impact is the ONLY thing that gets announced.** Before writing any item, ask:
@@ -87,7 +106,9 @@ use the defaults above.
 - **No internal mechanics or jargon.** Never mention `SKILL.md`, `.mdc`, file paths,
   manifests, git, commits, diffs, or "the skill/rule". Say what the *product behavior*
   or *guidance* is now.
-- **Group by impact**, not by file: New, Improved, Changed behavior, Removed.
+- **Group by impact**, not by file: New, Improved, Changed behavior, Fixed, Removed.
+  A release may have any subset — it's fine (and common) to have no "New" at all and
+  only Changed/Fixed items.
 - **Be concrete and short.** One or two sentences per item. Lead with the benefit.
 - **Don't invent.** Only describe what the changed content actually says.
 - **Each locale needs three pieces** (see Output format):
@@ -142,7 +163,8 @@ Requirements:
   are hard publish constraints — over-length values are rejected downstream.
 - `body` values are **GFM strings** (real newlines in the JSON, not the characters
   `\n`). Use `##`/`###` headings, `-` bullets, `**bold**`. Group by impact
-  (New / Improved / Changed behavior / Removed) and OMIT any empty group entirely.
+  (New / Improved / Changed behavior / Fixed / Removed) and OMIT any empty group
+  entirely — a release with only Changed/Fixed items is normal.
 - The announced set of items must be the SAME across all locales — only the language
   differs (see "Localize, don't machine-translate").
 - The file must be **valid JSON** (parseable by `JSON.parse`). No trailing commas, no
