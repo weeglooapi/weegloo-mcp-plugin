@@ -1,6 +1,6 @@
 ---
 name: weegloo-api-query-optimization
-description: Weegloo list APIs - projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call. ALSO covers the master/detail pattern (lightweight list/sidebar + on-click single-Content detail fetch) and resolving a Refer→Media image/file field to a displayable URL — use when building a history list, gallery, inbox, or any list-then-open-item UI. ALSO covers implementing a SEARCH feature: deciding in-memory vs server-side search (filtering the loaded array only works when it is the whole dataset) and full-text search over fields.* text via the Advanced Search header (X-Weegloo-Advanced-Search) — use when a UI has a search box over content/Media.
+description: Weegloo list APIs - projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call. ALSO covers the master/detail pattern (lightweight list/sidebar + on-click single-Content detail fetch) and resolving a Refer→Media image/file field to a displayable URL — use when building a history list, gallery, inbox, or any list-then-open-item UI. ALSO covers Weegloo image processing: appending a preset style segment (`/style1`..`/style10`, max-dimension px, aspect-preserving WebP) to a Media file URL to get on-the-fly resized thumbnails/avatars without re-uploading — use when sizing images, building thumbnails/avatars, or optimizing image delivery. ALSO covers implementing a SEARCH feature: deciding in-memory vs server-side search (filtering the loaded array only works when it is the whole dataset) and full-text search over fields.* text via the Advanced Search header (X-Weegloo-Advanced-Search) — use when a UI has a search box over content/Media.
 ---
 
 # Weegloo - query optimization for list APIs
@@ -188,6 +188,40 @@ file URL** (per the two paths above):
   front defeats the lightweight-list goal above. The reliable place to read image/file fields for
   rendering is the **detail fetch of the selected item** — exactly the per-item
   `…/contents/{contentId}` call, reading `fields.image1..N` → Media → file URL.
+
+### Image processing — on-the-fly resize via `/{styleN}`
+
+Once you have an image Media's file URL, **append a preset style name as a path segment** to get a
+**resized, WebP-converted** copy generated on the fly. The original file stays untouched — you do
+**not** re-upload or store a separate thumbnail.
+
+```
+<file URL>/style3        e.g.  https://…/tumbler.png/style3   → 128×128 WebP
+```
+
+Ten presets; each value is the **max dimension** in px and the **original aspect ratio is
+preserved** (the image is scaled so its longest side fits the box). Output is always **WebP at 100%
+quality**:
+
+| style | px | | style | px |
+|---|---|---|---|---|
+| `style1` | 32  | | `style6`  | 320  |
+| `style2` | 64  | | `style7`  | 480  |
+| `style3` | 128 | | `style8`  | 640  |
+| `style4` | 192 | | `style9`  | 960  |
+| `style5` | 256 | | `style10` | 1024 |
+
+There are **only these presets** — no arbitrary `width`/`height`/`quality`/`format` parameters.
+Pick the smallest style that covers the rendered size (e.g. avatars → `style1`/`style2`, list
+thumbnails → `style3`, hero → `style9`/`style10`); requesting a larger style than you display just
+wastes bytes. Use the **plain file URL** (no suffix) only when you genuinely need the untouched
+original (download, exact-fidelity, or a non-image asset).
+
+**Availability:** the styled URL works once the Media is **Published**, which a Media reaches
+**automatically** after its upload finishes processing — there is **no separate publish step** for
+Media (unlike Content). So a normally-uploaded image just works. The only cases where it is not yet
+deliverable: upload processing hasn't completed, or the upload opted out of auto-publish with
+**`X-Weegloo-Ignore-Publish: true`** (see `weegloo-upload-api`).
 
 ---
 
