@@ -58,9 +58,18 @@ and follow it exactly yourself.)
 
 - If it reports **no user-facing change** (`changed: []`), tell the user there's nothing
   to announce and **STOP** — do not publish.
-- Otherwise show the user the generated `title` and `summary` (en-US + ko-KR is enough to
-  eyeball; offer the full body / other locales on request) and **wait for confirmation**
-  before publishing.
+
+### 2b. Show the Korean version and get approval (mandatory gate)
+Before creating anything in CMA, show the user **only the Korean (`ko-KR`) version** of
+the generated announcement — the full `title`, `summary`, AND `body` — so they can review
+exactly how it reads. (Offer the other locales only if the user asks; ko-KR is the review
+copy.)
+
+- **Wait for explicit approval.** Do NOT proceed to create/publish until the user
+  approves the Korean version.
+- If the user wants changes, regenerate (step 2) — do not hand-edit `announcement.json` —
+  and show the new Korean version again.
+- Only after approval, continue to step 3.
 
 ### 3. Get the token (ask the user)
 Ask the user for the **Weegloo CMA Bearer token** (production). 
