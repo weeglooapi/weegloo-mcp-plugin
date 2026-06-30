@@ -82,20 +82,21 @@ use the defaults above.
   the user works through), NOT the Weegloo server or the web console. A bare line like
   "You can now package a WebHosting site as a MarketApp" is wrong here — the reader can't
   tell *what* gained the ability. Instead:
-  - Begin every `body` with a **neutral** one-line localized framing lead before the
-    first group — neutral because a release may be only changes/fixes, not new features.
-    Use e.g. en-US `_Weegloo MCP update_`, ko-KR `_Weegloo MCP 업데이트_`. Do NOT use
-    "What's new" as the lead (it presumes new features that may not exist).
-  - Attribute each item to the Weegloo MCP, with wording that fits its group — don't
-    force "you can now" onto a change or a fix:
-    - New: "**With the Weegloo MCP**, you can now …" / "**Weegloo MCP로** 이제 …"
-    - Changed/Improved: "The Weegloo MCP now …" / "이제 Weegloo MCP는 …"
-    - Fixed: "Fixed in the Weegloo MCP: …" / "Weegloo MCP에서 … 문제를 해결했습니다"
+  - **The `title` carries the Weegloo MCP framing** — lead with it, e.g.
+    en-US `Weegloo MCP: ship Web Hosting as a MarketApp`,
+    ko-KR `Weegloo MCP: Web Hosting을 MarketApp으로 배포`. This puts the subject in the
+    most visible place, so the body needs no separate "Weegloo MCP update" lead line —
+    start the body straight at the first group heading. (Mind the 64-char title limit;
+    keep the headline after the prefix short.)
+  - In the body, attribute items to the Weegloo MCP **where it removes ambiguity**, with
+    wording that fits the group — but don't repeat "Weegloo MCP" in every single bullet
+    (the title already established it):
+    - New: "you can now …" / "이제 …"
+    - Changed/Improved: "now …" / "이제 …"
+    - Fixed: "Fixed: …" / "… 문제를 해결했습니다"
   - Only say the Weegloo **server** or **console** changed if the source explicitly says
     so; otherwise describe it as Weegloo MCP behavior/guidance.
   - Keep the term **"Weegloo MCP"** as-is across all locales (don't translate "MCP").
-  - Titles stay short feature headlines — the MCP framing lives in the body lead and the
-    summary, not crammed into every title.
 - **Audience = Weegloo users**, e.g. people building content models, publishing
   content, uploading media, configuring web hosting — NOT plugin developers.
 - **User impact is the ONLY thing that gets announced.** Before writing any item, ask:

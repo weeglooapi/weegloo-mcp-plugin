@@ -75,9 +75,9 @@ copy.)
 Ask the user for the **Weegloo CMA Bearer token** (production). 
 - Take it as runtime input only. **Never** write it to a file, commit it, store it in
   memory, or echo it back in your response.
-- Optionally accept environment overrides if the user wants a non-default target:
-  `WEEGLOO_CMA_BASE`, `WEEGLOO_SPACE_ID`, `WEEGLOO_CONTENT_TYPE_ID`. Defaults already
-  target production.
+- The token is the ONLY thing to ask for. `WEEGLOO_CMA_BASE`, `WEEGLOO_SPACE_ID`, and
+  `WEEGLOO_CONTENT_TYPE_ID` are fixed production defaults baked into the script — do NOT
+  ask about them.
 
 ### 4. Create + publish
 Optionally dry-run first to show the exact payload without sending:
