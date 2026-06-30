@@ -43,6 +43,32 @@ use the defaults above.
 
    This gives you Added (`A`), Modified (`M`), Deleted (`D`), Renamed (`R`) paths.
 
+   **`A`/`D` describe the direction `BASE_SHA` → `HEAD_SHA`, which is only correct if
+   `HEAD_SHA` is genuinely newer than `BASE_SHA`. Do not trust it until step 1b confirms
+   the range is oriented correctly** — a reversed range turns every real addition into a
+   `D` and every real deletion into an `A`.
+
+1b. **Verify the range is not reversed BEFORE interpreting the diff (mandatory).**
+
+    ```bash
+    AHEAD=$(git rev-list --count "$BASE_SHA".."$HEAD_SHA")
+    BEHIND=$(git rev-list --count "$HEAD_SHA".."$BASE_SHA")
+    echo "head is $AHEAD ahead of base, $BEHIND behind"
+    git log --oneline "$BASE_SHA".."$HEAD_SHA" -- plugins/weegloo/skills plugins/weegloo/rules
+    ```
+
+    - If `BEHIND > AHEAD`, or the forward range (`base..head`) has ~0–1 commits while the
+      diff shows many changed files, the range is **reversed**. **STOP. Do not write an
+      announcement.** Report: "range appears reversed — head looks older than base" and
+      let the caller re-resolve. Announcing a reversed range produces the exact opposite of
+      reality (e.g. reporting an added skill as removed, or "now X-only" when X support was
+      actually broadened).
+    - **Then read the commit messages in the range and reconcile every claim against them.**
+      The commit message is ground truth; the name-status letter is not. If a commit says it
+      *split out / added / made generic* something while your diff reads it as *deleted /
+      narrowed* (or vice versa), **the diff direction is lying — stop and flag the
+      contradiction**, do not narrate the diff's literal direction.
+
 2. **If nothing relevant changed, stop.** Write nothing and report that there is no
    user-facing change. (The caller decides whether to skip sending.)
 
@@ -52,6 +78,11 @@ use the defaults above.
      so you describe *what actually changed*, not the whole feature again.
    - For Deleted files, read the **old** version (`git show "$BASE_SHA":<path>`) so you
      can say what is going away.
+   - **Corroborate every high-impact "Removed" / "dropped support" / "now X-only" claim
+     against a commit message that explicitly says so.** A whole-skill deletion or a
+     feature/provider removal inferred *only* from an `A`/`D` letter is a red flag for a
+     reversed or misread range — verify against the commit log (step 1b) before announcing
+     it. When in doubt, omit it rather than announce a removal that didn't happen.
    - Translate it into a user benefit / behavior change. Ask: *"What can a Weegloo
      user now do, do differently, or stop relying on?"*
 
