@@ -1,8 +1,21 @@
 name: Regenerate installer manifest
 
-# Branch-native distribution: whenever skills/rules/.mcp.json change on a branch,
-# regenerate plugins/weegloo/installer-manifest.json and commit it back to the same
-# branch so `npx weegloo` (which reads that one file via raw) serves fresh content.
+# Branch-native distribution: whenever skills/rules/.mcp.json change on a
+# DISTRIBUTABLE branch, regenerate plugins/weegloo/installer-manifest.json and commit
+# it back to the same branch so `npx weegloo` (which reads that one file via raw)
+# serves fresh content.
+#
+# Only distributable branches are auto-regenerated (see `branches:` below):
+#   - latest                    — the default `npx weegloo` ref
+#   - N.N.N                     — numeric version release branches (e.g. 1.0.12)
+#   - develop                   — internal mainline
+# The manifest embeds ALL skill/rule bodies + a content-hash `version` into ONE file,
+# so every skill/rule change touches it. If CI regenerated it on feature/PR branches
+# too, two concurrent skill/rule PRs would BOTH commit a manifest edit and collide on
+# merge. Gating to distributable branches means only the target branch's own CI mutates
+# the manifest — PR branches never touch it, so concurrent PRs never conflict on it, and
+# each merge self-heals the manifest on the target. Feature branches that genuinely need
+# a manifest (e.g. to test `npx weegloo --branch <feature>`) use workflow_dispatch below.
 #
 # Loop safety (no infinite re-trigger):
 #   - the default GITHUB_TOKEN's commits do NOT trigger workflows (GitHub built-in)
@@ -12,12 +25,17 @@ name: Regenerate installer manifest
 
 on:
   push:
+    branches:
+      - latest
+      - develop
+      - '[0-9]+.[0-9]+.[0-9]+'  # numeric version release branches (e.g. 1.0.12)
     paths:
       - 'plugins/weegloo/skills/**'
       - 'plugins/weegloo/rules/**'
       - 'plugins/weegloo/.mcp.json'
       - 'scripts/build-installer-manifest.mjs'
-  # Manual re-run for a chosen branch (e.g. to backfill a stale manifest) without
+  # Manual re-run for a chosen branch (e.g. to backfill a stale manifest, or to seed a
+  # manifest on a feature branch for `npx weegloo --branch <feature>` testing) without
   # pushing a throwaway commit. Runs the workflow file from the selected branch.
   workflow_dispatch:
 
