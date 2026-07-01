@@ -10,8 +10,16 @@
 
 import { parseArgs } from 'node:util';
 
-/** Selectable IDE/agent targets (the installer internally calls this `ide`). */
-export const AGENTS = ['cursor', 'claude', 'antigravity', 'codex'];
+/**
+ * Selectable IDE/agent targets (the installer internally calls this `ide`).
+ *
+ * NOTE: Antigravity is temporarily withheld — it is intentionally absent from
+ * this list so it appears neither in the interactive picker (see index.js) nor
+ * as a valid `--agent` value. The implementation (src/antigravity.js and its
+ * dispatch/prompt branches in index.js) is left intact; to re-enable, add
+ * `'antigravity'` back here and restore its choice in the index.js picker.
+ */
+export const AGENTS = ['cursor', 'claude', 'codex'];
 /** Install scopes (maps to `scope`). */
 export const LOCATIONS = ['project', 'global'];
 /** MCP server groups. `default` is the user-facing alias for the empty group ''. */
