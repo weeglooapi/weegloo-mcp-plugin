@@ -125,7 +125,8 @@ async function main() {
       choices: [
         { name: 'Cursor', value: 'cursor' },
         { name: 'Claude Code', value: 'claude' },
-        { name: 'Antigravity', value: 'antigravity' },
+        // Antigravity temporarily withheld — see AGENTS in cli.js. The
+        // antigravity dispatch/prompt branches below stay intact for re-enable.
         { name: 'Codex', value: 'codex' },
       ],
     });

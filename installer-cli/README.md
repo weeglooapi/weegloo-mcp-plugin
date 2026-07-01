@@ -1,6 +1,6 @@
 # weegloo
 
-A CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Antigravity, and Codex — interactive by default, or fully non-interactive for agents and CI.
+A CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, and Codex — interactive by default, or fully non-interactive for agents and CI.
 
 ## Usage
 
@@ -22,7 +22,7 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 | Option | Meaning |
 |---|---|
 | `-b, --branch <ref>` | Plugin version/branch to install (default: `latest`). Alias of `--ref`; also reads `WEEGLOO_REF`. |
-| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `antigravity` \| `codex`. |
+| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `codex`. |
 | `-l, --location <loc>` | Install location: `project` \| `global` (default: `global`). |
 | `--mcp <group>` | Install the MCP server with group: `default` \| `core` \| `extra` \| `all`. |
 | `--no-mcp` | Do not install the MCP server. |
@@ -77,7 +77,7 @@ WEEGLOO_REF=some-branch npx weegloo@latest
 In interactive mode the CLI asks the following questions in order (a flag from [CLI options](#cli-options) can pre-fill any of them, skipping that prompt):
 
 1. **Install location** - Global (`~/.cursor/`) or current project (`.cursor/`)
-2. **IDE** - Cursor / Claude Code / Antigravity / Codex
+2. **IDE** - Cursor / Claude Code / Codex
 3. **Personal Access Token** - Generate from the Weegloo console
 4. **MCP server group** - `default` / `core` / `extra` / `all`
 5. **Skills** - Select skills to install (multi-select)
