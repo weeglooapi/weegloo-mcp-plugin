@@ -10,19 +10,16 @@ import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from 
 const CURSOR_HOME = path.join(os.homedir(), '.cursor');
 
 /**
- * Cursor global MCP path (official app data location per OS).
+ * Cursor global (user-scope) MCP path.
+ *
+ * Cursor reads global MCP servers from `~/.cursor/mcp.json` on every OS
+ * (Windows resolves `~` to `%USERPROFILE%`) — not an OS-specific app-data
+ * directory. This also matches the global skills/rules location (CURSOR_HOME).
+ * Ref: https://cursor.com/docs/mcp
  * @returns {string}
  */
 export function getCursorGlobalMcpPath() {
-  const home = os.homedir();
-  if (process.platform === 'darwin') {
-    return path.join(home, 'Library', 'Application Support', 'Cursor', 'mcp.json');
-  }
-  if (process.platform === 'win32') {
-    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-    return path.join(appData, 'Cursor', 'mcp.json');
-  }
-  return path.join(home, '.config', 'Cursor', 'mcp.json');
+  return path.join(CURSOR_HOME, 'mcp.json');
 }
 
 /**
