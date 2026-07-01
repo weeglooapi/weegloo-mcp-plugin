@@ -20,3 +20,6 @@ temp/
 .claude/settings.local.json
 
 evals/
+
+# CI-generated release announcement (built fresh each run; never committed)
+announcement.json
