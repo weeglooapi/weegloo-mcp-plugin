@@ -40,9 +40,9 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 - **Weegloo platform accounts + `SpaceRole`** → manage **the Space itself** (CMA / Upload / CDA). The Weegloo User login mechanisms (PAT and console FE login popup) are documented in **`weegloo-user-login`**. DeliveryAccessToken for **CDA** also references **`SpaceRole`** (see **`weegloo-delivery-access-token`**).
 - **`ServiceUser` + `ServiceUserRole`** → end-users **of the product the Space ships**. Their tokens reach **ACMA** / **ACDA** (and **Upload**, for member-contributed media — see below), never the Weegloo-side management plane (**CMA** / **CDA**).
 
-## Sign-in flow (OAuth provider — Google, GitHub, or Facebook)
+## Sign-in flow (OAuth provider — Google, GitHub, Facebook, GitLab, LINE, Kakao, or Naver)
 
-1. The Space enables **ServiceLogin** with one or more providers (Google, GitHub, Facebook) in the console.
+1. The Space enables **ServiceLogin** with one or more providers (Google, GitHub, Facebook, GitLab, LINE, Kakao, Naver) in the console.
 2. The end user signs up / signs in through the configured provider in the product UI. Sign-up is open — anyone who reaches the screen can become a `ServiceUser` of this Space, subject to the provider's own checks.
 3. Weegloo returns a **Bearer Token** that identifies the member as the corresponding **`ServiceUser`** in that Space.
 4. The product stores the token (typically in browser storage for static sites; the same browser-security guidance — origin checks, prefer `sessionStorage` over `localStorage`, never log tokens — applies as in **`weegloo-user-login`**).
@@ -141,7 +141,7 @@ When wiring ServiceLogin for a product:
 ## Related
 
 - **Wire protocol + official browser SDK (`weegloo-service-user`):** **`weegloo-service-login-sdk`** skill (provider-agnostic spine).
-- **Per-provider console setup (obtain `clientId`/`clientSecret`):** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-github`** (GitHub); Facebook follows the same shape — see the spine's *Configuration responsibilities*.
+- **Per-provider console setup (obtain `clientId`/`clientSecret`):** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-github`** (GitHub), **`weegloo-service-login-kakao`** (Kakao), **`weegloo-service-login-naver`** (Naver), **`weegloo-service-login-line`** (LINE); Facebook and GitLab follow the same shape — see the spine's *Configuration responsibilities*.
 - **Base URLs / Accept header / API docs:** **`weegloo-api-endpoints`** rule.
 - **Picking the API combo per service type:** **`weegloo-service-architecture`** skill.
 - **Weegloo User login (admin / platform account — CMA, Upload, CDA):** **`weegloo-user-login`** skill.

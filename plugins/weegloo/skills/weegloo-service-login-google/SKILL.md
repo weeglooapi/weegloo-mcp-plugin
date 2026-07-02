@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-google
-description: Provider-specific setup for Weegloo ServiceLogin with **Google** OAuth 2.0 — the exact Google Cloud Console steps to create an OAuth client and obtain the `clientId` / `clientSecret`, the Google redirect URI to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google`), the OAuth consent screen / Test users gotcha, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is Google. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-sdk`; for the conceptual model see `weegloo-service-login`. Do not use this for GitHub or Facebook.
+description: Provider-specific setup for Weegloo ServiceLogin with **Google** OAuth 2.0 — the exact Google Cloud Console steps to create an OAuth client and obtain the `clientId` / `clientSecret`, the Google redirect URI to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google`), the OAuth consent screen / Test users gotcha, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is Google. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-sdk`; for the conceptual model see `weegloo-service-login`. Do not use this for another provider (GitHub, Facebook, GitLab, LINE, Kakao, or Naver).
 ---
 
 # Weegloo ServiceLogin — Google provider setup
@@ -14,8 +14,9 @@ that `ServiceLogin` needs. Everything else (the `auth.weegloo.com` wire protocol
 > **`weegloo-service-login`** (the conceptual model) and the wire-protocol/SDK flow from
 > **`weegloo-service-login-sdk`** (the spine). This skill does **not** decide whether to use Google —
 > the provider must already be chosen from the product's actual need. **Do not use this for a
-> non-Google provider** (GitHub/Facebook follow the same *shape*, but their console steps differ — see
-> *Configuration responsibilities* in the spine).
+> non-Google provider** (other providers follow the same *shape*, but their console steps differ —
+> GitHub, Kakao, Naver, and LINE have their own dedicated skills; Facebook and GitLab ride the spine's
+> generic shape — see *Configuration responsibilities* in the spine).
 
 ## Google's redirect URI (deploy-independent — register it now)
 
