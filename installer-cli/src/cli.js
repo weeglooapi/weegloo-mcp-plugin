@@ -19,7 +19,7 @@ import { parseArgs } from 'node:util';
  * dispatch/prompt branches in index.js) is left intact; to re-enable, add
  * `'antigravity'` back here and restore its choice in the index.js picker.
  */
-export const AGENTS = ['cursor', 'claude', 'codex'];
+export const AGENTS = ['cursor', 'claude', 'codex', 'androidstudio'];
 /** Install scopes (maps to `scope`). */
 export const LOCATIONS = ['project', 'global'];
 /** MCP server groups. `default` is the user-facing alias for the empty group ''. */

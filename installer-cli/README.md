@@ -1,6 +1,6 @@
 # weegloo
 
-A CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, and Codex — interactive by default, or fully non-interactive for agents and CI.
+A CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Codex, and Android Studio — interactive by default, or fully non-interactive for agents and CI.
 
 ## Usage
 
@@ -22,7 +22,7 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 | Option | Meaning |
 |---|---|
 | `-b, --branch <ref>` | Plugin version/branch to install (default: `latest`). Alias of `--ref`; also reads `WEEGLOO_REF`. |
-| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `codex`. |
+| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `codex` \| `androidstudio`. |
 | `-l, --location <loc>` | Install location: `project` \| `global` (default: `global`). |
 | `--mcp <group>` | Install the MCP server with group: `default` \| `core` \| `extra` \| `all`. |
 | `--no-mcp` | Do not install the MCP server. |
@@ -77,7 +77,7 @@ WEEGLOO_REF=some-branch npx weegloo@latest
 In interactive mode the CLI asks the following questions in order (a flag from [CLI options](#cli-options) can pre-fill any of them, skipping that prompt):
 
 1. **Install location** - Global (`~/.cursor/`) or current project (`.cursor/`)
-2. **IDE** - Cursor / Claude Code / Codex
+2. **IDE** - Cursor / Claude Code / Codex / Android Studio
 3. **Personal Access Token** - Generate from the Weegloo console
 4. **MCP server group** - `default` / `core` / `extra` / `all`
 5. **Skills** - Select skills to install (multi-select)
@@ -109,6 +109,17 @@ In interactive mode the CLI asks the following questions in order (a flag from [
 Codex writes `mcp_servers.weegloo` (HTTP URL) and `mcp_servers.weegloo-upload` (npx + env with your Personal Access Token). Multiple Weegloo instruction rules are merged into `AGENTS.md` with stable markers (re-runs update sections by rule id). Codex's own `.rules` files are for command approval policy, not agent instructions.
 
 Codex path rationale: Codex discovers persistent instructions from `AGENTS.md` / `AGENTS.override.md` files ([docs](https://developers.openai.com/codex/guides/agents-md)), and discovers skills from `.agents/skills` and `~/.agents/skills` ([docs](https://developers.openai.com/codex/skills)). Codex `.rules` files control sandbox approval policy, so Weegloo behavioral rules are installed as `AGENTS.md` instructions instead ([docs](https://developers.openai.com/codex/rules)).
+
+### Android Studio
+| Item | Path |
+|------|------|
+| MCP config | `mcp.json` in Android Studio's version-specific config dir (e.g. Windows: `%APPDATA%\Google\AndroidStudio<ver>\` · macOS: `~/Library/Application Support/Google/AndroidStudio<ver>/` · Linux: `~/.config/Google/AndroidStudio<ver>/`); the newest `AndroidStudio*` dir is auto-detected |
+| Skills | `.agent/skills/<skill-name>/` (project root) |
+| Instructions | `AGENTS.md` (project root) |
+
+Android Studio (Gemini) supports **only remote HTTP/SSE MCP servers, not stdio** ([docs](https://developer.android.com/studio/gemini/add-mcp-server)), so only the remote `weegloo` server is configured (as `mcpServers.weegloo` with `httpUrl`); the local stdio `weegloo-upload` server is **not** installed. Authentication uses the IDE's Connect (OAuth) button, so no token is written into `mcp.json`.
+
+Skills are **project-scoped only** — per the [Android skills spec](https://developer.android.com/tools/agents/android-skills) only skills within a project's codebase are supported — so they always install to `.agent/skills/<skill-name>/` at the project root (each skill is a folder with a `SKILL.md`), and behavioral rules are merged into the project's `AGENTS.md` ([AGENTS.md docs](https://developer.android.com/studio/gemini/agent-files)). There is no global/home install for Android Studio skills/rules; `--location global` is normalized to the current project (the MCP config still goes to Android Studio's config directory).
 
 ## Available Skills
 
