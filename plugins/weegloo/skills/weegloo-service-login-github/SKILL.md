@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-github
-description: Provider-specific setup for Weegloo ServiceLogin with **GitHub** OAuth 2.0 — the exact GitHub steps to register an OAuth App and obtain the `clientId` / `clientSecret`, the GitHub Authorization callback URL to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/github`), the single-callback-URL and generate-secret-shown-once gotchas, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is GitHub. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-sdk`; for the conceptual model see `weegloo-service-login`. Do not use this for Google or Facebook.
+description: Provider-specific setup for Weegloo ServiceLogin with **GitHub** OAuth 2.0 — the exact GitHub steps to register an OAuth App and obtain the `clientId` / `clientSecret`, the GitHub Authorization callback URL to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/github`), the single-callback-URL and generate-secret-shown-once gotchas, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is GitHub. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-sdk`; for the conceptual model see `weegloo-service-login`. Do not use this for another provider (Google, Facebook, GitLab, LINE, Kakao, or Naver).
 ---
 
 # Weegloo ServiceLogin — GitHub provider setup
@@ -14,8 +14,9 @@ This is the **GitHub instance** of the provider-agnostic ServiceLogin setup. It 
 > **`weegloo-service-login`** (the conceptual model) and the wire-protocol/SDK flow from
 > **`weegloo-service-login-sdk`** (the spine). This skill does **not** decide whether to use GitHub —
 > the provider must already be chosen from the product's actual need. **Do not use this for a
-> non-GitHub provider** (Google/Facebook follow the same *shape*, but their console steps differ — see
-> *Configuration responsibilities* in the spine; Google has its own **`weegloo-service-login-google`**).
+> non-GitHub provider** (other providers follow the same *shape*, but their console steps differ —
+> Google, Kakao, Naver, and LINE have their own dedicated skills; Facebook and GitLab ride the spine's
+> generic shape — see *Configuration responsibilities* in the spine).
 
 ## GitHub's Authorization callback URL (deploy-independent — register it now)
 
@@ -90,4 +91,4 @@ your own judgment on whether and where that belongs for the product you're build
 - **Provider-agnostic spine (wire protocol, SDK, `callbackUrl`, pitfalls):** **`weegloo-service-login-sdk`**.
 - **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser):** **`weegloo-service-login`**.
 - **Picking the API combo per service type:** **`weegloo-service-architecture`**.
-- **Google provider setup (the other dedicated provider skill):** **`weegloo-service-login-google`**.
+- **Other dedicated provider skills:** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-kakao`** (Kakao), **`weegloo-service-login-naver`** (Naver), **`weegloo-service-login-line`** (LINE).
