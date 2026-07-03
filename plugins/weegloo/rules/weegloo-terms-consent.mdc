@@ -1,0 +1,45 @@
+---
+id: weegloo-terms-consent
+type: rule
+title: Weegloo Terms-of-Service Consent Gate
+description: >
+  On the first Weegloo-related request of a session, verifies that the current user has
+  accepted the LATEST Weegloo terms of service — comparing `/me` `sys.term.acceptedAt`
+  against the terms' `effectiveDate` from `GET https://cma.weegloo.com/v1/policy/terms`.
+  While consent is missing or outdated, every Weegloo operation is refused and the user is
+  guided to review https://weegloo.com/terms and consent; `cma_AcceptTerms` is called only
+  after the user's explicit agreement.
+---
+
+rules:
+  - section: When this applies (first Weegloo request of the session; hard gate)
+    items:
+      - **Check on the user's FIRST Weegloo-related request in a session** — anything touching a Space, ContentType, Content, Media, WebHosting, token, ServiceLogin, or upload. Never for non-Weegloo work. Once consent is confirmed **current**, the check stays silent for the rest of the session; it re-enters only while consent is missing/outdated (see the blocked state below).
+      - **Order among the other gates:** run it **after** the MCP-auth gate (`weegloo-global-rules` — the check needs an authenticated `/me`) and **before** selecting the working Organization/Space or any other Weegloo read/write. If `/me` itself fails with an auth error, that is the auth gate's problem — fix that first.
+      - **Speak the user's language, and never expose internal mechanics** ("fetching the policy endpoint", "comparing timestamps"). If a step is user-visible (the HTTP fetch below may surface a permission prompt), precede it with ONE short plain line such as *"Checking your Weegloo terms-of-service status."* — nothing more.
+      - **This works from these rules alone** — it does not rely on invoking any skill, so it still applies in harnesses without skills (e.g. Codex).
+
+  - section: The check — is the user's consent current?
+    items:
+      - "**Step 1 — read the user's consent state:** call **`cma_GetCurrentUser`** (`GET /me`) and read **`sys.term`**: `{ \"accepted\": <boolean>, \"acceptedAt\": \"<ISO-8601 instant>\" }`. If another gate already fetched `/me` this session, reuse that response — don't call it twice."
+      - "**Step 2 — read the latest terms' effective date:** `GET https://cma.weegloo.com/v1/policy/terms` (public, **no auth**, not space-scoped). Response: `{ \"effectiveDate\": \"<ISO-8601 instant>\" }`."
+      - "**This endpoint is the sanctioned HTTP exception.** It is NOT exposed as an MCP tool, so the agent fetches it directly over HTTP — the ONE Weegloo API endpoint the agent may call itself, overriding the *agents use MCP tools only* rule for THIS read-only GET only. Everything else stays MCP-only. Do not send `Accept: application/json` (see `weegloo-api-endpoints`)."
+      - "**Step 3 — compare as instants** (both values are ISO-8601 UTC): consent is **current** iff **`sys.term.accepted === true` AND `acceptedAt >= effectiveDate`**."
+      - "**The server does NOT reset `accepted` to `false` when the terms are revised.** `accepted: true` with an `acceptedAt` BEFORE `effectiveDate` means the user agreed to an OLD version and has NOT consented to the current terms — the date comparison, not the boolean, is the real test."
+      - "**Consent current → total silence.** Say nothing about terms; just proceed with the request."
+      - "**Fail-open on network failure only:** if the `policy/terms` fetch fails (offline, server error), skip the comparison and proceed — never block the user's work on a fetch error. But `sys.term.accepted !== true` on `/me` is non-consent by itself, regardless of the fetch."
+
+  - section: While consent is missing or outdated — refuse Weegloo work
+    items:
+      - "**Refuse EVERY Weegloo operation, reads included** — all `mcp__weegloo__cma_*` calls, `weegloo-upload`, deploys, and any work that touches Weegloo resources. The ONLY allowed calls are: `cma_GetCurrentUser` (to re-check), the `policy/terms` GET above, and `cma_AcceptTerms` (after explicit consent — next section)."
+      - "**Tell the user WHY, in their language, every time they ask for Weegloo work:** the Weegloo terms of service were revised (effective `<effectiveDate>`), and the service cannot be used until they review and accept the latest terms at **https://weegloo.com/terms**. Ask them to read it and reply explicitly whether they agree. Repeat on every Weegloo-touching turn until resolved — do NOT do the work \"just this once\"."
+      - "**Non-Weegloo work continues normally.** Do not nag about terms on turns that don't touch Weegloo, and do not block unrelated coding tasks."
+      - "**Never engineer around the gate:** no raw HTTP calls to CMA/CDA/ACMA/etc. in place of the refused MCP tools, no queuing Weegloo writes \"for after consent\", and no doing the Weegloo work locally and reporting it as done."
+
+  - section: Accepting the terms — ONLY on the user's explicit agreement
+    items:
+      - "**`cma_AcceptTerms` records a legal consent — strictly the user's decision.** Call it ONLY after the user has, in this conversation, explicitly and affirmatively stated they agree to the latest terms (e.g. \"I agree\" / \"동의합니다\") after being shown **https://weegloo.com/terms**. NEVER call it preemptively, silently, on your own judgment, or bundled into another action."
+      - "**\"Just proceed\" / \"skip it\" / \"stop asking\" is NOT consent.** Only an explicit agreement TO THE TERMS counts. If the user declines or ignores it, keep Weegloo work blocked and carry on with non-Weegloo work."
+      - "**After the user consents:** call **`cma_AcceptTerms`**, then re-fetch `/me` and verify `sys.term.accepted === true` and `sys.term.acceptedAt >= effectiveDate` before declaring the gate cleared — then continue with the originally requested Weegloo work in the same turn."
+      - "**If `cma_AcceptTerms` is not in the session's tool list**, the installed Weegloo MCP predates the consent feature. Do NOT accept via raw HTTP on the user's behalf — tell the user the Weegloo MCP needs to be updated/reinstalled (or that they can accept on the Weegloo website), then re-check `/me`."
+      - "**If the tool call fails, surface the error** and stay blocked — do not retry in a loop, and never treat a failed call as consent recorded."
