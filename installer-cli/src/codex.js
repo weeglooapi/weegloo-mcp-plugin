@@ -133,14 +133,26 @@ export function getCodexRulesPath(scope = 'project') {
 }
 
 /**
- * Appends or replaces a rule section in AGENTS.md (marker per rule id).
+ * UTF-8 byte-order mark. Prepended to the Markdown context files we write (AGENTS.md /
+ * GEMINI.md) so Windows editors reliably detect them as UTF-8 instead of guessing the
+ * system ANSI codepage (e.g. CP949), which garbles non-ASCII rule text (Korean, etc.).
+ */
+const UTF8_BOM = String.fromCharCode(0xfeff);
+
+/**
+ * Appends or replaces a rule section in a Markdown context file (AGENTS.md / GEMINI.md),
+ * keyed by a per-rule marker. Always (re)writes the file with a leading UTF-8 BOM, and
+ * strips any pre-existing BOM first so it is never duplicated or left mid-file.
  */
 export function upsertRuleInAgentsMd(agentsPath, ruleName, content) {
   const marker = `<!-- weegloo:${ruleName} -->`;
   const endMarker = `<!-- /weegloo:${ruleName} -->`;
   const section = `\n${marker}\n${content.trim()}\n${endMarker}\n`;
 
-  const existing = fs.existsSync(agentsPath) ? fs.readFileSync(agentsPath, 'utf-8') : '';
+  let existing = fs.existsSync(agentsPath) ? fs.readFileSync(agentsPath, 'utf-8') : '';
+  if (existing.charCodeAt(0) === 0xfeff) existing = existing.slice(1);
+
+  const write = (body) => fs.writeFileSync(agentsPath, UTF8_BOM + body, 'utf-8');
 
   if (existing.includes(marker)) {
     const start = existing.indexOf(marker);
@@ -149,13 +161,13 @@ export function upsertRuleInAgentsMd(agentsPath, ruleName, content) {
       const before = existing.slice(0, start).trimEnd();
       const after = existing.slice(end + endMarker.length).trimStart();
       const merged = [before, section.trim(), after].filter(Boolean).join('\n\n');
-      fs.writeFileSync(agentsPath, `${merged}\n`, 'utf-8');
+      write(`${merged}\n`);
       return;
     }
   }
 
   const prefix = existing.trimEnd();
-  fs.writeFileSync(agentsPath, prefix ? `${prefix}\n${section}` : section.trimStart(), 'utf-8');
+  write(prefix ? `${prefix}\n${section}` : section.trimStart());
 }
 
 export async function installCodex({

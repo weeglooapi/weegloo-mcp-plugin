@@ -59,3 +59,28 @@ test('upsertRuleInAgentsMd appends and replaces marked Weegloo sections', () => 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test('upsertRuleInAgentsMd writes a single UTF-8 BOM (Windows detects UTF-8, not ANSI)', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'weegloo-agents-bom-'));
+  const agentsPath = path.join(tmpDir, 'GEMINI.md');
+
+  try {
+    // Rule body with non-ASCII (Korean) — the case that renders as garbled ANSI without a BOM.
+    upsertRuleInAgentsMd(agentsPath, 'weegloo-global-rules', '한글 규칙 본문');
+    // Re-run (idempotency): the BOM must not be duplicated or pushed mid-file.
+    upsertRuleInAgentsMd(agentsPath, 'weegloo-global-rules', '한글 규칙 본문 v2');
+
+    const bytes = fs.readFileSync(agentsPath); // raw buffer, no decoding
+    // Exactly one leading UTF-8 BOM (EF BB BF), and none elsewhere.
+    assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
+    const bomCount = bytes.filter((b, i) => b === 0xef && bytes[i + 1] === 0xbb && bytes[i + 2] === 0xbf).length;
+    assert.equal(bomCount, 1, 'expected exactly one UTF-8 BOM');
+
+    // Content round-trips as UTF-8 (decode after the 3-byte BOM).
+    const text = bytes.subarray(3).toString('utf-8');
+    assert.match(text, /한글 규칙 본문 v2/);
+    assert.doesNotMatch(text, /본문 v2 v2/);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

@@ -7,7 +7,6 @@ import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
-import { installAndroidStudio } from './androidstudio.js';
 import { installCodex, handleCodexMcpLogin, printCodexLoginNotice } from './codex.js';
 
 const PAT_GENERATION_URL = 'https://console.weegloo.com/account/profile/personal-access-tokens';
@@ -126,10 +125,8 @@ async function main() {
       choices: [
         { name: 'Cursor', value: 'cursor' },
         { name: 'Claude Code', value: 'claude' },
-        // Antigravity temporarily withheld — see AGENTS in cli.js. The
-        // antigravity dispatch/prompt branches below stay intact for re-enable.
         { name: 'Codex', value: 'codex' },
-        { name: 'Android Studio', value: 'androidstudio' },
+        { name: 'Antigravity', value: 'antigravity' },
       ],
     });
   }
@@ -139,10 +136,6 @@ async function main() {
   let installMcp = config.installMcp;
   let installSkillsRules = config.installSkillsRules;
 
-  // Android Studio supports only remote MCP servers (no stdio), so weegloo-upload
-  // is never installed there — advertise only the weegloo server in the prompts.
-  const mcpServersLabel = ide === 'androidstudio' ? '(weegloo)' : '(weegloo, weegloo-upload)';
-
   if (config.nonInteractive) {
     if (installMcp == null) installMcp = true;
     if (installSkillsRules == null) installSkillsRules = true;
@@ -151,7 +144,7 @@ async function main() {
       message: 'What would you like to install?',
       choices: [
         {
-          name: `Install MCP server  ${chalk.dim(mcpServersLabel)}`,
+          name: `Install MCP server  ${chalk.dim('(weegloo, weegloo-upload)')}`,
           value: 'mcp',
           checked: true,
         },
@@ -167,7 +160,7 @@ async function main() {
   } else {
     if (installMcp == null) {
       installMcp = await confirm({
-        message: `Install MCP server ${mcpServersLabel}?`,
+        message: 'Install MCP server (weegloo, weegloo-upload)?',
         default: true,
       });
     }
@@ -240,32 +233,27 @@ async function main() {
     }
   }
 
-  // Android Studio skills/rules are project-scoped only (no home/global variant), so it
-  // never prompts for scope — it's normalized to 'project' below.
   const needsScopePrompt =
-    ide !== 'androidstudio' &&
-    (installSkillsRules ||
-      ((ide === 'codex' || ide === 'cursor' || ide === 'claude') && installMcp));
+    installSkillsRules ||
+    ((ide === 'codex' || ide === 'cursor' || ide === 'claude' || ide === 'antigravity') && installMcp);
   if (config.scope == null && needsScopePrompt && !config.nonInteractive) {
     const scopeMessages = {
       codex: 'Where would you like to install Codex configuration (MCP / skills / rules)?',
       cursor: 'Where would you like to install Cursor configuration (MCP / skills / rules)?',
       claude: 'Where would you like to install Claude Code configuration (MCP / skills / rules)?',
-      // Antigravity MCP is always written to ~/.gemini/antigravity (scope-independent),
-      // so the scope choice only affects skills / rules.
-      antigravity: 'Where would you like to install Antigravity skills / rules?',
+      antigravity: 'Where would you like to install Antigravity configuration (MCP / skills / rules)?',
     };
     const projectHints = {
       codex: '(./.codex/ in current folder)',
       cursor: '(./.cursor/ in current folder)',
       claude: '(./.mcp.json and ./.claude/ in current folder)',
-      antigravity: '(./.agent/ in current folder)',
+      antigravity: '(./.agents/ and ./AGENTS.md in current folder)',
     };
     const globalHints = {
       codex: '(~/.codex/)',
       cursor: '(Cursor app data mcp.json)',
       claude: '(~/.claude.json)',
-      antigravity: '(~/.gemini/antigravity/ and GEMINI.md)',
+      antigravity: '(~/.gemini/ — config/mcp_config.json, skills/, GEMINI.md)',
     };
     const ideKey = ['codex', 'cursor', 'claude', 'antigravity'].includes(ide) ? ide : null;
 
@@ -289,34 +277,6 @@ async function main() {
     });
   }
 
-  // Antigravity writes MCP to a fixed path (~/.gemini/antigravity), so `global`
-  // location only affects skills/rules. Warn once everything is resolved (the
-  // values above may have come from prompts, not flags).
-  if (ide === 'antigravity' && scope === 'global' && installMcp && !installSkillsRules) {
-    console.log(
-      chalk.yellow('  ⚠  ') +
-      chalk.dim(
-        'Location \'global\' only affects Skills/Rules for Antigravity; the MCP config path is fixed (~/.gemini/antigravity).'
-      )
-    );
-    console.log();
-  }
-
-  // Android Studio: MCP goes to its version-specific config directory, and skills/rules are
-  // project-scoped only (.agent/skills and ./AGENTS.md at the project root). There is no
-  // global variant, so normalize scope to 'project' and warn if the user asked for global.
-  if (ide === 'androidstudio') {
-    if (config.scope === 'global') {
-      console.log(
-        chalk.yellow('  ⚠  ') +
-        chalk.dim(
-          'Android Studio skills/rules are project-scoped; installing into the current project (.agent/skills and ./AGENTS.md). MCP still goes to Android Studio\'s config directory.'
-        )
-      );
-      console.log();
-    }
-    scope = 'project';
-  }
 
   if (installSkillsRules) {
     // --ignore-skill / --ignore-rule skip a kind entirely; otherwise install ALL
@@ -368,8 +328,6 @@ async function main() {
     await installClaude(answers);
   } else if (ide === 'antigravity') {
     await installAntigravity(answers);
-  } else if (ide === 'androidstudio') {
-    await installAndroidStudio(answers);
   } else if (ide === 'codex') {
     await installCodex(answers);
   }

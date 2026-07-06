@@ -5,11 +5,29 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
 import { writeContentFile } from './io.js';
+import { upsertRuleInAgentsMd } from './codex.js';
 import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from './self-update.js';
 
-const ANTIGRAVITY_HOME = path.join(os.homedir(), '.gemini', 'antigravity');
-const ANTIGRAVITY_MCP_PATH = path.join(ANTIGRAVITY_HOME, 'mcp_config.json');
-const GEMINI_MD_PATH = path.join(os.homedir(), '.gemini', 'GEMINI.md');
+/**
+ * Antigravity (Google's agentic IDE, Gemini-based) target.
+ *
+ * Paths differ by scope:
+ *
+ *   Global (~/.gemini/):
+ *     ├── config/mcp_config.json   ← MCP servers
+ *     ├── skills/<id>/             ← skills
+ *     └── GEMINI.md                ← behavioral rules (Antigravity global context file)
+ *
+ *   Project (<cwd>/):
+ *     ├── AGENTS.md                ← behavioral rules (portable, project context file)
+ *     └── .agents/
+ *         ├── mcp_config.json      ← MCP servers
+ *         └── skills/<id>/         ← skills
+ *
+ * Rules are NOT written as separate files here: they are merged (marker per rule id,
+ * upsert-in-place) into GEMINI.md (global) or AGENTS.md (project) so re-installs update
+ * sections instead of duplicating content. Both are plain Markdown context files.
+ */
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -32,20 +50,25 @@ function buildMcpUrlWithGroup(baseUrl, group) {
   return `${baseUrl}${sep}group=${encodeURIComponent(group)}`;
 }
 
-/**
- * Appends rule content to ~/.gemini/GEMINI.md.
- * Skips if the rule's section marker already exists.
- */
-function appendToGeminiMd(ruleName, content) {
-  const marker = `<!-- weegloo:${ruleName} -->`;
-  const existing = fs.existsSync(GEMINI_MD_PATH)
-    ? fs.readFileSync(GEMINI_MD_PATH, 'utf-8')
-    : '';
+/** MCP config path by scope. */
+export function getAntigravityMcpPath(scope = 'global') {
+  return scope === 'global'
+    ? path.join(os.homedir(), '.gemini', 'config', 'mcp_config.json')
+    : path.join(process.cwd(), '.agents', 'mcp_config.json');
+}
 
-  if (existing.includes(marker)) return;
+/** Skills directory by scope. */
+export function getAntigravitySkillsDir(scope = 'global') {
+  return scope === 'global'
+    ? path.join(os.homedir(), '.gemini', 'skills')
+    : path.join(process.cwd(), '.agents', 'skills');
+}
 
-  const section = `\n${marker}\n${content}\n`;
-  fs.appendFileSync(GEMINI_MD_PATH, section, 'utf-8');
+/** Behavioral-rules Markdown file by scope: GEMINI.md (global) vs AGENTS.md (project). */
+export function getAntigravityRulesFile(scope = 'global') {
+  return scope === 'global'
+    ? path.join(os.homedir(), '.gemini', 'GEMINI.md')
+    : path.join(process.cwd(), 'AGENTS.md');
 }
 
 export async function installAntigravity({
@@ -62,9 +85,9 @@ export async function installAntigravity({
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
   rules = applySelfUpdateTemplate(rules, { version, agent: 'antigravity', ref: pluginRef, scope });
-  const skillsDir = scope === 'global'
-    ? path.join(ANTIGRAVITY_HOME, 'skills')
-    : path.join(process.cwd(), '.agent', 'skills');
+
+  const skillsDir = getAntigravitySkillsDir(scope);
+  const rulesFile = getAntigravityRulesFile(scope);
 
   console.log(chalk.bold('  ▶  Installing for Antigravity...'));
   console.log(chalk.dim(`     github: ${REPO} @ ${chalk.cyan(pluginRef)}`));
@@ -72,10 +95,11 @@ export async function installAntigravity({
 
   if (installMcp) {
     const { weeglooUrl, uploadApiUrl } = mcp;
+    const mcpPath = getAntigravityMcpPath(scope);
     const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
     try {
-      ensureDir(ANTIGRAVITY_HOME);
-      const config = readJsonSafe(ANTIGRAVITY_MCP_PATH);
+      ensureDir(path.dirname(mcpPath));
+      const config = readJsonSafe(mcpPath);
       if (!config.mcpServers) config.mcpServers = {};
 
       config.mcpServers['weegloo'] = {
@@ -90,9 +114,9 @@ export async function installAntigravity({
         },
       };
 
-      fs.writeFileSync(ANTIGRAVITY_MCP_PATH, JSON.stringify(config, null, 2), 'utf-8');
+      fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2), 'utf-8');
       mcpSpinner.succeed(
-        `  MCP servers configured  ${chalk.dim('→ ' + ANTIGRAVITY_MCP_PATH)}`
+        `  MCP servers configured  ${chalk.dim('→ ' + mcpPath)}`
       );
     } catch (err) {
       mcpSpinner.fail(`  Failed to configure MCP servers: ${err.message}`);
@@ -126,7 +150,7 @@ export async function installAntigravity({
     }
   }
 
-  // ── Rules download & install ────────────────────────────────
+  // ── Rules download & install (→ GEMINI.md global / AGENTS.md project) ────────
   if (!installSkillsRules) {
     console.log(chalk.dim('  - Rules: skipped (MCP only)'));
   } else if (rules.length === 0) {
@@ -134,30 +158,16 @@ export async function installAntigravity({
   } else {
     const rulesSpinner = ora({ text: `  Installing rules (0/${rules.length})`, indent: 0 }).start();
     try {
-      if (scope === 'global') {
-        // Global rules → append to ~/.gemini/GEMINI.md
-        ensureDir(path.dirname(GEMINI_MD_PATH));
-        for (let i = 0; i < rules.length; i++) {
-          const rule = rules[i];
-          rulesSpinner.text = `  Installing rules (${i + 1}/${rules.length}) ${chalk.dim(rule.id)}`;
-          appendToGeminiMd(rule.id, rule.content);
-        }
-        rulesSpinner.succeed(
-          `  Rules installed    ${chalk.dim(`(${rules.length})  → ${GEMINI_MD_PATH}`)}`
-        );
-      } else {
-        // Project rules → .agent/rules/<rule>.md
-        const rulesDir = path.join(process.cwd(), '.agent', 'rules');
-        ensureDir(rulesDir);
-        for (let i = 0; i < rules.length; i++) {
-          const rule = rules[i];
-          rulesSpinner.text = `  Installing rules (${i + 1}/${rules.length}) ${chalk.dim(rule.id)}`;
-          writeContentFile(path.join(rulesDir, `${rule.id}.md`), rule.content);
-        }
-        rulesSpinner.succeed(
-          `  Rules installed    ${chalk.dim(`(${rules.length})  → ${path.join(process.cwd(), '.agent', 'rules')}`)}`
-        );
+      ensureDir(path.dirname(rulesFile));
+      for (let i = 0; i < rules.length; i++) {
+        const rule = rules[i];
+        rulesSpinner.text = `  Installing rules (${i + 1}/${rules.length}) ${chalk.dim(rule.id)}`;
+        // Marker-per-rule upsert: re-installs replace the section in place (no duplication).
+        upsertRuleInAgentsMd(rulesFile, rule.id, rule.content);
       }
+      rulesSpinner.succeed(
+        `  Rules installed    ${chalk.dim(`(${rules.length})  → ${rulesFile}`)}`
+      );
     } catch (err) {
       rulesSpinner.fail(`  Failed to install rules: ${err.message}`);
     }
