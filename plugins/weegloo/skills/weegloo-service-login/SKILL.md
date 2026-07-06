@@ -121,12 +121,25 @@ Publish semantics still apply: ACDA only returns **published** snapshots - see *
 
 A product may combine all three - see **`weegloo-service-architecture`** for service-type recipes.
 
+## Author of member content — set `publishWithAuthor` at modeling time
+
+If the product ever needs to know **who created** a piece of member content once it is **delivered** (read back through **ACDA** / **CDA**), that content's **ContentType must have `publishWithAuthor: true`**. This single flag governs, on the delivery plane:
+
+- **Author byline / display** — "posted by X", a comment's author, the owner of a profile, an avatar next to a post.
+- **"My content" and per-member `:self` filtering** — showing a member only their own rows via a `createdBy: :self` role rule (**`weegloo-space-role`**).
+- **Author-based moderation or grouping** — anything that reads `sys.createdBy` off a delivered resource.
+
+Why it is easy to miss: **`publishWithAuthor` is `false` by default.** With the default, the **published snapshot delivered by ACDA / CDA carries no `sys.createdBy`**, so every author-dependent feature above silently comes back **empty** (byline blank, `:self` matches nothing) — even though **ACMA (management) still shows the author** because drafts always keep `sys.createdBy`. So it works in the console / on ACMA and breaks only on the delivered read.
+
+- Decide this **when you model the post / comment / review ContentType**, and enable it **before members start posting** — it is applied at publish time and is **not retroactive** (already-published entries must be re-published to gain an author).
+- Do **not** add a manual `author` field; use the built-in `sys.createdBy`. Detail and recovery: **`weegloo-create-content-type`** (*Author / createdBy* footgun); the permission angle: **`weegloo-space-role`** → *`:self` on delivery*.
+
 ## Configuration responsibilities (LLM checklist)
 
 When wiring ServiceLogin for a product:
 
 1. Define one or more **`ServiceUserRole`**s that match the product's permission tiers (e.g. `member-reader`, `paid-member`, `moderator`). Keep them **least-privilege**. For “only this member’s rows” on a ContentType, set **`createdBy.sys.id`** to **`:self`** on the role’s **`content`** (and/or **`media`**) rules — see **`weegloo-space-role`**.
-   - **⚠️ `:self` reads through ACDA need `publishWithAuthor: true` on that ContentType.** ACDA (delivery) matches `:self` against the **published snapshot's** `sys.createdBy`, which is **absent by default** — so members silently get **empty** results (and `Deny` rules over-expose). This is the #1 ServiceLogin footgun: it passes on ACMA (management) but breaks on ACDA. Set the flag **before** members post; it is **not retroactive**. See **`weegloo-create-content-type`** and **`weegloo-space-role`** → *`:self` on delivery*.
+   - **⚠️ A `:self` rule on a ContentType needs `publishWithAuthor: true` to work on ACDA** — the delivery snapshot has no author by default, so `:self` matches nothing (and `Deny` over-exposes) even though it passes on ACMA. This is the same delivery-plane author requirement as author bylines — see *Author of member content* above.
 2. Pick the **default** role and set **`ServiceLogin.sys.defaultRole`** to its `Refer`.
 3. Configure the OAuth provider(s) and the product origin(s) so callbacks reach the app.
 4. In product code, on successful provider sign-in, capture the **Bearer Token** and call **ACMA** / **ACDA** with it.
