@@ -15,10 +15,9 @@ import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from 
  * option (index.js normalizes scope to 'project' and never prompts for it).
  *
  *   MCP:    Android Studio's own configuration directory → mcp.json  (NOT per-project;
- *           the newest `AndroidStudio*` config dir is auto-detected). Android Studio supports
- *           only remote HTTP MCP servers, so only the remote `weegloo` server is written
- *           (as `mcpServers.weegloo` with `httpUrl`); the local stdio `weegloo-upload` is
- *           NOT installed. Auth is via the IDE Connect (OAuth) button, so `headers` is empty.
+ *           the newest `AndroidStudio*` config dir is auto-detected). Writes BOTH the remote
+ *           `weegloo` server (`httpUrl`; auth via the IDE Connect/OAuth button, so `headers`
+ *           is empty) AND the local stdio `weegloo-upload` server (npx; auth via the PAT).
  *   Skills: <project>/.android-studio/skills/<id>/
  *   Rules:  <project>/AGENTS.md  (single file, marker-per-rule upsert — like Antigravity)
  */
@@ -83,6 +82,7 @@ export function resolveAndroidStudioConfigDir() {
 }
 
 export async function installAndroidStudio({
+  token,
   pluginRef,
   version,
   mcpGroup,
@@ -104,17 +104,17 @@ export async function installAndroidStudio({
   console.log();
 
   if (installMcp) {
-    const { weeglooUrl } = mcp;
+    const { weeglooUrl, uploadApiUrl } = mcp;
     const { dir: configDir, detected } = resolveAndroidStudioConfigDir();
     const mcpPath = path.join(configDir, 'mcp.json');
-    const mcpSpinner = ora({ text: '  Configuring MCP server', indent: 0 }).start();
+    const mcpSpinner = ora({ text: '  Configuring MCP servers', indent: 0 }).start();
     try {
       ensureDir(configDir);
       const config = readJsonSafe(mcpPath);
       if (!config.mcpServers) config.mcpServers = {};
 
       // Remote HTTP server (httpUrl). Auth handled by the IDE Connect (OAuth) button, so
-      // headers stays empty. weegloo-upload is omitted — Android Studio has no stdio support.
+      // headers stays empty.
       config.mcpServers['weegloo'] = {
         httpUrl: buildMcpUrlWithGroup(weeglooUrl, mcpGroup),
         headers: {},
@@ -124,9 +124,19 @@ export async function installAndroidStudio({
         includeTools: [],
         excludeTools: [],
       };
+      // Local stdio upload server (npx) — Android Studio runs it like the other IDEs.
+      // Auth is the Personal Access Token (env), separate from the weegloo OAuth Connect.
+      config.mcpServers['weegloo-upload'] = {
+        command: 'npx',
+        args: ['-y', 'weegloo-upload'],
+        env: {
+          UPLOAD_API_URL: uploadApiUrl,
+          AUTH_BEARER_TOKEN: token,
+        },
+      };
 
       fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2), 'utf-8');
-      mcpSpinner.succeed(`  MCP server configured  ${chalk.dim('→ ' + mcpPath)}`);
+      mcpSpinner.succeed(`  MCP servers configured  ${chalk.dim('→ ' + mcpPath)}`);
       if (!detected) {
         console.log(
           chalk.yellow('  ⚠  ') +
@@ -136,14 +146,11 @@ export async function installAndroidStudio({
           )
         );
       }
-      console.log(
-        chalk.dim('  - Note: weegloo-upload (local file upload) is not installed — Android Studio supports only remote MCP servers.')
-      );
     } catch (err) {
-      mcpSpinner.fail(`  Failed to configure MCP server: ${err.message}`);
+      mcpSpinner.fail(`  Failed to configure MCP servers: ${err.message}`);
     }
   } else {
-    console.log(chalk.dim('  - MCP server: skipped (Skills/Rules only)'));
+    console.log(chalk.dim('  - MCP servers: skipped (Skills/Rules only)'));
   }
 
   // ── Skills download & install ───────────────────────────────

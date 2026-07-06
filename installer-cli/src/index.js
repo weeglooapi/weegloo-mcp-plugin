@@ -138,10 +138,6 @@ async function main() {
   let installMcp = config.installMcp;
   let installSkillsRules = config.installSkillsRules;
 
-  // Android Studio supports only remote MCP servers (no stdio), so weegloo-upload is
-  // never installed there — advertise only the weegloo server in the prompts.
-  const mcpServersLabel = ide === 'androidstudio' ? '(weegloo)' : '(weegloo, weegloo-upload)';
-
   if (config.nonInteractive) {
     if (installMcp == null) installMcp = true;
     if (installSkillsRules == null) installSkillsRules = true;
@@ -150,7 +146,7 @@ async function main() {
       message: 'What would you like to install?',
       choices: [
         {
-          name: `Install MCP server  ${chalk.dim(mcpServersLabel)}`,
+          name: `Install MCP server  ${chalk.dim('(weegloo, weegloo-upload)')}`,
           value: 'mcp',
           checked: true,
         },
@@ -166,7 +162,7 @@ async function main() {
   } else {
     if (installMcp == null) {
       installMcp = await confirm({
-        message: `Install MCP server ${mcpServersLabel}?`,
+        message: 'Install MCP server (weegloo, weegloo-upload)?',
         default: true,
       });
     }

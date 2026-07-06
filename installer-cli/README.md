@@ -128,7 +128,7 @@ Antigravity writes `mcpServers.weegloo` (HTTP URL via `serverUrl`) and `mcpServe
 | Skills | `.android-studio/skills/<skill-name>/` (project root) |
 | Rules | `AGENTS.md` (project root) |
 
-Android Studio (Gemini) supports **only remote HTTP/SSE MCP servers, not stdio** ([docs](https://developer.android.com/studio/gemini/add-mcp-server)), so only the remote `weegloo` server is written (`mcpServers.weegloo` with `httpUrl`, `headers`, `timeout`, `enabled`, `trust`, `includeTools`, `excludeTools`); the local stdio `weegloo-upload` server is **not** installed. Authentication uses the IDE's Connect (OAuth) button, so `headers` is empty (no token). Skills install to `.android-studio/skills/` and behavioral rules are merged into the project's `AGENTS.md` (single file, per-rule markers).
+Android Studio writes **both** MCP servers into `mcp.json` ([docs](https://developer.android.com/studio/gemini/add-mcp-server)): the remote `mcpServers.weegloo` (with `httpUrl`, `headers`, `timeout`, `enabled`, `trust`, `includeTools`, `excludeTools`) and the local stdio `mcpServers.weegloo-upload` (npx + env with your Personal Access Token). The remote `weegloo` server authenticates via the IDE's Connect (OAuth) button, so its `headers` is empty (no token); `weegloo-upload` authenticates with the PAT in its env. Skills install to `.android-studio/skills/` and behavioral rules are merged into the project's `AGENTS.md` (single file, per-rule markers).
 
 ## Available Skills
 
