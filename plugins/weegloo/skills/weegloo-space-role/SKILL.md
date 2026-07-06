@@ -90,7 +90,7 @@ Use the reserved value **`:self`** in **`createdBy.sys.id`**:
 
 `:self` is **not** a real user id in the directory; it is evaluated per request.
 
-> **`:self` on delivery (ACDA / CDA) needs `publishWithAuthor: true` on the ContentType.** `:self` matches `sys.createdBy`, which the published snapshot only carries when that flag is set (`false` by default). With the default, on delivery an `Allow` rule matches **nothing** (empty result) and a `Deny` rule excludes **no one** (over-exposure); **management (ACMA / CMA) is unaffected** (draft author always present), so a `:self` role can pass on ACMA yet break on ACDA. Set it before members post; not retroactive. Full mechanism: **`weegloo-create-content-type`** → *`publishWithAuthor`*.
+> **`:self` works on delivery (ACDA / CDA) only if the ContentType has `publishWithAuthor: true`** — otherwise the published snapshot has no `sys.createdBy` to match, so it passes on ACMA but silently returns empty (or over-exposes) on ACDA. See **`weegloo-create-content-type`** → *`publishWithAuthor`*.
 
 ---
 
@@ -178,7 +178,7 @@ OpenAPI field shapes: **`weegloo-api-endpoints`** → CMA API docs → **`Create
 - **Omitting `contentType`** when only one ContentType should be private — without it, the action may apply to **all** Content types that pass the `createdBy` filter.
 - **Confusing `SpaceRole` with `ServiceUserRole`** — Weegloo Users vs Service Users use different role resources and tokens; see **`weegloo-api-endpoints`** and **`weegloo-service-architecture`**.
 - **Expecting `:self` on a shared DeliveryAccessToken** to mean “each anonymous visitor sees their own data” — anonymous CDA has **no** per-visitor identity; per-user private delivery for members belongs on **ACDA** + **ServiceUserRole**, not public CDA.
-- **Using `:self` on ACDA / CDA without `publishWithAuthor: true`** — the delivery snapshot has no author, so `Allow` matches nothing and `Deny` excludes no one (passes on ACMA/CMA, breaks on delivery). See the `:self` note above; mechanism in **`weegloo-create-content-type`**.
+- **Using `:self` on ACDA / CDA without `publishWithAuthor: true`** — silently matches nothing on delivery (see the `:self` note above).
 
 ---
 

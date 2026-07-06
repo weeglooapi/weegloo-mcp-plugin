@@ -123,7 +123,7 @@ A product may combine all three - see **`weegloo-service-architecture`** for ser
 
 ## Author of member content — set `publishWithAuthor` at modeling time
 
-If the product will ever **show or filter by the author** of delivered member content — a comment/post **byline**, a "my posts" list, per-member **`:self`**, author-based moderation — the content's **ContentType needs `publishWithAuthor: true`**, set **when you model it, before members post** (it is `false` by default and not retroactive). Otherwise the ACDA / CDA snapshot carries no `sys.createdBy` and every one of those features silently comes back empty, even though it works on ACMA. Do **not** add a manual `author` field. Full mechanism and recovery: **`weegloo-create-content-type`** → *`publishWithAuthor`*.
+If the product will **show or filter by the author** of delivered member content — comment/post **byline**, a "my posts" list, per-member **`:self`**, author-based moderation — the ContentType needs **`publishWithAuthor: true`**, set when you model it, before members post. It is **`false` by default**, so this is easy to miss. Full mechanism (and why it works on ACMA but breaks on ACDA): **`weegloo-create-content-type`** → *`publishWithAuthor`*.
 
 ## Configuration responsibilities (LLM checklist)
 
