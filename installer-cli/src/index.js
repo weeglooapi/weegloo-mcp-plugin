@@ -7,6 +7,7 @@ import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
+import { installAndroidStudio } from './androidstudio.js';
 import { installCodex, handleCodexMcpLogin, printCodexLoginNotice } from './codex.js';
 
 const PAT_GENERATION_URL = 'https://console.weegloo.com/account/profile/personal-access-tokens';
@@ -127,6 +128,7 @@ async function main() {
         { name: 'Claude Code', value: 'claude' },
         { name: 'Codex', value: 'codex' },
         { name: 'Antigravity', value: 'antigravity' },
+        { name: 'Android Studio', value: 'androidstudio' },
       ],
     });
   }
@@ -136,6 +138,10 @@ async function main() {
   let installMcp = config.installMcp;
   let installSkillsRules = config.installSkillsRules;
 
+  // Android Studio supports only remote MCP servers (no stdio), so weegloo-upload is
+  // never installed there — advertise only the weegloo server in the prompts.
+  const mcpServersLabel = ide === 'androidstudio' ? '(weegloo)' : '(weegloo, weegloo-upload)';
+
   if (config.nonInteractive) {
     if (installMcp == null) installMcp = true;
     if (installSkillsRules == null) installSkillsRules = true;
@@ -144,7 +150,7 @@ async function main() {
       message: 'What would you like to install?',
       choices: [
         {
-          name: `Install MCP server  ${chalk.dim('(weegloo, weegloo-upload)')}`,
+          name: `Install MCP server  ${chalk.dim(mcpServersLabel)}`,
           value: 'mcp',
           checked: true,
         },
@@ -160,7 +166,7 @@ async function main() {
   } else {
     if (installMcp == null) {
       installMcp = await confirm({
-        message: 'Install MCP server (weegloo, weegloo-upload)?',
+        message: `Install MCP server ${mcpServersLabel}?`,
         default: true,
       });
     }
@@ -233,9 +239,12 @@ async function main() {
     }
   }
 
+  // Android Studio is project-only (no global variant), so it never prompts for scope —
+  // it's normalized to 'project' below.
   const needsScopePrompt =
-    installSkillsRules ||
-    ((ide === 'codex' || ide === 'cursor' || ide === 'claude' || ide === 'antigravity') && installMcp);
+    ide !== 'androidstudio' &&
+    (installSkillsRules ||
+      ((ide === 'codex' || ide === 'cursor' || ide === 'claude' || ide === 'antigravity') && installMcp));
   if (config.scope == null && needsScopePrompt && !config.nonInteractive) {
     const scopeMessages = {
       codex: 'Where would you like to install Codex configuration (MCP / skills / rules)?',
@@ -275,6 +284,22 @@ async function main() {
         },
       ],
     });
+  }
+
+  // Android Studio is project-only: skills → ./.android-studio/skills, rules → ./AGENTS.md, and
+  // the MCP config goes to Android Studio's own config directory. Normalize scope to 'project'
+  // and warn if the user explicitly asked for global.
+  if (ide === 'androidstudio') {
+    if (config.scope === 'global') {
+      console.log(
+        chalk.yellow('  ⚠  ') +
+        chalk.dim(
+          "Android Studio installs are project-only; using the current project (./.android-studio/skills and ./AGENTS.md). MCP goes to Android Studio's config directory."
+        )
+      );
+      console.log();
+    }
+    scope = 'project';
   }
 
 
@@ -328,6 +353,8 @@ async function main() {
     await installClaude(answers);
   } else if (ide === 'antigravity') {
     await installAntigravity(answers);
+  } else if (ide === 'androidstudio') {
+    await installAndroidStudio(answers);
   } else if (ide === 'codex') {
     await installCodex(answers);
   }

@@ -13,7 +13,7 @@ import { parseArgs } from 'node:util';
 /**
  * Selectable IDE/agent targets (the installer internally calls this `ide`).
  */
-export const AGENTS = ['cursor', 'claude', 'codex', 'antigravity'];
+export const AGENTS = ['cursor', 'claude', 'codex', 'antigravity', 'androidstudio'];
 /** Install scopes (maps to `scope`). */
 export const LOCATIONS = ['project', 'global'];
 /** MCP server groups. `default` is the user-facing alias for the empty group ''. */
