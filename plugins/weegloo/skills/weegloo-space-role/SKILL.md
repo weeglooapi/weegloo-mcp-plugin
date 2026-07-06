@@ -90,7 +90,7 @@ Use the reserved value **`:self`** in **`createdBy.sys.id`**:
 
 `:self` is **not** a real user id in the directory; it is evaluated per request.
 
-> **`:self` on delivery (ACDA / CDA) needs `publishWithAuthor: true` on the ContentType.** `:self` matches `sys.createdBy`, which the published snapshot only carries when that flag is set (`false` by default). With the default, on delivery an `Allow` rule matches **nothing** (empty result) and a `Deny` rule excludes **no one** (over-exposure); **management (ACMA / CMA) is unaffected** (draft author always present), so a `:self` role can pass on ACMA yet break on ACDA. Set it before members post; not retroactive. Full mechanism: **`weegloo-create-content-type`** → *Author / createdBy*.
+> **`:self` on delivery (ACDA / CDA) needs `publishWithAuthor: true` on the ContentType.** `:self` matches `sys.createdBy`, which the published snapshot only carries when that flag is set (`false` by default). With the default, on delivery an `Allow` rule matches **nothing** (empty result) and a `Deny` rule excludes **no one** (over-exposure); **management (ACMA / CMA) is unaffected** (draft author always present), so a `:self` role can pass on ACMA yet break on ACDA. Set it before members post; not retroactive. Full mechanism: **`weegloo-create-content-type`** → *`publishWithAuthor`*.
 
 ---
 

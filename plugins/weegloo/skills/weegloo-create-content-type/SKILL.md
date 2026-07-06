@@ -257,9 +257,27 @@ Full reference model (single / array / bidirectional / self / circular +
 
 ## Don't model what the platform provides
 
-- **Author / createdBy**: set `publishWithAuthor: true` on the ContentType. Published content then exposes `sys.createdBy` (and `sys.updatedBy`) automatically - do not create a separate author field (a Comment ContentType needs no `author` field). **This one flag is what makes the author available on the delivery plane (CDA / ACDA).** **Footgun:** it is **`false` by default** and applied **at publish time** (baked into the published snapshot), not as a read-time filter. With the default, the **published snapshot carries no `sys.createdBy`**, so on CDA / ACDA both **author bylines / display** *and* **`createdBy` / `:self` permission filters** silently return empty - while **management (CMA / ACMA) is unaffected** (drafts always keep `sys.createdBy`), which is exactly why it passes on the management plane and only breaks on the delivered read. **Enable it before the Content is authored/published** - turning it on later does **not** restore authors on already-published entries; you must **re-publish** each one. This is load-bearing for **ServiceLogin** products (member posts/comments read back through ACDA). Mechanism + recovery: Weegloo docs → *Content modeling* (Author exposure) and *System properties (sys)*.
+- **Author / `createdBy`**: expose the author via **`publishWithAuthor`** and the built-in **`sys.createdBy`** — do **not** add a separate author field (a Comment ContentType needs no `author` field). See the **`publishWithAuthor`** section below for when and how (it is `false` by default and not retroactive).
 - **Timestamps**: `sys.createdAt`, `sys.updatedAt` are automatic. Create a separate Date field only for user-controlled dates (e.g. a publish date the author picks).
 - **ID**: `sys.id` is auto-generated. Do not create an id field.
+
+---
+
+## `publishWithAuthor` — expose the author on the delivery plane
+
+`publishWithAuthor` is a boolean on the **ContentType** (not a field). It decides whether **publishing** bakes the author — `sys.createdBy` (and `sys.updatedBy`) — into the **published snapshot**. It is **`false` by default**.
+
+Set it whenever the **delivered** content needs to know **who created it**, and use the built-in `sys.createdBy` rather than a manual author field. It is the single switch behind all of:
+
+- **Author byline / display** on delivered content — "posted by X", a comment's author, a profile owner, an avatar next to a post.
+- **`createdBy` / `:self` permission filters** on the delivery plane — a member seeing only their own rows (see **`weegloo-space-role`**).
+- **Author-based grouping or moderation** — anything that reads `sys.createdBy` off a delivered resource.
+
+**Why the default bites (footgun).** With `publishWithAuthor: false`, the **CDA / ACDA published snapshot carries no `sys.createdBy`**, so every author-dependent feature above silently returns **empty** — a blank byline, a `:self` `Allow` rule that matches nothing, a `Deny` rule that excludes no one. **Management (CMA / ACMA) is unaffected**, because it reads the **draft**, which always keeps `sys.createdBy`. That asymmetry is the trap: it works in the console and on ACMA, and only breaks on the delivered read.
+
+**Applied at publish time, not retroactive.** Turning it on later does **not** restore authors on already-published entries — you must **re-publish** each one. So enable it **when you model the ContentType, before any Content is authored/published**.
+
+This is load-bearing for **ServiceLogin** products, where member posts/comments are written and read back through ACDA. Mechanism + recovery: Weegloo docs → *Content modeling* (Author exposure) and *System properties (sys)*.
 
 ---
 
