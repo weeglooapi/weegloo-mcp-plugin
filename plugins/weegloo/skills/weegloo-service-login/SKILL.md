@@ -123,7 +123,7 @@ A product may combine all three - see **`weegloo-service-architecture`** for ser
 
 ## Author of member content — set `publishWithAuthor` at modeling time
 
-If the product will **show or filter by the author** of delivered member content — comment/post **byline**, a "my posts" list, per-member **`:self`**, author-based moderation — the ContentType needs **`publishWithAuthor: true`**, set when you model it, before members post. It is **`false` by default**, so this is easy to miss. Full mechanism (and why it works on ACMA but breaks on ACDA): **`weegloo-create-content-type`** → *`publishWithAuthor`*.
+If the product will **display or filter by the author** of member content — comment/post byline, a "my posts" list, per-member **`:self`**, moderation — the ContentType needs **`publishWithAuthor: true`** (set it when you model the ContentType, before members post). Full details and the ACMA-vs-ACDA gotcha: **`weegloo-create-content-type`** → *`publishWithAuthor`*.
 
 ## Configuration responsibilities (LLM checklist)
 
