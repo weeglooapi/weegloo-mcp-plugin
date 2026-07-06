@@ -150,8 +150,6 @@ When planning an architecture, answer these in order:
 
 If the product covers more than one row, ship all matching paths - they coexist (recipe 5).
 
-**TypeScript projects:** if the app reads from CDA or ACDA, generate typed response interfaces with `npx weegloo-codegen` after ContentType setup. See **`weegloo-create-content-type`** skill for usage.
-
 ## After the architecture — model the content (do these next)
 
 Choosing the API / login / role combination is only step 1. **Before** writing any code, payloads, or asking the user to decide content-shape questions, invoke the content-modeling skills in order — do **not** design ContentTypes or Content from memory or from the rule summaries:

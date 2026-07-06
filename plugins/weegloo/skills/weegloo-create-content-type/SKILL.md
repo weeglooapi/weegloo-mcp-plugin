@@ -263,23 +263,6 @@ Full reference model (single / array / bidirectional / self / circular +
 
 ---
 
-## TypeScript codegen (CDA / ACDA response types)
-
-For TypeScript projects consuming CDA or ACDA, generate typed response interfaces from ContentType definitions with **`weegloo-codegen`**:
-
-```bash
-# 1. Export ContentTypes from CMA (MCP or REST), save the raw JSON response
-# 2. Generate types
-npx weegloo-codegen content-types.json -o ./generated
-```
-
-- **Input**: CMA ContentType list JSON (`{ items: [...] }`, bare array, or single CT). Get it by calling `cma_GetListContentTypes` (MCP) or `GET /v1/spaces/{spaceId}/content-types` (CMA REST) and saving the response body.
-- **Output**: per-ContentType `.ts` files with single-locale and `?locale=*` response shapes.
-- **Runtime**: `Refer`, `Media`, `LocaleWrap`, etc. come from `weegloo-codegen/runtime`.
-- **When to run**: after ContentType creation, schema change (field add/remove/type change, `localized` flag change), or when replacing hand-written CDA/ACDA response interfaces.
-
----
-
 ## Important
 
 - **Locale model** (default locale, fallback, `localized: false` writes): **`weegloo-default-locale`** rule and skill.
