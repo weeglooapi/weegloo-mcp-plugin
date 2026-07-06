@@ -20,6 +20,7 @@ rules:
       - **AI Agent (Cursor, Claude, etc.)** must **not** call these HTTP APIs directly. Use **Weegloo MCP tools** only.
       - **Application / development code** (frontend, backend, scripts) may call the APIs using the base URLs and paths documented below.
       - APIs are for **implementation in project code**; agents integrate via **MCP**, not raw REST calls.
+      - **Single agent-side exception:** the read-only **`GET https://cma.weegloo.com/v1/policy/terms`** fetch performed by the terms-consent gate — it has no MCP tool, so the agent calls it over HTTP as defined in **`weegloo-terms-consent`**. No other direct API call is allowed.
 
   - section: Two login models (read this before picking an API)
     items:

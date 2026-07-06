@@ -1,7 +1,7 @@
 {
   "name": "weegloo",
-  "version": "1.4.0",
-  "description": "CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Codex, and Antigravity (interactive or non-interactive)",
+  "version": "1.5.1",
+  "description": "CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Codex, Antigravity, and Android Studio (interactive or non-interactive)",
   "type": "module",
   "bin": {
     "weegloo": "bin.js"
@@ -24,6 +24,7 @@
     "claude",
     "codex",
     "antigravity",
+    "android-studio",
     "plugin",
     "installer"
   ],

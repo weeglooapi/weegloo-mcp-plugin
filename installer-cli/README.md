@@ -1,6 +1,6 @@
 # weegloo
 
-A CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Codex, and Antigravity — interactive by default, or fully non-interactive for agents and CI.
+A CLI to set up the Weegloo MCP plugin for Cursor, Claude Code, Codex, Antigravity, and Android Studio — interactive by default, or fully non-interactive for agents and CI.
 
 ## Usage
 
@@ -22,7 +22,7 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 | Option | Meaning |
 |---|---|
 | `-b, --branch <ref>` | Plugin version/branch to install (default: `latest`). Alias of `--ref`; also reads `WEEGLOO_REF`. |
-| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `codex` \| `antigravity`. |
+| `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `codex` \| `antigravity` \| `androidstudio`. |
 | `-l, --location <loc>` | Install location: `project` \| `global` (default: `global`). |
 | `--mcp <group>` | Install the MCP server with group: `default` \| `core` \| `extra` \| `all`. |
 | `--no-mcp` | Do not install the MCP server. |
@@ -77,7 +77,7 @@ WEEGLOO_REF=some-branch npx weegloo@latest
 In interactive mode the CLI asks the following questions in order (a flag from [CLI options](#cli-options) can pre-fill any of them, skipping that prompt):
 
 1. **Install location** - Global (`~/.cursor/`) or current project (`.cursor/`)
-2. **IDE** - Cursor / Claude Code / Codex / Antigravity
+2. **IDE** - Cursor / Claude Code / Codex / Antigravity / Android Studio
 3. **Personal Access Token** - Generate from the Weegloo console
 4. **MCP server group** - `default` / `core` / `extra` / `all`
 5. **Skills** - Select skills to install (multi-select)
@@ -118,6 +118,17 @@ Codex path rationale: Codex discovers persistent instructions from `AGENTS.md` /
 | Rules | `~/.gemini/GEMINI.md` | `AGENTS.md` (project root) |
 
 Antigravity writes `mcpServers.weegloo` (HTTP URL via `serverUrl`) and `mcpServers.weegloo-upload` (npx + env with your Personal Access Token) into `mcp_config.json`. Behavioral rules are **not** written as separate files: they are merged into Antigravity's context file — `GEMINI.md` for a global install, `AGENTS.md` for a project install — with stable per-rule markers, so re-running the installer updates each section in place instead of duplicating content. `GEMINI.md` is Antigravity's global context file; `AGENTS.md` is the portable project context file (also read by other agents).
+
+### Android Studio
+**Project-only** — Android Studio has no global install (`--location global` is normalized to the current project).
+
+| Item | Path |
+|------|------|
+| MCP config | `mcp.json` in Android Studio's version-specific config dir (e.g. Windows: `%APPDATA%\Google\AndroidStudio<ver>\` · macOS: `~/Library/Application Support/Google/AndroidStudio<ver>/` · Linux: `~/.config/Google/AndroidStudio<ver>/`); the newest `AndroidStudio*` dir is auto-detected |
+| Skills | `.android-studio/skills/<skill-name>/` (project root) |
+| Rules | `AGENTS.md` (project root) |
+
+Android Studio writes **both** MCP servers into `mcp.json` ([docs](https://developer.android.com/studio/gemini/add-mcp-server)): the remote `mcpServers.weegloo` (with `httpUrl`, `headers`, `timeout`, `enabled`, `trust`, `includeTools`, `excludeTools`) and the local stdio `mcpServers.weegloo-upload` (npx + env with your Personal Access Token). The remote `weegloo` server authenticates via the IDE's Connect (OAuth) button, so its `headers` is empty (no token); `weegloo-upload` authenticates with the PAT in its env. Skills install to `.android-studio/skills/` and behavioral rules are merged into the project's `AGENTS.md` (single file, per-rule markers).
 
 ## Available Skills
 
