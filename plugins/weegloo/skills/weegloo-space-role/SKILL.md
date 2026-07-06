@@ -90,6 +90,17 @@ Use the reserved value **`:self`** in **`createdBy.sys.id`**:
 
 `:self` is **not** a real user id in the directory; it is evaluated per request.
 
+### ⚠️ `:self` on delivery (ACDA / CDA) requires `publishWithAuthor: true`
+
+`:self` matches a resource's **`sys.createdBy`**. On the **delivery plane (ACDA / CDA)** that value comes from the **published snapshot**, which only carries `sys.createdBy` when the resource's **ContentType** has **`publishWithAuthor: true`** (see **`weegloo-create-content-type`**). It is **`false` by default** — with the default, the snapshot's author is `null`, so:
+
+- an **`Allow`** rule with `:self` matches **nothing** → the member silently gets an **empty** result on ACDA / CDA (the classic "my own posts / jobs don't show up" bug — no error, just empty);
+- a **`Deny`** (`$nor`) rule with `:self` excludes **no one** → **over-exposure** (a security hole, not just a display glitch).
+
+The **management plane (ACMA / CMA)** is **unaffected** — it evaluates `:self` against the **draft's** `sys.createdBy`, which is always present regardless of the flag. So a `:self` role can pass every ACMA/CMA test yet fail the moment the same data is read through **ACDA / CDA**.
+
+**Fix:** set **`publishWithAuthor: true`** on the ContentType **before** members start posting. It is applied at **publish time** and is **not retroactive** — already-published entries must be **re-published** to gain an author. Mechanism + recovery: **`weegloo-create-content-type`** → *Author / createdBy* footgun.
+
 ---
 
 ## Recipe — per-user private Content (Weegloo User)
@@ -176,6 +187,7 @@ OpenAPI field shapes: **`weegloo-api-endpoints`** → CMA API docs → **`Create
 - **Omitting `contentType`** when only one ContentType should be private — without it, the action may apply to **all** Content types that pass the `createdBy` filter.
 - **Confusing `SpaceRole` with `ServiceUserRole`** — Weegloo Users vs Service Users use different role resources and tokens; see **`weegloo-api-endpoints`** and **`weegloo-service-architecture`**.
 - **Expecting `:self` on a shared DeliveryAccessToken** to mean “each anonymous visitor sees their own data” — anonymous CDA has **no** per-visitor identity; per-user private delivery for members belongs on **ACDA** + **ServiceUserRole**, not public CDA.
+- **Using `:self` on ACDA / CDA without `publishWithAuthor: true`** — the published snapshot has no author, so `Allow` rules match **nothing** and `Deny` rules exclude **no one**. This passes on ACMA/CMA (draft) but breaks on delivery. See *`:self` on delivery* above and **`weegloo-create-content-type`**.
 
 ---
 

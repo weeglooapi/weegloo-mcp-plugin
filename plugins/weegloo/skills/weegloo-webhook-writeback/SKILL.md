@@ -74,6 +74,8 @@ When the job ContentType is the **Request / Response carrier** for an external A
 
 Use the reserved id **`:self`** (not a hard-coded User id) so the filter tracks **whoever is authenticated** — see **`weegloo-space-role`**.
 
+> **⚠️ Delivery-plane prerequisite:** if the frontend **polls the job through ACDA / CDA** (the usual pattern), the job **ContentType** must have **`publishWithAuthor: true`**. The delivery `:self` filter matches the **published snapshot's** `sys.createdBy`, which is **`null` by default** — so the `Read` **`Allow`** rule returns **nothing** (the poller never sees its own job, appearing to hang forever) and any `Deny` rule fails to isolate members. Set the flag at ContentType creation. **ACMA / CMA management reads are unaffected** (they use the draft's author). See **`weegloo-space-role`** → *`:self` on delivery* and **`weegloo-create-content-type`**.
+
 **Who gets which role**
 
 | Caller | Role resource | Assign via |

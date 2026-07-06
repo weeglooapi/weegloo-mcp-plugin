@@ -126,6 +126,7 @@ A product may combine all three - see **`weegloo-service-architecture`** for ser
 When wiring ServiceLogin for a product:
 
 1. Define one or more **`ServiceUserRole`**s that match the product's permission tiers (e.g. `member-reader`, `paid-member`, `moderator`). Keep them **least-privilege**. For “only this member’s rows” on a ContentType, set **`createdBy.sys.id`** to **`:self`** on the role’s **`content`** (and/or **`media`**) rules — see **`weegloo-space-role`**.
+   - **⚠️ `:self` reads through ACDA need `publishWithAuthor: true` on that ContentType.** ACDA (delivery) matches `:self` against the **published snapshot's** `sys.createdBy`, which is **absent by default** — so members silently get **empty** results (and `Deny` rules over-expose). This is the #1 ServiceLogin footgun: it passes on ACMA (management) but breaks on ACDA. Set the flag **before** members post; it is **not retroactive**. See **`weegloo-create-content-type`** and **`weegloo-space-role`** → *`:self` on delivery*.
 2. Pick the **default** role and set **`ServiceLogin.sys.defaultRole`** to its `Refer`.
 3. Configure the OAuth provider(s) and the product origin(s) so callbacks reach the app.
 4. In product code, on successful provider sign-in, capture the **Bearer Token** and call **ACMA** / **ACDA** with it.
