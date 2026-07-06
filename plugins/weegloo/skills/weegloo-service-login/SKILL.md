@@ -121,11 +121,16 @@ Publish semantics still apply: ACDA only returns **published** snapshots - see *
 
 A product may combine all three - see **`weegloo-service-architecture`** for service-type recipes.
 
+## Author of member content — set `publishWithAuthor` at modeling time
+
+If the product will **display or filter by the author** of member content — comment/post byline, a "my posts" list, per-member **`:self`**, moderation — the ContentType needs **`publishWithAuthor: true`** (set it when you model the ContentType, before members post). Full details and the ACMA-vs-ACDA gotcha: **`weegloo-create-content-type`** → *`publishWithAuthor`*.
+
 ## Configuration responsibilities (LLM checklist)
 
 When wiring ServiceLogin for a product:
 
 1. Define one or more **`ServiceUserRole`**s that match the product's permission tiers (e.g. `member-reader`, `paid-member`, `moderator`). Keep them **least-privilege**. For “only this member’s rows” on a ContentType, set **`createdBy.sys.id`** to **`:self`** on the role’s **`content`** (and/or **`media`**) rules — see **`weegloo-space-role`**.
+   - **⚠️ A `:self` rule needs `publishWithAuthor: true` on the ContentType to work on ACDA** — see *Author of member content* above.
 2. Pick the **default** role and set **`ServiceLogin.sys.defaultRole`** to its `Refer`.
 3. Configure the OAuth provider(s) and the product origin(s) so callbacks reach the app.
 4. In product code, on successful provider sign-in, capture the **Bearer Token** and call **ACMA** / **ACDA** with it.

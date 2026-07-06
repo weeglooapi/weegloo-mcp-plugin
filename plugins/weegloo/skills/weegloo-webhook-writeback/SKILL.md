@@ -74,6 +74,8 @@ When the job ContentType is the **Request / Response carrier** for an external A
 
 Use the reserved id **`:self`** (not a hard-coded User id) so the filter tracks **whoever is authenticated** — see **`weegloo-space-role`**.
 
+> **⚠️ If the job is polled through ACDA / CDA, its ContentType needs `publishWithAuthor: true`** — otherwise the `:self` `Read` returns nothing on delivery. Why: **`weegloo-create-content-type`** → *`publishWithAuthor`*.
+
 **Who gets which role**
 
 | Caller | Role resource | Assign via |

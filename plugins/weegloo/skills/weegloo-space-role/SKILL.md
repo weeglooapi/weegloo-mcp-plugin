@@ -90,6 +90,8 @@ Use the reserved value **`:self`** in **`createdBy.sys.id`**:
 
 `:self` is **not** a real user id in the directory; it is evaluated per request.
 
+> **`:self` works on delivery (ACDA / CDA) only if the ContentType has `publishWithAuthor: true`** — otherwise the published snapshot has no `sys.createdBy` to match, so it passes on ACMA but silently returns empty (or over-exposes) on ACDA. See **`weegloo-create-content-type`** → *`publishWithAuthor`*.
+
 ---
 
 ## Recipe — per-user private Content (Weegloo User)
@@ -176,6 +178,7 @@ OpenAPI field shapes: **`weegloo-api-endpoints`** → CMA API docs → **`Create
 - **Omitting `contentType`** when only one ContentType should be private — without it, the action may apply to **all** Content types that pass the `createdBy` filter.
 - **Confusing `SpaceRole` with `ServiceUserRole`** — Weegloo Users vs Service Users use different role resources and tokens; see **`weegloo-api-endpoints`** and **`weegloo-service-architecture`**.
 - **Expecting `:self` on a shared DeliveryAccessToken** to mean “each anonymous visitor sees their own data” — anonymous CDA has **no** per-visitor identity; per-user private delivery for members belongs on **ACDA** + **ServiceUserRole**, not public CDA.
+- **Using `:self` on ACDA / CDA without `publishWithAuthor: true`** — silently matches nothing on delivery (see the `:self` note above).
 
 ---
 
