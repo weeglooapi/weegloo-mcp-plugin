@@ -108,6 +108,8 @@ In interactive mode the CLI asks the following questions in order (a flag from [
 
 Codex writes `mcp_servers.weegloo` (HTTP URL) and `mcp_servers.weegloo-upload` (npx + env with your Personal Access Token). Multiple Weegloo instruction rules are merged into `AGENTS.md` with stable markers (re-runs update sections by rule id). Codex's own `.rules` files are for command approval policy, not agent instructions.
 
+**Project installs also register the project as trusted** in `~/.codex/config.toml` (`[projects."<dir>"] trust_level = "trusted"`): Codex [only loads project-scoped `.codex/` config for trusted projects](https://developers.openai.com/codex/config-basic), so without this entry the MCP servers written to `.codex/config.toml` would be silently ignored (and `codex mcp login weegloo` would fail with "No MCP server named 'weegloo' found"). An existing `[projects."<dir>"]` entry — including an explicit `untrusted` decision — is never modified; the installer warns instead.
+
 Codex path rationale: Codex discovers persistent instructions from `AGENTS.md` / `AGENTS.override.md` files ([docs](https://developers.openai.com/codex/guides/agents-md)), and discovers skills from `.agents/skills` and `~/.agents/skills` ([docs](https://developers.openai.com/codex/skills)). Codex `.rules` files control sandbox approval policy, so Weegloo behavioral rules are installed as `AGENTS.md` instructions instead ([docs](https://developers.openai.com/codex/rules)).
 
 ### Antigravity

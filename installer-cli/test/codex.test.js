@@ -5,8 +5,10 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  ensureCodexProjectTrust,
   getCodexInstructionsPath,
   getCodexSkillsDir,
+  readCodexProjectTrust,
   upsertRuleInAgentsMd,
 } from '../src/codex.js';
 
@@ -80,6 +82,92 @@ test('upsertRuleInAgentsMd writes a single UTF-8 BOM (Windows detects UTF-8, not
     const text = bytes.subarray(3).toString('utf-8');
     assert.match(text, /한글 규칙 본문 v2/);
     assert.doesNotMatch(text, /본문 v2 v2/);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('ensureCodexProjectTrust appends a trusted entry and is idempotent', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'weegloo-codex-trust-'));
+  const configPath = path.join(tmpDir, 'config.toml');
+  // Path with a space — the realistic case that breaks naive quoting.
+  const projectDir = '/Users/someone/My Project';
+
+  try {
+    fs.writeFileSync(configPath, '[mcp_servers.node_repl]\ncommand = "node"\n', 'utf-8');
+
+    const first = ensureCodexProjectTrust(projectDir, configPath);
+    assert.equal(first.status, 'added');
+    assert.equal(first.trustLevel, 'trusted');
+
+    const content = fs.readFileSync(configPath, 'utf-8');
+    assert.match(content, /\[mcp_servers\.node_repl\]/); // existing config preserved
+    assert.match(content, /\[projects\."\/Users\/someone\/My Project"\]/);
+    assert.match(content, /trust_level = "trusted"/);
+
+    const second = ensureCodexProjectTrust(projectDir, configPath);
+    assert.equal(second.status, 'exists');
+    assert.equal(second.trustLevel, 'trusted');
+    const occurrences = fs.readFileSync(configPath, 'utf-8').match(/\[projects\./g);
+    assert.equal(occurrences.length, 1, 'expected exactly one [projects.…] entry');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('ensureCodexProjectTrust creates the user config when missing', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'weegloo-codex-trust-new-'));
+  const configPath = path.join(tmpDir, 'home', '.codex', 'config.toml');
+
+  try {
+    const result = ensureCodexProjectTrust('/tmp/proj', configPath);
+    assert.equal(result.status, 'added');
+    const content = fs.readFileSync(configPath, 'utf-8');
+    assert.match(content, /\[projects\."\/tmp\/proj"\]/);
+    assert.match(content, /trust_level = "trusted"/);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('ensureCodexProjectTrust never overrides an explicit untrusted decision', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'weegloo-codex-untrusted-'));
+  const configPath = path.join(tmpDir, 'config.toml');
+  const projectDir = '/Users/someone/proj';
+
+  try {
+    const original = `[projects."${projectDir}"]\ntrust_level = "untrusted"\n`;
+    fs.writeFileSync(configPath, original, 'utf-8');
+
+    const result = ensureCodexProjectTrust(projectDir, configPath);
+    assert.equal(result.status, 'exists');
+    assert.equal(result.trustLevel, 'untrusted');
+    assert.equal(fs.readFileSync(configPath, 'utf-8'), original, 'config must be unchanged');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('readCodexProjectTrust round-trips Windows paths with escaped backslashes', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'weegloo-codex-win-'));
+  const configPath = path.join(tmpDir, 'config.toml');
+  const projectDir = 'C:\\Users\\me\\My Project';
+
+  try {
+    const first = ensureCodexProjectTrust(projectDir, configPath);
+    assert.equal(first.status, 'added');
+
+    const content = fs.readFileSync(configPath, 'utf-8');
+    // Backslashes must be escaped in the basic-string key: C:\\Users\\me\\My Project
+    assert.match(content, /\[projects\."C:\\\\Users\\\\me\\\\My Project"\]/);
+
+    // The escaped key must unquote back to the original path (idempotency check).
+    assert.deepEqual(readCodexProjectTrust(content, projectDir), {
+      found: true,
+      trustLevel: 'trusted',
+    });
+    const second = ensureCodexProjectTrust(projectDir, configPath);
+    assert.equal(second.status, 'exists');
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
