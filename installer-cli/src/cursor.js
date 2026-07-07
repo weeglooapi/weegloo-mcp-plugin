@@ -4,7 +4,7 @@ import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
-import { writeContentFile } from './io.js';
+import { writeContentFile, uploadServerCommand } from './io.js';
 import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from './self-update.js';
 
 const CURSOR_HOME = path.join(os.homedir(), '.cursor');
@@ -87,9 +87,10 @@ export async function installCursor({
         type: 'http',
         url: buildMcpUrlWithGroup(weeglooUrl, mcpGroup),
       };
+      const { command, args } = uploadServerCommand();
       config.mcpServers['weegloo-upload'] = {
-        command: 'npx',
-        args: ['-y', 'weegloo-upload'],
+        command,
+        args,
         env: {
           UPLOAD_API_URL: uploadApiUrl,
           AUTH_BEARER_TOKEN: token,

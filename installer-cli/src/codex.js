@@ -5,7 +5,7 @@ import { spawn } from 'child_process';
 import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
-import { writeContentFile } from './io.js';
+import { writeContentFile, uploadServerCommand } from './io.js';
 import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from './self-update.js';
 
 /**
@@ -96,13 +96,14 @@ export function stripWeeglooMcpSections(toml) {
  * @param {{ weeglooUrl: string, uploadApiUrl: string, token: string }} config
  */
 export function buildWeeglooMcpToml({ weeglooUrl, uploadApiUrl, token }) {
+  const { command, args } = uploadServerCommand();
   return [
     '[mcp_servers.weegloo]',
     `url = ${escapeTomlString(weeglooUrl)}`,
     '',
     '[mcp_servers.weegloo-upload]',
-    'command = "npx"',
-    'args = ["-y", "weegloo-upload"]',
+    `command = ${escapeTomlString(command)}`,
+    `args = [${args.map(escapeTomlString).join(', ')}]`,
     '',
     '[mcp_servers.weegloo-upload.env]',
     `UPLOAD_API_URL = ${escapeTomlString(uploadApiUrl)}`,
