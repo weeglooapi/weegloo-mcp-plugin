@@ -40,15 +40,21 @@ The `clientId` / `clientSecret` come from the user's **own Google Cloud OAuth cl
 can produce them. So when you reach this step, **stop and ask** — and **don't ask bare**. Hand the user
 this step-by-step walkthrough, with the real `{spaceId}` already filled into the redirect URI above:
 
-1. Go to **Google Cloud Console → APIs & Services → Credentials** (create or select a project first).
-   Give the user **this menu path** — it is the durable anchor. If you also want to hand them a
-   clickable link, **find the current one at that moment rather than pasting a hardcoded/memorized
-   URL** — Google relocates console pages, so a literal URL embedded here would go stale; look it up
-   (e.g. Google's official "Create OAuth client ID" / OAuth 2.0 setup docs).
+1. Go to the **Google Cloud Console → OAuth clients** page (create or select a project first):
+   **https://console.cloud.google.com/auth/clients** . Hand the user that link — it drops them
+   straight on the client list. If Google has relocated it (they move console pages periodically), fall
+   back to the durable menu path — **Google Auth Platform → Clients** (older consoles: **APIs &
+   Services → Credentials**) — which is the anchor; re-find the current URL from Google's docs if the
+   link 404s.
 2. **First time only:** configure the **OAuth consent screen** (User type **External**; set an app name
    + support email). While the app stays in *Testing*, add the signing-in Google account under **Test
    users**, otherwise sign-in is blocked.
-3. **+ Create Credentials → OAuth client ID**, Application type **Web application**, give it a name.
+3. **+ Create Credentials → OAuth client ID**, and for **Application type select `Web application`** —
+   give it a name. **Choose `Web application` even when your product is an Android / iOS app**; do
+   *not* pick the "Android" or "iOS" type. Weegloo's redirect URI is `https://auth.weegloo.com/…` (a
+   web URL), so from Google's side the OAuth client is always a web app — a native app receives its
+   token via the `https` WebHosting deep-link bridge, not a Google native client (see
+   **`weegloo-service-login-sdk`** → *Native apps (Android / iOS)*).
 4. Under **Authorized redirect URIs**, **Add URI** and paste **exactly** the redirect URI above (with
    the real `{spaceId}`). **No "Authorized JavaScript origins" are needed** — the browser navigates to
    `auth.weegloo.com`, never to Google directly.

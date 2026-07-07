@@ -50,6 +50,10 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 
 **Implementation:** the wire protocol on `auth.weegloo.com` (login redirect, `exchangeToken` POST exchange, refresh, logout), the official **`weegloo-service-user`** npm SDK, and the browser-specific gotchas (entry URL vs the provider redirect URI, GET-with-body limitation, `exchangeToken` URL stripping) live in the **`weegloo-service-login-sdk`** skill. Use that skill - and the SDK - instead of re-deriving the protocol when wiring a browser app.
 
+### Native apps (Android / iOS)
+
+ServiceLogin is **not browser-only** — native mobile apps can use it too. One constraint drives the wiring: **`ServiceLogin.callbackUrl` accepts only `http` / `https`, never a custom deep-link scheme** (`myapp://…`). So a native app points `callbackUrl` at a small **`https` Weegloo WebHosting page that redirects into the app's deep link**, passing the `?exchangeToken=…` through to the app, which then completes the token exchange itself. Full mechanism (bridge page, end-to-end flow, security notes): **`weegloo-service-login-sdk`** → *Native apps (Android / iOS)*.
+
 ## Token capability - ACMA / ACDA / Upload
 
 A Bearer Token issued by ServiceLogin may be used with:
