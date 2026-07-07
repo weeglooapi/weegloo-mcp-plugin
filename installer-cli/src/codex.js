@@ -71,6 +71,83 @@ function escapeTomlString(value) {
 }
 
 /**
+ * Escapes a value for use as a quoted key in a TOML table header
+ * (e.g. `[projects."C:\\Users\\me"]`). Table-header keys must be single-line
+ * basic strings — escapeTomlString's multi-line `"""…"""` form is invalid there.
+ */
+function tomlKeyString(value) {
+  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * Unquotes a raw TOML key segment (`"…"`, `'…'`, or bare) back to its value.
+ */
+function unquoteTomlKey(raw) {
+  const s = raw.trim();
+  if (s.startsWith('"') && s.endsWith('"')) {
+    return s.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  }
+  if (s.startsWith("'") && s.endsWith("'")) return s.slice(1, -1);
+  return s;
+}
+
+/**
+ * Finds the `[projects."<projectPath>"]` entry in a config.toml string.
+ * @returns {{ found: boolean, trustLevel?: string | null }}
+ */
+export function readCodexProjectTrust(toml, projectPath) {
+  let inTarget = false;
+  let found = false;
+  let trustLevel = null;
+
+  for (const line of toml.split(/\r?\n/)) {
+    const section = line.match(/^\[(.+)\]\s*$/);
+    if (section) {
+      const name = section[1].trim();
+      inTarget =
+        name.startsWith('projects.') &&
+        unquoteTomlKey(name.slice('projects.'.length)) === projectPath;
+      if (inTarget) found = true;
+      continue;
+    }
+    if (inTarget) {
+      const kv = line.match(/^\s*trust_level\s*=\s*"([^"]*)"/);
+      if (kv) trustLevel = kv[1];
+    }
+  }
+
+  return found ? { found: true, trustLevel } : { found: false };
+}
+
+/**
+ * Marks a project as trusted in the user-level Codex config. Codex only loads
+ * project-scoped `.codex/` layers (including `.codex/config.toml` with the MCP
+ * servers this installer writes) for trusted projects, and the trust record
+ * must live in `~/.codex/config.toml` — a project cannot declare itself trusted.
+ *
+ * An existing `[projects."…"]` entry is never modified: an explicit untrusted
+ * decision is the user's to change.
+ *
+ * @param {string} projectPath Absolute path of the project directory
+ * @param {string} [configPath] User-level config.toml (defaults to `~/.codex/config.toml`)
+ * @returns {{ status: 'added' | 'exists', trustLevel: string | null, configPath: string }}
+ */
+export function ensureCodexProjectTrust(projectPath, configPath = getCodexConfigPath('global')) {
+  ensureDir(path.dirname(configPath));
+  const existing = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf-8') : '';
+
+  const current = readCodexProjectTrust(existing, projectPath);
+  if (current.found) {
+    return { status: 'exists', trustLevel: current.trustLevel ?? null, configPath };
+  }
+
+  const block = `[projects.${tomlKeyString(projectPath)}]\ntrust_level = "trusted"\n`;
+  const base = existing.trimEnd();
+  fs.writeFileSync(configPath, base ? `${base}\n\n${block}` : block, 'utf-8');
+  return { status: 'added', trustLevel: 'trusted', configPath };
+}
+
+/**
  * Removes existing Weegloo MCP tables so re-runs do not duplicate sections.
  * @param {string} toml
  */
@@ -212,6 +289,28 @@ export async function installCodex({
       );
     } catch (err) {
       mcpSpinner.fail(`  Failed to configure MCP servers: ${err.message}`);
+    }
+
+    if (scope === 'project') {
+      const trustSpinner = ora({ text: '  Trusting project in Codex', indent: 0 }).start();
+      try {
+        const result = ensureCodexProjectTrust(process.cwd());
+        if (result.status === 'added') {
+          trustSpinner.succeed(
+            `  Project trusted in Codex  ${chalk.dim('→ ' + result.configPath)}`
+          );
+        } else if (result.trustLevel === 'trusted') {
+          trustSpinner.succeed(
+            `  Project already trusted in Codex  ${chalk.dim('→ ' + result.configPath)}`
+          );
+        } else {
+          trustSpinner.warn(
+            `  Project is '${result.trustLevel ?? 'untrusted'}' in ${result.configPath} — Codex ignores the project .codex/config.toml until you trust it (left unchanged).`
+          );
+        }
+      } catch (err) {
+        trustSpinner.fail(`  Failed to trust project in Codex: ${err.message}`);
+      }
     }
   } else {
     console.log(chalk.dim('  - MCP servers: skipped'));
