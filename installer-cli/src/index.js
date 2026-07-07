@@ -9,6 +9,7 @@ import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
 import { installAndroidStudio } from './androidstudio.js';
 import { installCodex, handleCodexMcpLogin, printCodexLoginNotice } from './codex.js';
+import { validateToken, cmaMeUrl } from './validate-token.js';
 
 const PAT_GENERATION_URL = 'https://console.weegloo.com/account/profile/personal-access-tokens';
 
@@ -49,6 +50,80 @@ function printBanner() {
   console.log(chalk.dim('  Sets up the Weegloo MCP plugin for your IDE.'));
   console.log(chalk.dim('  Configures MCP servers, Skills, and Rules automatically.'));
   console.log();
+}
+
+/**
+ * Resolves a Personal Access Token that is verified against CMA `GET /v1/me` (must
+ * return 200). A token supplied via --token / WEEGLOO_TOKEN is checked once; a token
+ * typed at the prompt is re-asked until it verifies. Returns the verified token.
+ *
+ * Failure handling: a definitive rejection (non-200) re-prompts interactively, or fails
+ * fast in non-interactive mode (never writes a known-bad token to config). A network
+ * error (couldn't reach CMA) re-prompts interactively, but in non-interactive mode it
+ * proceeds with a warning — the token can't be confirmed either way and blocking a piped
+ * install on a transient network fault would be worse than the prior no-check behavior.
+ *
+ * @param {{ providedToken: string|null, meUrl: string, nonInteractive: boolean }} args
+ * @returns {Promise<string>}
+ */
+async function resolveValidToken({ providedToken, meUrl, nonInteractive }) {
+  const verify = async (tok) => {
+    const spinner = ora({ text: '  Verifying token...', indent: 0 }).start();
+    const result = await validateToken(tok, { meUrl });
+    if (result.ok) {
+      spinner.succeed('  Token verified');
+    } else if (result.networkError) {
+      spinner.fail('  Could not reach Weegloo to verify the token.');
+    } else {
+      spinner.fail(`  Invalid Personal Access Token (server responded ${result.status}).`);
+    }
+    return result;
+  };
+
+  // 1) Token pinned via --token / WEEGLOO_TOKEN — verify it once.
+  if (providedToken != null) {
+    const result = await verify(providedToken);
+    if (result.ok) return providedToken;
+    if (nonInteractive) {
+      if (result.networkError) {
+        console.log(
+          chalk.yellow('  ⚠  ') +
+          chalk.dim('Proceeding without verification (network error). The token was NOT confirmed.')
+        );
+        return providedToken;
+      }
+      console.log();
+      console.log(chalk.red('  ✖  The provided Personal Access Token is invalid.'));
+      console.log(
+        chalk.dim('     Generate one from the Weegloo console: ') + chalk.cyan(PAT_GENERATION_URL)
+      );
+      console.log();
+      process.exit(1);
+    }
+    // Interactive: let the user correct the bad/unverifiable token via the prompt below.
+    console.log(chalk.dim('  Enter a valid token to continue.'));
+  }
+
+  // 2) Interactive prompt — repeat until a token verifies (200) or the user cancels (Ctrl+C).
+  console.log(chalk.dim('  Generate one at: ') + chalk.cyan(PAT_GENERATION_URL));
+  for (;;) {
+    const entered = await password({
+      message: 'Enter your Weegloo Personal Access Token:',
+      mask: '*',
+    });
+    const token = (entered || '').trim();
+    if (!token) {
+      console.log(chalk.red('  ✖  Personal Access Token is required for MCP server.'));
+      continue;
+    }
+    const result = await verify(token);
+    if (result.ok) return token;
+    console.log(
+      result.networkError
+        ? chalk.dim('     Check your connection, then re-enter your token.')
+        : chalk.dim('     That token was rejected. Please re-enter a valid token.')
+    );
+  }
 }
 
 async function main() {
@@ -203,26 +278,13 @@ async function main() {
   if (installMcp) {
     // Token: flag/env pins it; otherwise prompt (interactive). Non-interactive with no
     // token + MCP was already rejected by resolveConfig, so we never block on stdin here.
-    if (config.token != null) {
-      token = config.token;
-    } else if (!config.nonInteractive) {
-      console.log(chalk.dim('  Generate one at: ') + chalk.cyan(PAT_GENERATION_URL));
-      const entered = await password({
-        message: 'Enter your Weegloo Personal Access Token:',
-        mask: '*',
-      });
-      token = (entered || '').trim();
-      if (!token) {
-        console.log();
-        console.log(chalk.red('  ✖  Personal Access Token is required for MCP server.'));
-        console.log(
-          chalk.dim('     Generate one from the Weegloo console: ') +
-          chalk.cyan(PAT_GENERATION_URL)
-        );
-        console.log();
-        process.exit(1);
-      }
-    }
+    // Whichever source it comes from, the token is verified against CMA GET /v1/me (200)
+    // before we use it; the prompt re-asks until a token verifies.
+    token = await resolveValidToken({
+      providedToken: config.token,
+      meUrl: cmaMeUrl(mcp),
+      nonInteractive: config.nonInteractive,
+    });
 
     // MCP group: --mcp <group> pins it (default ⇒ ''); otherwise prompt or default ''.
     if (config.mcpGroup != null) {
