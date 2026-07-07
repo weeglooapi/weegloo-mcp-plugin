@@ -126,6 +126,29 @@ async function resolveValidToken({ providedToken, meUrl, nonInteractive }) {
   }
 }
 
+/**
+ * Loud, red, impossible-to-miss banner shown when Android Studio is chosen. Its Gemini is
+ * unreliable with Weegloo (AI performance), so we strongly steer users to another agent.
+ * The interactive re-confirm lives at the call site; non-interactive runs still print this.
+ */
+function printAndroidStudioWarning() {
+  const W = 64;
+  const bar = (text) => {
+    const body = ('  ' + text).slice(0, W);
+    return chalk.bgRed.white.bold(body + ' '.repeat(Math.max(0, W - body.length)));
+  };
+  console.log();
+  console.log(bar(''));
+  console.log(bar('⛔  WARNING — ANDROID STUDIO IS STRONGLY NOT RECOMMENDED'));
+  console.log(bar(''));
+  console.log(bar("Android Studio's Gemini is highly unstable with Weegloo"));
+  console.log(bar('due to AI performance issues. Using a different AI Agent'));
+  console.log(bar('(Cursor, Claude Code, Codex, Antigravity) is STRONGLY'));
+  console.log(bar('recommended.'));
+  console.log(bar(''));
+  console.log();
+}
+
 async function main() {
   // Parse flags before anything else so --help and parse errors stay clean.
   let values;
@@ -206,6 +229,25 @@ async function main() {
         { name: 'Android Studio', value: 'androidstudio' },
       ],
     });
+  }
+
+  // Android Studio (Gemini) is unreliable with Weegloo — warn loudly and, interactively,
+  // require an explicit re-confirm (defaulting to "no") before continuing. A pinned,
+  // non-interactive choice still sees the warning but is not blocked.
+  if (ide === 'androidstudio') {
+    printAndroidStudioWarning();
+    if (!config.nonInteractive) {
+      const proceed = await confirm({
+        message: 'Do you still want to install for Android Studio anyway?',
+        default: false,
+      });
+      if (!proceed) {
+        console.log();
+        console.log(chalk.yellow('  Installation cancelled.'));
+        console.log();
+        process.exit(0);
+      }
+    }
   }
 
   // 3. What to install. Flags pin either toggle; otherwise prompt (the combined
