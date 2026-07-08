@@ -12,10 +12,11 @@ deterministic step — config (read from `package.json`), npm auth (`NPM_TOKEN` 
 branch/dirty checks, published-vs-current version comparison, tests, the actual `npm publish`,
 and the final report. Run it from `installer-cli/`.
 
-Your job is only the **one human decision** the script refuses to make on its own — **which
-release to ship**, which doubles as the publish approval (the script never publishes without an
-explicit `--bump`+`--yes`). After a successful publish you also **commit the version bump** so
-the repo doesn't fall behind the registry.
+Your job is only the **one decision** the script won't make on its own — **which bump**, when
+one is needed (`NEEDS_BUMP`). When the version is already ahead (`READY`), there's nothing to
+decide, so just publish. Either way the script never publishes without an explicit `--yes`.
+After a successful publish you also **commit the version bump** so the repo doesn't fall behind
+the registry.
 
 Pushing stays the user's call — this skill commits the bump but never pushes.
 
@@ -44,15 +45,16 @@ The script prints a status block and one **verdict**:
 
 Warnings (dirty tree, branch ≠ dist-tag) are shown but do **not** block — mention them and let the user decide whether to continue.
 
-## 2. THE HUMAN GATE — one question that is both bump AND publish approval
+## 2. Bump / publish — ask only when there's a real decision
 
-There is a single human decision. **Choosing the release IS the go-ahead to publish** — don't split it into two turns.
+The user invoked a **publish** skill, so shipping is the intent. Only ask when there's genuinely something to decide.
 
-- **`NEEDS_BUMP`** → ask one question, showing the resolved numbers from the status block:
+- **`NEEDS_BUMP`** (published == current) → there IS a decision: which bump. Ask one question, showing the resolved numbers from the status block:
   *"이번 릴리스로 배포할까요? patch → x.y.z / minor → … / major → … / custom"* — the user's pick is the publish approval. Do **not** pick for them.
-- **`READY`** → no bump to choose; just confirm *"현재 버전 x.y.z 그대로 배포할까요?"* once.
+- **`READY`** (local > published, or first publish) → **nothing to decide — just publish.** The version was already bumped deliberately and the invocation is the go-ahead, so don't add a redundant confirm. Announce what you're shipping (*"발행본 1.5.5보다 앞선 1.5.6을 latest로 배포합니다"*) and run it.
+  - **One guard:** if there are **warnings** (dirty tree, or branch ≠ dist-tag), surface them and get a quick OK first — publishing `latest` from the wrong branch is a real footgun. No warnings → straight to publish.
 
-The user sees the exact resulting version **before** answering, so the choice is informed consent. Tests run inside `release` and abort before publish if they fail — nothing ships on a red build, so no second confirmation is needed.
+Tests run inside `release` and abort before publish if they fail — nothing ships on a red build.
 
 Then publish in one shot:
 
