@@ -240,7 +240,7 @@ async function main() {
           { name: 'Codex', value: 'codex' },
           { name: 'Antigravity', value: 'antigravity' },
           { name: 'Android Studio', value: 'androidstudio' },
-          { name: `Xcode  ${chalk.dim('(Claude Code / Codex inside Xcode)')}`, value: 'xcode' },
+          { name: `Xcode`, value: 'xcode' },
         ],
       });
       if (ide === 'xcode') {
@@ -359,9 +359,12 @@ async function main() {
   }
 
   // Android Studio is project-only (no global variant), so it never prompts for scope —
-  // it's normalized to 'project' below.
+  // it's normalized to 'project' below. Xcode-hosted agents (Claude Code / Codex inside
+  // Xcode) are likewise always project-scoped, so they skip the prompt and are normalized
+  // to 'project' below too.
   const needsScopePrompt =
     ide !== 'androidstudio' &&
+    host !== 'xcode' &&
     (installSkillsRules ||
       ((ide === 'codex' || ide === 'cursor' || ide === 'claude' || ide === 'antigravity') && installMcp));
   if (config.scope == null && needsScopePrompt && !config.nonInteractive) {
@@ -403,6 +406,19 @@ async function main() {
         },
       ],
     });
+  }
+
+  // Xcode-hosted Claude Code / Codex always install into the current project — never prompt
+  // for scope, and normalize to 'project' (warning if the user explicitly asked for global).
+  if (host === 'xcode') {
+    if (config.scope === 'global') {
+      console.log(
+        chalk.yellow('  ⚠  ') +
+        chalk.dim('Xcode-hosted installs are project-only; using the current project.')
+      );
+      console.log();
+    }
+    scope = 'project';
   }
 
   // Android Studio is project-only: skills → ./.android-studio/skills, rules → ./AGENTS.md, and
