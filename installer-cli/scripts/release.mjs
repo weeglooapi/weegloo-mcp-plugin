@@ -241,6 +241,50 @@ export function bumpVersion(current, level) {
   }
 }
 
+/**
+ * Decide the release flow WITHOUT executing anything — pure, so every scenario is
+ * unit-testable. `main()` runs preflight for I/O, then hands the result here and
+ * merely executes the returned steps in order.
+ *
+ * @param {object} p
+ * @param {'BLOCKED'|'NEEDS_BUMP'|'READY'} p.verdict
+ * @param {string} p.current   current package.json version
+ * @param {string} p.distTag
+ * @param {{bump?:string, yes?:boolean, tests?:boolean}} [p.opts]
+ * @returns {{ steps: Array<object>, exit: number, reason: string, version: string }}
+ *   reason ∈ blocked | bump-required | bad-bump | plan | publish
+ *   step.type ∈ bump | test | skip-test | plan | publish
+ */
+export function planRelease({ verdict, current, distTag, opts = {} }) {
+  if (verdict === 'BLOCKED') {
+    return { steps: [], exit: 1, reason: 'blocked', version: current };
+  }
+
+  const steps = [];
+  let version = current;
+
+  // Gate 1 — bump. The planner resolves the resulting number but never guesses the level.
+  if (opts.bump) {
+    const isExplicit = /^\d+\.\d+\.\d+$/.test(opts.bump);
+    version = isExplicit ? opts.bump : bumpVersion(current, opts.bump);
+    if (!version) return { steps: [], exit: 1, reason: 'bad-bump', version: current };
+    steps.push({ type: 'bump', to: version });
+  } else if (verdict === 'NEEDS_BUMP') {
+    return { steps: [], exit: 2, reason: 'bump-required', version: current };
+  }
+
+  steps.push(opts.tests === false ? { type: 'skip-test' } : { type: 'test' });
+
+  // Gate 2 — publish. Without --yes we only plan (dry run).
+  const args = ['publish', '--access', 'public', '--tag', distTag];
+  if (opts.yes) {
+    steps.push({ type: 'publish', args });
+    return { steps, exit: 0, reason: 'publish', version };
+  }
+  steps.push({ type: 'plan', args });
+  return { steps, exit: 0, reason: 'plan', version };
+}
+
 /** Human-readable status block. */
 function printStatus(s) {
   const line = (mark, label, msg) => console.log(`${mark} ${c.bold(label.padEnd(9))} ${msg}`);
@@ -294,64 +338,63 @@ function main() {
     process.exit(1);
   }
 
-  // ── release ──
+  // ── release ── decide (pure) then execute the plan step by step.
   emit(s, opts);
-  if (s.verdict === 'BLOCKED') {
+  const plan = planRelease({ verdict: s.verdict, current: s.current, distTag: s.distTag, opts });
+
+  if (plan.reason === 'blocked') {
     console.error(c.red('BLOCKED — resolve the blocker(s) above before releasing.'));
-    process.exit(1);
+    process.exit(plan.exit);
   }
-
-  // HUMAN GATE 1: bump. The script never chooses the level.
-  let versionToPublish = s.current;
-  if (opts.bump) {
-    // `npm version` accepts both keywords (patch/minor/major) and explicit x.y.z here.
-    const bumped = run('npm', ['--no-git-tag-version', 'version', opts.bump]);
-    if (bumped.code !== 0) {
-      console.error(c.red(`bump failed: ${bumped.stderr || bumped.stdout}`));
-      process.exit(1);
-    }
-    versionToPublish = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
-    console.log(`${MARK.ok} bumped   package.json → ${c.bold(versionToPublish)} ${c.dim('(uncommitted — commit/push is yours)')}`);
-  } else if (s.verdict === 'NEEDS_BUMP') {
+  if (plan.reason === 'bump-required') {
     console.error(c.yellow('\nNEEDS_BUMP: published == current. Re-run with --bump patch|minor|major|<x.y.z>.'));
-    process.exit(2); // human gate not satisfied
+    process.exit(plan.exit);
+  }
+  if (plan.reason === 'bad-bump') {
+    console.error(c.red(`\nunknown --bump "${opts.bump}". Use patch|minor|major|<x.y.z>.`));
+    process.exit(plan.exit);
   }
 
-  // tests
-  if (opts.tests) {
-    console.log(`${MARK.info} test     running \`npm test\`…`);
-    const t = spawnSync('npm', ['test'], { cwd: PACKAGE_ROOT, stdio: 'inherit' });
-    if (t.status !== 0) {
-      console.error(c.red('tests failed — aborting before publish.'));
-      process.exit(1);
+  for (const step of plan.steps) {
+    if (step.type === 'bump') {
+      // `npm version` accepts both keywords (patch/minor/major) and explicit x.y.z.
+      const bumped = run('npm', ['--no-git-tag-version', 'version', opts.bump]);
+      if (bumped.code !== 0) {
+        console.error(c.red(`bump failed: ${bumped.stderr || bumped.stdout}`));
+        process.exit(1);
+      }
+      console.log(`${MARK.ok} bumped   package.json → ${c.bold(step.to)} ${c.dim('(uncommitted — the skill commits it)')}`);
+    } else if (step.type === 'test') {
+      console.log(`${MARK.info} test     running \`npm test\`…`);
+      const t = spawnSync('npm', ['test'], { cwd: PACKAGE_ROOT, stdio: 'inherit' });
+      if (t.status !== 0) {
+        console.error(c.red('tests failed — aborting before publish.'));
+        process.exit(1);
+      }
+      console.log(`${MARK.ok} test     passed`);
+    } else if (step.type === 'skip-test') {
+      console.log(`${MARK.warn} test     skipped (--no-tests)`);
+    } else if (step.type === 'plan') {
+      console.log(`\n${c.bold('PLAN')} — nothing published yet.`);
+      console.log(`  version : ${plan.version}`);
+      console.log(`  dist-tag: ${s.distTag}`);
+      console.log(`  command : ${c.cyan(`npm ${step.args.join(' ')}`)}  ${c.dim('(cwd: installer-cli)')}`);
+      console.log(`\nConfirm, then re-run with ${c.bold('--yes')} to publish.`);
+      process.exit(0);
+    } else if (step.type === 'publish') {
+      const { token } = findNpmToken();
+      const env = token ? { ...process.env, NPM_TOKEN: token } : process.env;
+      console.log(`\n${MARK.info} publish  npm ${step.args.join(' ')}`);
+      const pub = spawnSync('npm', step.args, { cwd: PACKAGE_ROOT, env, stdio: 'inherit' });
+      if (pub.status !== 0) {
+        console.error(c.red('\npublish failed. If it demanded an OTP, the token type is wrong — use a Granular/Automation token.'));
+        process.exit(1);
+      }
+      console.log(`\n${MARK.ok} ${c.bold('published')} ${s.packageName}@${plan.version}  (tag ${s.distTag})`);
+      console.log(`  https://www.npmjs.com/package/${s.packageName}`);
+      if (opts.bump) console.log(c.dim('  reminder: package.json has an uncommitted version bump — the skill commits it.'));
     }
-    console.log(`${MARK.ok} test     passed`);
-  } else {
-    console.log(`${MARK.warn} test     skipped (--no-tests)`);
   }
-
-  // HUMAN GATE 2: publish. No --yes → print the plan and stop.
-  const publishArgs = ['publish', '--access', 'public', '--tag', s.distTag];
-  if (!opts.yes) {
-    console.log(`\n${c.bold('PLAN')} — nothing published yet.`);
-    console.log(`  version : ${versionToPublish}`);
-    console.log(`  dist-tag: ${s.distTag}`);
-    console.log(`  command : ${c.cyan(`npm ${publishArgs.join(' ')}`)}  ${c.dim('(cwd: installer-cli)')}`);
-    console.log(`\nConfirm, then re-run with ${c.bold('--yes')} to publish.`);
-    process.exit(0);
-  }
-
-  const { token } = findNpmToken();
-  const env = token ? { ...process.env, NPM_TOKEN: token } : process.env;
-  console.log(`\n${MARK.info} publish  npm ${publishArgs.join(' ')}`);
-  const pub = spawnSync('npm', publishArgs, { cwd: PACKAGE_ROOT, env, stdio: 'inherit' });
-  if (pub.status !== 0) {
-    console.error(c.red('\npublish failed. If it demanded an OTP, the token type is wrong — use a Granular/Automation token.'));
-    process.exit(1);
-  }
-  console.log(`\n${MARK.ok} ${c.bold('published')} ${s.packageName}@${versionToPublish}  (tag ${s.distTag})`);
-  console.log(`  https://www.npmjs.com/package/${s.packageName}`);
-  if (opts.bump) console.log(c.dim('  reminder: package.json has an uncommitted version bump — commit & push it.'));
 }
 
 // Run only when invoked directly (`node scripts/release.mjs …`), not when imported by tests.
