@@ -216,19 +216,38 @@ async function main() {
     }
   }
 
-  // 2. IDE / agent
+  // 2. IDE / agent (+ optional GUI host). `host` says WHERE the agent runs (e.g. Xcode
+  //    Intelligence); it only changes whether we inject PATH for the npx upload server.
   let ide = config.agent;
+  let host = config.host ?? null;
+  const hostAgentPrompt = {
+    message: 'Which agent runs inside Xcode?',
+    choices: [
+      { name: 'Claude Code', value: 'claude' },
+      { name: 'Codex', value: 'codex' },
+    ],
+  };
   if (ide == null) {
-    ide = await select({
-      message: 'Select your IDE:',
-      choices: [
-        { name: 'Cursor', value: 'cursor' },
-        { name: 'Claude Code', value: 'claude' },
-        { name: 'Codex', value: 'codex' },
-        { name: 'Antigravity', value: 'antigravity' },
-        { name: 'Android Studio', value: 'androidstudio' },
-      ],
-    });
+    if (host === 'xcode') {
+      // --host xcode pinned, agent unpinned → constrain the choice to hostable agents.
+      ide = await select(hostAgentPrompt);
+    } else {
+      ide = await select({
+        message: 'Select your IDE:',
+        choices: [
+          { name: 'Cursor', value: 'cursor' },
+          { name: 'Claude Code', value: 'claude' },
+          { name: 'Codex', value: 'codex' },
+          { name: 'Antigravity', value: 'antigravity' },
+          { name: 'Android Studio', value: 'androidstudio' },
+          { name: `Xcode  ${chalk.dim('(Claude Code / Codex inside Xcode)')}`, value: 'xcode' },
+        ],
+      });
+      if (ide === 'xcode') {
+        host = 'xcode';
+        ide = await select(hostAgentPrompt);
+      }
+    }
   }
 
   // Android Studio (Gemini) is unreliable with Weegloo — warn loudly and, interactively,
@@ -443,6 +462,7 @@ async function main() {
     rules,
     mcp,
     scope,
+    host,
     installMcp,
     installSkillsRules,
   };
@@ -480,6 +500,19 @@ async function main() {
     } else {
       await handleCodexMcpLogin();
     }
+  }
+  if (installMcp && host === 'xcode') {
+    console.log(
+      chalk.dim(
+        '  Xcode picks up this config from the standard location — restart Xcode if the '
+      )
+    );
+    console.log(
+      chalk.dim(
+        '  weegloo-upload tools do not appear. (PATH was injected so Xcode can launch npx.)'
+      )
+    );
+    console.log();
   }
   console.log(
     '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/en-US/ai/tools/mcp/')

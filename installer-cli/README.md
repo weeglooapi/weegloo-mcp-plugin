@@ -23,6 +23,7 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 |---|---|
 | `-b, --branch <ref>` | Plugin version/branch to install (default: `latest`). Alias of `--ref`; also reads `WEEGLOO_REF`. |
 | `-a, --agent <id>` | Target IDE/agent: `cursor` \| `claude` \| `codex` \| `antigravity` \| `androidstudio`. |
+| `--host <id>` | Run the agent inside a GUI host: `xcode`. Only valid with `--agent claude`/`codex`. Injects a `PATH` into the `weegloo-upload` server env so the host can find `npx` (see [GUI hosts](#gui-hosts-xcode)). |
 | `-l, --location <loc>` | Install location: `project` \| `global` (default: `global`). |
 | `--mcp <group>` | Install the MCP server with group: `default` \| `core` \| `extra` \| `all`. |
 | `--no-mcp` | Do not install the MCP server. |
@@ -48,9 +49,27 @@ WEEGLOO_TOKEN=… npx weegloo@latest -y --agent claude
 # Skills/Rules only, no MCP (no token needed)
 npx weegloo@latest -y --agent claude --no-mcp
 
+# Codex running inside Xcode Intelligence (injects PATH so Xcode can spawn npx)
+WEEGLOO_TOKEN=… npx weegloo@latest -y --agent codex --host xcode
+
 # Pre-fill a couple of choices, get prompted for the rest (interactive)
 npx weegloo@latest --agent cursor --location global
 ```
+
+### GUI hosts (Xcode)
+
+When an agent runs **inside a GUI host** — e.g. Codex or Claude Code driven by Xcode 27's Intelligence — the host spawns MCP servers with the bare login `PATH` (`/usr/bin:/bin`). nvm/homebrew node installs are not on that PATH, so the `npx`-based `weegloo-upload` server fails to launch (ENOENT) and its tools silently never appear.
+
+Selecting **Xcode** in the interactive IDE list (then choosing Claude Code or Codex), or passing `--host xcode`, writes the config to the **same standard location** as a normal Claude/Codex install (Xcode copies it from there) but adds a `PATH` entry to the `weegloo-upload` server's `env`, pinned to the bin directory of the node that ran the installer:
+
+```toml
+[mcp_servers.weegloo-upload.env]
+PATH = "/Users/you/.nvm/versions/node/v18.20.8/bin:/usr/bin:/bin"
+UPLOAD_API_URL = "https://upload.weegloo.com/v1"
+AUTH_BEARER_TOKEN = "…"
+```
+
+`PATH` (rather than an absolute `command`) is sufficient on its own — it covers both locating `npx` and npx's `#!/usr/bin/env node` shebang. Because the path embeds the node version, **re-run the installer after a node upgrade**. `--host` has no effect on Windows (there `cmd /c npx` already resolves node next to `npx.cmd`) and only applies to `--agent claude`/`codex` (Xcode Intelligence hosts only those).
 
 ### Overriding the ref (branch / tag)
 

@@ -170,10 +170,10 @@ export function stripWeeglooMcpSections(toml) {
 }
 
 /**
- * @param {{ weeglooUrl: string, uploadApiUrl: string, token: string }} config
+ * @param {{ weeglooUrl: string, uploadApiUrl: string, token: string, injectPath?: boolean }} config
  */
-export function buildWeeglooMcpToml({ weeglooUrl, uploadApiUrl, token }) {
-  const { command, args } = uploadServerCommand();
+export function buildWeeglooMcpToml({ weeglooUrl, uploadApiUrl, token, injectPath = false }) {
+  const { command, args, env } = uploadServerCommand({ injectPath });
   return [
     '[mcp_servers.weegloo]',
     `url = ${escapeTomlString(weeglooUrl)}`,
@@ -183,6 +183,7 @@ export function buildWeeglooMcpToml({ weeglooUrl, uploadApiUrl, token }) {
     `args = [${args.map(escapeTomlString).join(', ')}]`,
     '',
     '[mcp_servers.weegloo-upload.env]',
+    ...Object.entries(env).map(([k, v]) => `${k} = ${escapeTomlString(v)}`),
     `UPLOAD_API_URL = ${escapeTomlString(uploadApiUrl)}`,
     `AUTH_BEARER_TOKEN = ${escapeTomlString(token)}`,
     '',
@@ -257,6 +258,7 @@ export async function installCodex({
   rules = [],
   mcp = {},
   scope = 'project',
+  host,
   installMcp,
   installSkillsRules,
 }) {
@@ -282,6 +284,7 @@ export async function installCodex({
         weeglooUrl: buildMcpUrlWithGroup(weeglooUrl, mcpGroup),
         uploadApiUrl,
         token,
+        injectPath: host === 'xcode',
       });
       fs.writeFileSync(configPath, merged, 'utf-8');
       mcpSpinner.succeed(

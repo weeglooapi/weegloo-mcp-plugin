@@ -18,6 +18,14 @@ export const AGENTS = ['cursor', 'claude', 'codex', 'antigravity', 'androidstudi
 export const LOCATIONS = ['project', 'global'];
 /** MCP server groups. `default` is the user-facing alias for the empty group ''. */
 export const MCP_GROUPS = ['default', 'core', 'extra', 'all'];
+/**
+ * GUI hosts that launch an agent with a bare login PATH, so the local `npx`-based
+ * `weegloo-upload` server needs an explicit PATH env to be found. Orthogonal to
+ * `--agent`: the host says *where* the agent runs, the agent says *what config* we write.
+ */
+export const HOSTS = ['xcode'];
+/** Agents that can run *inside* a GUI host (Xcode Intelligence hosts only these). */
+export const HOSTABLE_AGENTS = ['claude', 'codex'];
 
 export const HELP_TEXT = `
   Weegloo MCP Plugin Installer
@@ -33,6 +41,9 @@ export const HELP_TEXT = `
     -b, --branch <ref>   Plugin version/branch to install (default: latest)
                          (alias of --ref; also reads WEEGLOO_REF)
     -a, --agent <id>     Target IDE/agent: ${AGENTS.join(' | ')}
+        --host <id>      Run the agent inside a GUI host: ${HOSTS.join(' | ')}
+                         (only with --agent ${HOSTABLE_AGENTS.join('/')}; injects PATH so the
+                         npx-based upload server is found when Xcode spawns it)
     -l, --location <loc> Install location: ${LOCATIONS.join(' | ')} (default: global)
         --mcp <group>    Install the MCP server with group: ${MCP_GROUPS.join(' | ')}
         --no-mcp         Do not install the MCP server
@@ -54,6 +65,7 @@ const OPTIONS = {
   branch: { type: 'string', short: 'b', multiple: true },
   ref: { type: 'string', multiple: true },
   agent: { type: 'string', short: 'a' },
+  host: { type: 'string' },
   location: { type: 'string', short: 'l' },
   // string (not boolean): the group value is required, and its presence implies install.
   mcp: { type: 'string' },
@@ -131,10 +143,33 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
   let agent = null;
   if (values.agent != null) {
     const a = String(values.agent).trim();
-    if (!AGENTS.includes(a)) {
+    if (a === 'xcode') {
+      // Common mistake: Xcode is a host, not an agent. Point at the right flag.
+      errors.push(
+        `'xcode' is not an --agent; it is a host. Use --host xcode with --agent ${HOSTABLE_AGENTS.join('/')}.`
+      );
+    } else if (!AGENTS.includes(a)) {
       errors.push(`Invalid --agent '${a}'. Valid values: ${AGENTS.join(', ')}.`);
     } else {
       agent = a;
+    }
+  }
+
+  // ── host (GUI wrapper; orthogonal to agent) ─────────────────────────────────
+  let host = null;
+  if (values.host != null) {
+    const h = String(values.host).trim();
+    if (!HOSTS.includes(h)) {
+      errors.push(`Invalid --host '${h}'. Valid values: ${HOSTS.join(', ')}.`);
+    } else {
+      host = h;
+      // A host only makes sense for agents it can actually launch. Validate against a
+      // pinned agent; when the agent is unpinned (interactive), the prompt is constrained.
+      if (agent != null && !HOSTABLE_AGENTS.includes(agent)) {
+        errors.push(
+          `--host ${h} only works with --agent ${HOSTABLE_AGENTS.join('/')} (Xcode does not host '${agent}').`
+        );
+      }
     }
   }
 
@@ -204,6 +239,9 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
   if (token != null && installMcp === false) {
     warnings.push('A token was provided but --no-mcp is set; the token is ignored.');
   }
+  if (host != null && installMcp === false) {
+    warnings.push(`--host ${host} only affects the npx upload server, so it has no effect with --no-mcp.`);
+  }
   if (showAllBranches && (refPinned || nonInteractive)) {
     warnings.push('--all-branches has no effect when the branch is pinned or non-interactive (the picker is skipped).');
   }
@@ -219,6 +257,7 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
       pluginRef,
       refPinned,
       agent,
+      host,
       installMcp,
       mcpGroup,
       scope,
