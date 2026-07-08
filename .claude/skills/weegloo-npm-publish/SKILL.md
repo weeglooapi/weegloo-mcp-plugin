@@ -29,8 +29,15 @@ node scripts/release.mjs preflight        # or: npm run preflight   (add --json 
 The script prints a status block and one **verdict**:
 
 - **`BLOCKED`** → surface the listed blocker(s) to the user in Korean and stop. Common cases:
-  - *no `NPM_TOKEN`* → tell them (Korean): "npm 토큰이 없습니다. https://www.npmjs.com/settings/weegloo/tokens 에서 publish 권한 토큰(**Granular Access Token** 또는 Automation)을 발급한 뒤 `.env` 에 `NPM_TOKEN=...` 로 넣어주세요." Then re-run preflight.
-  - *`npm whoami` failed (401)* → token is wrong/expired; same fix as above.
+  - *no `NPM_TOKEN`* → the token itself is the only thing that must come from the user. Tell them (Korean) to create a **publish** token (Granular Access Token **or** Automation) at https://www.npmjs.com/settings/weegloo/tokens, then offer **two paths — do not pick for them**:
+    - **(a) 붙여넣어 주시면 제가 파일에 기록** — the user pastes the token and you write it yourself. This is the recommended first option (mirrors the weegloo-upload token rule: edit the file for them rather than making them do it).
+    - **(b) 직접 `.env` 에 `NPM_TOKEN=...` 로 넣기** — the user edits it themselves.
+    - **Writing it for them (path a) — safely:**
+      1. **Confirm `.env` is gitignored** before writing (`installer-cli/.gitignore` already ignores `.env`). Never write a token to a tracked file.
+      2. Write/update `NPM_TOKEN=<value>` in **`installer-cli/.env`**. If the file exists, **replace an existing `NPM_TOKEN` line** rather than appending a duplicate, and leave other vars untouched; otherwise create the file.
+      3. **Never echo the token back** to chat, never commit it, never print it in a command. When you must load it, source the file (`set -a; . installer-cli/.env; set +a`) — don't inline the value.
+    - Then **re-run preflight** — `npm whoami` verifies the token actually works.
+  - *`npm whoami` failed (401)* → the token is wrong/expired. Same two paths as above (paste-and-I'll-write, or edit yourself); replace the bad `NPM_TOKEN` value, then re-run preflight.
   - *registry ahead (published > current)* → do **not** overwrite; the registry has a newer version. Surface it and stop.
 - **`NEEDS_BUMP`** → published == current. The status block lists the resolved numbers for each bump (`patch → x.y.z`, `minor`, `major`) — also in `nextVersions` under `--json`.
 - **`READY`** → current > published (or first publish). No bump needed.
