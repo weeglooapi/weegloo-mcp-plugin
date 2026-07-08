@@ -1,6 +1,6 @@
 ---
 name: weegloo-npm-publish
-description: Publish the weegloo installer CLI (installer-cli/) to npm. A release script does all the deterministic work (auth, branch/version/dirty checks, tests, publish); this skill only drives the two human gates — choosing the version bump and confirming the publish. Use when the user wants to release/publish the weegloo npm package, ship a new installer CLI version, run `npm publish` for installer-cli, or "버전 올리고 배포".
+description: Publish the weegloo installer CLI (installer-cli/) to npm. A release script does all the deterministic work (auth, branch/version/dirty checks, tests, publish); this skill only drives the single human decision — picking the release (which doubles as publish approval) — and commits the version bump afterward. Use when the user wants to release/publish the weegloo npm package, ship a new installer CLI version, run `npm publish` for installer-cli, or "버전 올리고 배포".
 ---
 
 # weegloo npm publish
@@ -12,13 +12,12 @@ deterministic step — config (read from `package.json`), npm auth (`NPM_TOKEN` 
 branch/dirty checks, published-vs-current version comparison, tests, the actual `npm publish`,
 and the final report. Run it from `installer-cli/`.
 
-Your job is only the **two human gates** the script deliberately refuses to cross on its own:
+Your job is only the **one human decision** the script refuses to make on its own — **which
+release to ship**, which doubles as the publish approval (the script never publishes without an
+explicit `--bump`+`--yes`). After a successful publish you also **commit the version bump** so
+the repo doesn't fall behind the registry.
 
-1. **Which version bump?** — the script never guesses. On `NEEDS_BUMP` you ask the user.
-2. **Actually publish?** — publishing is irreversible. The script stops and prints a plan
-   unless you pass `--yes`, so you confirm with the user first.
-
-Committing/pushing the branch is the user's job, done **beforehand** — this skill never commits or pushes.
+Pushing stays the user's call — this skill commits the bump but never pushes.
 
 ## 1. Preflight (script) — read the verdict
 
@@ -33,31 +32,40 @@ The script prints a status block and one **verdict**:
   - *no `NPM_TOKEN`* → tell them (Korean): "npm 토큰이 없습니다. https://www.npmjs.com/settings/weegloo/tokens 에서 publish 권한 토큰(**Granular Access Token** 또는 Automation)을 발급한 뒤 `.env` 에 `NPM_TOKEN=...` 로 넣어주세요." Then re-run preflight.
   - *`npm whoami` failed (401)* → token is wrong/expired; same fix as above.
   - *registry ahead (published > current)* → do **not** overwrite; the registry has a newer version. Surface it and stop.
-- **`NEEDS_BUMP`** → published == current. Go to gate 1 below.
-- **`READY`** → current > published (or first publish). Skip straight to gate 2.
+- **`NEEDS_BUMP`** → published == current. The status block lists the resolved numbers for each bump (`patch → x.y.z`, `minor`, `major`) — also in `nextVersions` under `--json`.
+- **`READY`** → current > published (or first publish). No bump needed.
 
 Warnings (dirty tree, branch ≠ dist-tag) are shown but do **not** block — mention them and let the user decide whether to continue.
 
-## 2. HUMAN GATE 1 — version bump (only when `NEEDS_BUMP`)
+## 2. THE HUMAN GATE — one question that is both bump AND publish approval
 
-Ask the user which bump, showing the resulting number for each: `patch` / `minor` / `major` / a custom `x.y.z`.
-Do **not** pick for them. The script applies it (`npm --no-git-tag-version version …`, package.json only — left uncommitted for the user).
+There is a single human decision. **Choosing the release IS the go-ahead to publish** — don't split it into two turns.
 
-## 3. HUMAN GATE 2 — confirm, then publish
+- **`NEEDS_BUMP`** → ask one question, showing the resolved numbers from the status block:
+  *"이번 릴리스로 배포할까요? patch → x.y.z / minor → … / major → … / custom"* — the user's pick is the publish approval. Do **not** pick for them.
+- **`READY`** → no bump to choose; just confirm *"현재 버전 x.y.z 그대로 배포할까요?"* once.
 
-Run `release` with the chosen bump but **without `--yes`** first — it runs tests and prints the exact publish plan without publishing:
+The user sees the exact resulting version **before** answering, so the choice is informed consent. Tests run inside `release` and abort before publish if they fail — nothing ships on a red build, so no second confirmation is needed.
 
-```bash
-node scripts/release.mjs release --bump <patch|minor|major|x.y.z>
-```
-
-(If the verdict was `READY`, omit `--bump`.) Show the plan to the user and get an explicit go-ahead. Then publish:
+Then publish in one shot:
 
 ```bash
-node scripts/release.mjs release --bump <…> --yes
+node scripts/release.mjs release --bump <patch|minor|major|x.y.z> --yes   # NEEDS_BUMP
+node scripts/release.mjs release --yes                                    # READY (no bump)
 ```
 
-The script runs tests, publishes `npm publish --access public --tag <distTag>`, and reports the version, tag, and `https://www.npmjs.com/package/weegloo`. If it bumped the version, remind the user that `package.json` has an **uncommitted** change to commit/push themselves.
+`--bump` and `--yes` are two **safety flags** the script requires together (it never publishes without both) — but that is one *human* turn, not two. Without `--yes` the script only prints a plan; use that for a dry run if asked. The script bumps `package.json`, runs `npm test`, publishes `npm publish --access public --tag <distTag>`, and reports the version, tag, and `https://www.npmjs.com/package/weegloo`.
+
+## 3. Commit the bump (after publish succeeds)
+
+If a bump happened, the published version MUST be committed — otherwise the repo's `package.json` falls behind the registry (the "registry ahead" drift). The script deliberately does **not** touch git; **you (the skill) commit** it here:
+
+```bash
+git add installer-cli/package.json installer-cli/package-lock.json
+git commit -m "chore(release): weegloo@<version>"
+```
+
+Commit only — **do not push**; pushing stays the user's call (verify the branch/remote first). Tell the user the commit was made and that they should push it. For a real release this should land on the branch matching the dist-tag (`latest`), so confirm the branch before committing if it doesn't match.
 
 ## Notes
 

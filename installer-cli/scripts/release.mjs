@@ -88,21 +88,32 @@ function run(cmd, args, { env = process.env, cwd = PACKAGE_ROOT } = {}) {
   };
 }
 
+/**
+ * Extract the NPM_TOKEN value from the text of a `.env` file. Pure — no I/O.
+ * Handles an optional `export ` prefix, surrounding whitespace, and single/double
+ * quotes. Anchored per-line so `MY_NPM_TOKEN=…` does NOT match. Returns the token
+ * string, or null when absent or empty.
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function parseNpmTokenFromEnv(text) {
+  const m = String(text).match(/^\s*(?:export\s+)?NPM_TOKEN\s*=\s*(.+?)\s*$/m);
+  if (!m) return null;
+  let val = m[1].trim();
+  if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+    val = val.slice(1, -1);
+  }
+  return val || null;
+}
+
 /** Read NPM_TOKEN from the environment, or from a gitignored .env (package dir, then repo root). */
 function findNpmToken() {
   if (process.env.NPM_TOKEN) return { token: process.env.NPM_TOKEN, source: 'env' };
   for (const dir of [PACKAGE_ROOT, REPO_ROOT]) {
     const envPath = join(dir, '.env');
     if (!existsSync(envPath)) continue;
-    const text = readFileSync(envPath, 'utf8');
-    const m = text.match(/^\s*(?:export\s+)?NPM_TOKEN\s*=\s*(.+?)\s*$/m);
-    if (m) {
-      let val = m[1].trim();
-      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-        val = val.slice(1, -1);
-      }
-      return { token: val, source: `.env (${dir === PACKAGE_ROOT ? 'installer-cli' : 'repo root'})` };
-    }
+    const token = parseNpmTokenFromEnv(readFileSync(envPath, 'utf8'));
+    if (token) return { token, source: `.env (${dir === PACKAGE_ROOT ? 'installer-cli' : 'repo root'})` };
   }
   return { token: null, source: null };
 }
@@ -165,10 +176,18 @@ function preflight(opts) {
 
   const verdict = decideVerdict({ versionState, blockers });
 
+  // The resolved number each bump level would produce — so the caller can show a
+  // single "publish as patch → x.y.z?" prompt (bump choice == publish approval).
+  const nextVersions = {
+    patch: bumpVersion(current, 'patch'),
+    minor: bumpVersion(current, 'minor'),
+    major: bumpVersion(current, 'major'),
+  };
+
   return {
     packageName, current, published, distTag, pluginRef, branch,
     tokenSource, whoami, npmrcOk, dirty: Boolean(dirty),
-    versionState, warnings, blockers, verdict,
+    versionState, nextVersions, warnings, blockers, verdict,
   };
 }
 
@@ -206,6 +225,22 @@ export function decideVerdict({ versionState, blockers = [] }) {
   return 'READY';
 }
 
+/**
+ * The version that a given bump level would produce from `current`. Pure.
+ * @param {string} current  x.y.z
+ * @param {'patch'|'minor'|'major'} level
+ * @returns {string|null}  null for an unknown level
+ */
+export function bumpVersion(current, level) {
+  const [maj = 0, min = 0, pat = 0] = String(current).split('.').map((n) => parseInt(n, 10) || 0);
+  switch (level) {
+    case 'major': return `${maj + 1}.0.0`;
+    case 'minor': return `${maj}.${min + 1}.0`;
+    case 'patch': return `${maj}.${min}.${pat + 1}`;
+    default: return null;
+  }
+}
+
 /** Human-readable status block. */
 function printStatus(s) {
   const line = (mark, label, msg) => console.log(`${mark} ${c.bold(label.padEnd(9))} ${msg}`);
@@ -221,6 +256,9 @@ function printStatus(s) {
     behind: `published=${s.published}  current=${s.current}  → registry ahead`,
   }[s.versionState];
   line(s.versionState === 'behind' ? MARK.bad : s.versionState === 'equal' ? MARK.warn : MARK.ok, 'version', vmsg);
+  if (s.verdict === 'NEEDS_BUMP') {
+    line(MARK.info, 'bump', `patch → ${s.nextVersions.patch}   minor → ${s.nextVersions.minor}   major → ${s.nextVersions.major}`);
+  }
 
   for (const w of s.warnings) console.log(`  ${c.yellow('warn')}  ${w}`);
   for (const b of s.blockers) console.log(`  ${c.red('block')} ${b}`);
