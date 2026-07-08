@@ -1,82 +1,84 @@
 ---
 name: weegloo-npm-publish
-description: Publish the weegloo installer CLI (installer-cli/) to npm — preflight checks, version compare, bump prompt, tests, npm publish. Reads settings from a saved local config file, or asks for them and offers to save. Use when the user wants to release/publish the weegloo npm package, ship a new installer CLI version, run `npm publish` for installer-cli, or "버전 올리고 배포".
+description: Publish the weegloo installer CLI (installer-cli/) to npm. A release script does all the deterministic work (auth, branch/version/dirty checks, tests, publish); this skill only drives the single human decision — picking the release (which doubles as publish approval) — and commits the version bump afterward. Use when the user wants to release/publish the weegloo npm package, ship a new installer CLI version, run `npm publish` for installer-cli, or "버전 올리고 배포".
 ---
 
 # weegloo npm publish
 
-Manually publishes the `weegloo` npm package from `installer-cli/` (no publish CI exists).
-Run every `npm` command below **from `packageDir`** (default `installer-cli`).
-Committing/pushing the branch is the user's job, done **beforehand** — this skill never commits or pushes.
+Publishes the `weegloo` npm package from `installer-cli/` (no publish CI exists).
 
-## 1. Load config
+**Almost everything here is a script.** `installer-cli/scripts/release.mjs` absorbs every
+deterministic step — config (read from `package.json`), npm auth (`NPM_TOKEN` + `.npmrc`),
+branch/dirty checks, published-vs-current version comparison, tests, the actual `npm publish`,
+and the final report. Run it from `installer-cli/`.
 
-Config lives in `config.local.json` **next to this SKILL.md** — non-secret defaults for this repo, **committed to the repo** so the values are shared (the `.local` suffix is historical; no secrets ever go in this file — see below).
+Your job is only the **one decision** the script won't make on its own — **which bump**, when
+one is needed (`NEEDS_BUMP`). When the version is already ahead (`READY`), there's nothing to
+decide, so just publish. Either way the script never publishes without an explicit `--yes`.
+After a successful publish you also **commit the version bump** so the repo doesn't fall behind
+the registry.
 
-- If the file exists → load it and use those values.
-- If missing → ask the user each field (offer the default), then ask **"이 설정을 파일로 저장할까요?"** — if yes, write the JSON; if no, use the answers for this run only.
+Pushing stays the user's call — this skill commits the bump but never pushes.
 
-```json
-{
-  "packageDir": "installer-cli",
-  "packageName": "weegloo",
-  "distTag": "latest",
-  "runTests": true
-}
-```
-
-**Never store secrets** in `config.local.json` — it is committed, so anything here lands in git history. The npm token comes only from `NPM_TOKEN` (env or a gitignored `.env`) — see step 2.
-
-## 2. Preflight
-
-### Auth (npm token via `NPM_TOKEN` — never `npm login`)
-
-1. **Find the token** — look for `NPM_TOKEN` in the environment, then in a gitignored `.env` (project root or `installer-cli/`).
-   - **No token found → STOP and tell the user (in Korean):**
-     "npm 토큰이 없습니다. https://www.npmjs.com/settings/weegloo/tokens 에서 publish 권한 토큰(**Granular Access Token** 또는 Automation)을 발급한 뒤, `.env` 에 `NPM_TOKEN=...` 로 넣어주세요."
-     Wait for the user, then re-check.
-2. **Wire it** — ensure `installer-cli/.npmrc` (gitignored) contains exactly:
-   ```
-   //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-   ```
-   and that both `.npmrc` and `.env` are in `installer-cli/.gitignore`. **Never commit `.npmrc`/`.env`, never print the token to chat.**
-3. **Verify** — with `NPM_TOKEN` loaded, `npm whoami` should print the account. A **401** means the token is wrong/expired → back to step 1.
-
-### Repo state
-
-- Confirm the current git branch matches the `distTag` policy: dist-tag `latest` ⇄ branch `latest`, `beta` ⇄ `beta`. **Warn** on a mismatch and confirm before continuing.
-- `git status --porcelain` — warn if the tree is dirty.
-
-## 3. Version check (the key step)
-
-- **Published**: `npm view <packageName> version`
-- **Current**: `version` in `<packageDir>/package.json`
-
-Then:
-- **published == current** → ask which bump, showing the resulting number for each: `patch` / `minor` / `major` / custom. Apply with `npm --no-git-tag-version version <patch|minor|major>` (or set the custom value), which only edits `package.json` — leave that change uncommitted for the user to commit/push. Re-read the new version.
-- **current > published** → confirm publishing the current version as-is.
-- **current < published** → **STOP**: the registry is ahead; surface this instead of overwriting.
-
-## 4. Test
-
-If `runTests`, run `npm test`. Abort on any failure.
-
-## 5. Publish
-
-Load `NPM_TOKEN` into the environment **without printing it** — if it's only in `.env`, source it (`set -a; . <path>/.env; set +a`). Then show the command for confirmation and run:
+## 1. Preflight (script) — read the verdict
 
 ```bash
-npm publish --access public --tag <distTag>
+cd installer-cli
+node scripts/release.mjs preflight        # or: npm run preflight   (add --json to parse)
 ```
 
-`installer-cli/.npmrc` resolves `${NPM_TOKEN}` for auth (step 2). If publish errors demanding an **OTP**, the token type is wrong — recreate it as a Granular/Automation token (step 1), which publishes without OTP.
+The script prints a status block and one **verdict**:
 
-## 6. Report
+- **`BLOCKED`** → surface the listed blocker(s) to the user in Korean and stop. Common cases:
+  - *no `NPM_TOKEN`* → the token itself is the only thing that must come from the user. Tell them (Korean) to create a **publish** token (Granular Access Token **or** Automation) at https://www.npmjs.com/settings/weegloo/tokens, then offer **two paths — do not pick for them**:
+    - **(a) 붙여넣어 주시면 제가 파일에 기록** — the user pastes the token and you write it yourself. This is the recommended first option (mirrors the weegloo-upload token rule: edit the file for them rather than making them do it).
+    - **(b) 직접 `.env` 에 `NPM_TOKEN=...` 로 넣기** — the user edits it themselves.
+    - **Writing it for them (path a) — safely:**
+      1. **Confirm `.env` is gitignored** before writing (`installer-cli/.gitignore` already ignores `.env`). Never write a token to a tracked file.
+      2. Write/update `NPM_TOKEN=<value>` in **`installer-cli/.env`**. If the file exists, **replace an existing `NPM_TOKEN` line** rather than appending a duplicate, and leave other vars untouched; otherwise create the file.
+      3. **Never echo the token back** to chat, never commit it, never print it in a command. When you must load it, source the file (`set -a; . installer-cli/.env; set +a`) — don't inline the value.
+    - Then **re-run preflight** — `npm whoami` verifies the token actually works.
+  - *`npm whoami` failed (401)* → the token is wrong/expired. Same two paths as above (paste-and-I'll-write, or edit yourself); replace the bad `NPM_TOKEN` value, then re-run preflight.
+  - *registry ahead (published > current)* → do **not** overwrite; the registry has a newer version. Surface it and stop.
+- **`NEEDS_BUMP`** → published == current. The status block lists the resolved numbers for each bump (`patch → x.y.z`, `minor`, `major`) — also in `nextVersions` under `--json`.
+- **`READY`** → current > published (or first publish). No bump needed.
 
-State: published version, dist-tag, and `https://www.npmjs.com/package/<packageName>`.
-If the skill bumped the version in step 3, remind the user that `package.json` has an **uncommitted** version change to commit/push themselves.
+Warnings (dirty tree, branch ≠ dist-tag) are shown but do **not** block — mention them and let the user decide whether to continue.
+
+## 2. Bump / publish — ask only when there's a real decision
+
+The user invoked a **publish** skill, so shipping is the intent. Only ask when there's genuinely something to decide.
+
+- **`NEEDS_BUMP`** (published == current) → there IS a decision: which bump. Ask one question, showing the resolved numbers from the status block:
+  *"이번 릴리스로 배포할까요? patch → x.y.z / minor → … / major → … / custom"* — the user's pick is the publish approval. Do **not** pick for them.
+- **`READY`** (local > published, or first publish) → **nothing to decide — just publish.** The version was already bumped deliberately and the invocation is the go-ahead, so don't add a confirm. Instead **announce what you're shipping — version, dist-tag, and current branch** — in one line so a genuinely wrong state is visible before it runs, e.g. *"1.5.6을 latest 태그로 (develop 브랜치에서) 배포합니다"*, then run it.
+  - Don't gate on the `branch ≠ dist-tag` or `dirty tree` warnings here: releasing from `develop` first, and an uncommitted bump, are both normal in this repo's flow — they'd be false alarms every release. Just include the branch in the announcement so it's never hidden. The script's required `--yes` remains the real backstop.
+
+Tests run inside `release` and abort before publish if they fail — nothing ships on a red build.
+
+Then publish in one shot:
+
+```bash
+node scripts/release.mjs release --bump <patch|minor|major|x.y.z> --yes   # NEEDS_BUMP
+node scripts/release.mjs release --yes                                    # READY (no bump)
+```
+
+`--bump` and `--yes` are two **safety flags** the script requires together (it never publishes without both) — but that is one *human* turn, not two. Without `--yes` the script only prints a plan; use that for a dry run if asked. The script bumps `package.json`, runs `npm test`, publishes `npm publish --access public --tag <distTag>`, and reports the version, tag, and `https://www.npmjs.com/package/weegloo`.
+
+## 3. Commit the bump (after publish succeeds)
+
+If a bump happened, the published version MUST be committed — otherwise the repo's `package.json` falls behind the registry (the "registry ahead" drift). The script deliberately does **not** touch git; **you (the skill) commit** it here:
+
+```bash
+git add installer-cli/package.json installer-cli/package-lock.json
+git commit -m "chore(release): weegloo@<version>"
+```
+
+Commit only — **do not push**; pushing stays the user's call (verify the branch/remote first). Tell the user the commit was made and that they should push it. For a real release this should land on the branch matching the dist-tag (`latest`), so confirm the branch before committing if it doesn't match.
 
 ## Notes
 
-- The npm package ships only `bin.js` + `src/` (`files` field). Skills/rules are fetched at runtime from GitHub by the installer, so **no manifest rebuild is needed before publishing**.
-- `pluginRef` in `package.json` maps the npm dist-tag ⇄ git **branch** — keep it consistent with `distTag` (`"latest"` for latest releases). The installer fetches skills/rules from that branch at runtime, so the branch must hold the intended content before publishing.
+- **Secrets:** `NPM_TOKEN` comes only from the environment or a gitignored `.env` (repo root or `installer-cli/`). `installer-cli/.npmrc` resolves `${NPM_TOKEN}`. Both `.npmrc` and `.env` are gitignored — never commit or print the token. If publish demands an **OTP**, the token type is wrong; use a Granular/Automation token.
+- **What ships:** the npm package is only `bin.js` + `src/` (`files` field) — `scripts/` is not published. Skills/rules are fetched at runtime from GitHub, so no manifest rebuild is needed before publishing.
+- **`pluginRef`** in `package.json` maps the npm dist-tag ⇄ git **branch** (both `latest`). The installer fetches skills/rules from that branch, so the branch must hold the intended content before publishing. The script derives `distTag` from `pluginRef`; override with `--dist-tag` for a `beta` release.
+- Flags: `--no-tests` skips `npm test`; `--json` makes preflight machine-readable.
