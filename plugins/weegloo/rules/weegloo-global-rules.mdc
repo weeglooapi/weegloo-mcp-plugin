@@ -60,7 +60,7 @@ rules:
 
   - section: Plan limit / quota exceeded — explain and guide to upgrade
     items:
-      - **Applies to ANY plan-limit / quota error**, not just Space creation. When a Weegloo MCP tool fails with an error code in the **`WGL429*`** family (e.g. **`WGL429001`** = Space-creation limit) or an HTTP **429**-class *"limit/quota exceeded"* response — for any resource (Space, Content, Media, members, WebHosting, tokens, …) — treat it as **the current plan's allowed limit being reached**, not a transient failure.
+      - **Applies to ANY plan-limit / quota error**, not just Space creation. When a Weegloo MCP tool fails with an error code in the **`WGL429*`** family or an HTTP **429**-class *"limit/quota exceeded"* response — for any resource (Space, Content, Media, members, WebHosting, tokens, …) — treat it as **the current plan's allowed limit being reached**, not a transient failure.
       - **Do NOT silently retry, loop, or just surface the raw code.** Respond in the **user's language** with a short, clear explanation plus next steps.
       - **Always include three things:** (a) **what failed and why** — the operation, that it hit the current plan's allowed limit, and the error code (e.g. `WGL429001`); (b) **upgrade path** — recommend upgrading the subscription plan to raise the limit, and share the pricing page **https://docs.weegloo.com/pricing/pricing/**; (c) **alternatives** — e.g. delete an existing resource of the same type to free a slot then retry, or wait and retry if it is genuinely a transient/rate limit.
       - **Then ASK what the user wants to do.** Do **not** auto-upgrade, auto-delete existing resources, or retry in a loop on your own — hitting a plan limit is a user/billing decision.
