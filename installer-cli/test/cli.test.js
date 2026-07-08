@@ -75,6 +75,41 @@ test('resolveConfig: --ignore-skill alone keeps skills/rules phase on (wants rul
   assert.equal(resolve(['--ignore-skill', '--ignore-rule']).config.installSkillsRules, false);
 });
 
+// ── host (GUI wrapper) ──────────────────────────────────────────────────────
+
+test('resolveConfig: --host xcode with a hostable agent resolves cleanly', () => {
+  const { errors, config } = resolve(['-y', '-a', 'codex', '--host', 'xcode'], {
+    env: { WEEGLOO_TOKEN: 'pat' },
+  });
+  assert.deepEqual(errors, []);
+  assert.equal(config.agent, 'codex');
+  assert.equal(config.host, 'xcode');
+});
+
+test('resolveConfig: --host defaults to null (no PATH injection)', () => {
+  assert.equal(resolve(['-y', '-a', 'codex'], { env: { WEEGLOO_TOKEN: 'pat' } }).config.host, null);
+});
+
+test('resolveConfig: --host xcode rejects a non-hostable agent', () => {
+  const { errors } = resolve(['-y', '-a', 'cursor', '--host', 'xcode'], { env: { WEEGLOO_TOKEN: 'pat' } });
+  assert.ok(errors.some((e) => /--host xcode only works with --agent claude\/codex/.test(e)));
+});
+
+test('resolveConfig: invalid --host value is rejected', () => {
+  assert.ok(resolve(['--host', 'vim']).errors.some((e) => /Invalid --host/.test(e)));
+});
+
+test('resolveConfig: --agent xcode points at --host instead', () => {
+  const { errors } = resolve(['-y', '-a', 'xcode'], { env: { WEEGLOO_TOKEN: 'pat' } });
+  assert.ok(errors.some((e) => /'xcode' is not an --agent/.test(e)));
+});
+
+test('resolveConfig: --host xcode with --no-mcp warns (PATH has no effect)', () => {
+  const { errors, warnings } = resolve(['-y', '-a', 'codex', '--host', 'xcode', '--no-mcp']);
+  assert.deepEqual(errors, []);
+  assert.ok(warnings.some((w) => /--host xcode only affects the npx upload server/.test(w)));
+});
+
 // ── hard errors ─────────────────────────────────────────────────────────────
 
 test('resolveConfig: --mcp + --no-mcp conflict', () => {

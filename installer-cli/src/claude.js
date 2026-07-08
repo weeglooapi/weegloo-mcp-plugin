@@ -48,6 +48,7 @@ export async function installClaude({
   rules,
   mcp = {},
   scope,
+  host,
   installMcp,
   installSkillsRules,
 }) {
@@ -75,11 +76,12 @@ export async function installClaude({
         type: 'http',
         url: buildMcpUrlWithGroup(weeglooUrl, mcpGroup),
       };
-      const { command, args } = uploadServerCommand();
+      const { command, args, env } = uploadServerCommand({ injectPath: host === 'xcode' });
       config.mcpServers['weegloo-upload'] = {
         command,
         args,
         env: {
+          ...env,
           UPLOAD_API_URL: uploadApiUrl,
           AUTH_BEARER_TOKEN: token,
         },
