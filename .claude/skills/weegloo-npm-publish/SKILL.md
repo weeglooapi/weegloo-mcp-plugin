@@ -51,8 +51,8 @@ The user invoked a **publish** skill, so shipping is the intent. Only ask when t
 
 - **`NEEDS_BUMP`** (published == current) → there IS a decision: which bump. Ask one question, showing the resolved numbers from the status block:
   *"이번 릴리스로 배포할까요? patch → x.y.z / minor → … / major → … / custom"* — the user's pick is the publish approval. Do **not** pick for them.
-- **`READY`** (local > published, or first publish) → **nothing to decide — just publish.** The version was already bumped deliberately and the invocation is the go-ahead, so don't add a redundant confirm. Announce what you're shipping (*"발행본 1.5.5보다 앞선 1.5.6을 latest로 배포합니다"*) and run it.
-  - **One guard:** if there are **warnings** (dirty tree, or branch ≠ dist-tag), surface them and get a quick OK first — publishing `latest` from the wrong branch is a real footgun. No warnings → straight to publish.
+- **`READY`** (local > published, or first publish) → **nothing to decide — just publish.** The version was already bumped deliberately and the invocation is the go-ahead, so don't add a confirm. Instead **announce what you're shipping — version, dist-tag, and current branch** — in one line so a genuinely wrong state is visible before it runs, e.g. *"1.5.6을 latest 태그로 (develop 브랜치에서) 배포합니다"*, then run it.
+  - Don't gate on the `branch ≠ dist-tag` or `dirty tree` warnings here: releasing from `develop` first, and an uncommitted bump, are both normal in this repo's flow — they'd be false alarms every release. Just include the branch in the announcement so it's never hidden. The script's required `--yes` remains the real backstop.
 
 Tests run inside `release` and abort before publish if they fail — nothing ships on a red build.
 
