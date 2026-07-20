@@ -149,6 +149,7 @@ rules:
     items:
       - **Public read-only site:** **CDA** with a least-privilege `DeliveryAccessToken` (`SpaceRole`). No ServiceLogin.
       - **Public site + team admin UI:** **CDA** for visitors; **CMA** for the team via **`weegloo-user-login`** (Weegloo User login — PAT for servers, console FE login popup for browsers). No ServiceLogin.
+      - **Scoped write into ONE Space (no full-Org PAT):** **CMA** (+ Upload / CDA) with a **`SpaceAccessToken`** bound to a `SpaceRole` scoped to the use — a backend importer / sync job, **or a public / browser client such as anonymous posting** (with a suitably narrow role). Details: **`weegloo-space-access-token`** skill.
       - **Members-only read service (open end-user sign-up):** **ServiceLogin** + **ACDA**. Configure `ServiceLogin.sys.defaultRole` to a least-privilege `ServiceUserRole`.
       - **Members read + write service (open end-user sign-up):** **ServiceLogin** + **ACMA** (member writes, scoped to own resources; moderators via `isAdmin`) + **ACDA** (member reads). Use **CDA** in addition for any resources that should also be readable by anonymous visitors.
       - **Composite service:** combine the above per caller identity. Each path uses the API matching the caller's identity for that path; tokens **do not** cross identity boundaries.

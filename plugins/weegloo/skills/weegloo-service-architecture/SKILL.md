@@ -35,6 +35,7 @@ Detailed semantics:
 - **Weegloo User login (PAT + console FE login popup):** **`weegloo-user-login`** skill.
 - **ServiceLogin / ServiceUser / ServiceUserRole / `isAdmin`:** **`weegloo-service-login`** skill.
 - **Delivery token provisioning:** **`weegloo-delivery-access-token`** skill.
+- **Space-scoped write token (role-governed):** **`weegloo-space-access-token`** skill.
 - **Publish model (write → publish → readable on CDA / ACDA):** **`weegloo-cda-publish`** skill.
 
 ## Recipes by service type
@@ -122,6 +123,7 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 │ Service User moderator deleting others'     │ ACMA  + ServiceUser.isAdmin = true (delete)   │
 │ Weegloo User editing in a custom admin UI   │ CMA   + console FE login token (Space mbr.)   │
 │ Weegloo User uploading Media (admin UI)     │ Upload + Weegloo User Bearer → CMA Media      │
+│ Scoped write into one Space                 │ CMA   + SpaceAccessToken (SpaceRole)          │
 │ Backend / CI / scripts (developer)          │ CMA   + Personal Access Token (server only)   │
 └─────────────────────────────────────────────┴───────────────────────────────────────────────┘
 ```
@@ -130,6 +132,7 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 
 - **Calling CMA from a browser that does not have a Weegloo User session.** A Service User's ServiceLogin Bearer Token does **not** authorize CMA — use ACMA. The Weegloo User login flow for static admin UIs is **`weegloo-user-login`**.
 - **Putting a Personal Access Token in client-side code.** PATs are Weegloo User credentials meant for servers, CI, and developer scripts. For browser admin UIs, use the console FE login popup (Mechanism B in **`weegloo-user-login`**).
+- **Exposing a broad-role `SpaceAccessToken` in a public client.** A SpaceAccessToken embedded in a browser is only as safe as its bound role — fine with a **narrowly-scoped** role (e.g. anonymous create-only), but **never** with Administrator or a broad write role. If the client only **reads**, use a read-only **`DeliveryAccessToken`** instead. See **`weegloo-space-access-token`**.
 - **Reusing one DeliveryAccessToken for member-private reads.** CDA tokens are public; never bind them to anything more than the least-privilege public read scope. Use **ACDA** for per-member content.
 - **Granting Administrator (or any broad write) on a CDA DeliveryAccessToken** — strictly forbidden per **`weegloo-delivery-access-token`**.
 - **Letting end-users sign up as Weegloo Users.** Weegloo platform accounts are invitation-only Space members; end-user sign-up belongs to **ServiceLogin**. If you find yourself inviting every product user to the Space, you are using the wrong identity model.
@@ -168,5 +171,6 @@ This chain is the intended path: pick the architecture here, then walk skills 1�
 - **`weegloo-service-login`** — ServiceLogin / ServiceUser / ServiceUserRole / `isAdmin` mechanics and Bearer Token scope. The end-user identity model.
 - **`weegloo-service-login-sdk`** — OAuth wire protocol on `auth.weegloo.com` and the official browser SDK for ServiceLogin.
 - **`weegloo-delivery-access-token`** — least-privilege DeliveryAccessToken creation for CDA.
+- **`weegloo-space-access-token`** — Space-scoped read+write token whose power is set by a bound `SpaceRole`.
 - **`weegloo-space-role`** — SpaceRole / ServiceUserRole permission filters (`createdBy`, `:self`).
 - **`weegloo-cda-publish`** — publish model that gates what CDA / ACDA actually return.
