@@ -222,6 +222,13 @@ Grant the caller the right to call a Script's `/execute`, without letting them a
 
 Use `"Execute": { "Allow": [] }` instead to allow executing **every** Script in the Space.
 
+**Why this is powerful (privilege delegation):** because the Script's inner writes run with the
+**author's** authority, granting a caller `Execute` (and nothing else) lets them perform **one
+specific privileged operation** they otherwise can't. e.g. end users have **no** write on a `Log`
+ContentType, but `Execute` on a `recordEvent` Script lets them **append** log entries through it —
+without gaining `content.Create`/`Edit` on `Log` at all. Scope with `self` so it's exactly that one
+Script. Full patterns: **`weegloo-script`**.
+
 > **Authoring gotcha (not a filter thing):** a Script runs its inner Content/Media ops with its
 > **author's** authority, not re-checked per statement at run time. So the **author's** role must
 > hold an **unconditional `Allow`** (no `contentType`/`createdBy`/`tag` filter) for **each**

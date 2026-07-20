@@ -55,11 +55,15 @@ into the Space — it only notifies the external system.
 
 ## Path B — run a Script (`script` Refer)
 
-Set **`script`** (and leave `url` unset) to run a Script on the event instead of an HTTP call:
+Set **`script`** (and leave `url` unset) to run a Script on the event instead of an HTTP call. This
+is the **event → external call → follow-up work** pattern: the Script can call a third-party API
+**and then act on the result** (write a field, create a record, ingest Media, update a counter) — all
+in one ordered, server-side run. *Example:* on `Content.Publish`, a Script POSTs the item to a search
+index, then `ResourcePatch`es an `indexedAt` value back onto it. (Full patterns: `weegloo-script`.)
 
 - The Script is enqueued **async, fire-and-forget** — the Webhook does **not** poll or store the
-  Script's return value. (If you need the result, have the Script write it into Content/Media, or
-  call the Script from the frontend via `/execute` and poll `requestId` — `weegloo-script`.)
+  Script's return value. (If you need the result back, have the Script write it into Content/Media,
+  or call the Script from the frontend via `/execute` and poll `requestId` — `weegloo-script`.)
 - The **triggering resource becomes the Script's `payload`** (read it as `{ /payload/... }`).
 - **`runAs` is attribution only, not authorization.** It sets who the resource writes are attributed
   to (`HookOwner` = the webhook's creator; `EventUser` = the triggering user). The **only permission

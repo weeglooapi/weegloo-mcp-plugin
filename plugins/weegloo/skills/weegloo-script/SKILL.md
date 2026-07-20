@@ -1,6 +1,6 @@
 ---
 name: weegloo-script
-description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/PageRead, ResourceCreate/Update/Patch/Delete/Publish, Http, SetVar, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions, sync (10s) or async (60s, poll by requestId). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, compute or transform data server-side, enforce credits/ownership, or run any "create a job → poll for the result" flow.
+description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/PageRead, ResourceCreate/Update/Patch/Delete/Publish, Http, SetVar, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions, sync (10s) or async (60s, poll by requestId). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write), or run any "create a job → poll for the result" flow.
 ---
 
 # Weegloo — Script (declarative backend endpoints)
@@ -34,6 +34,52 @@ see *The external-API job pattern* below.
   the caller **polls** `GET …/scripts/{scriptId}/executions/{requestId}` until `200`.
 - A **Webhook** can run a Script instead of calling an external URL (event-driven trigger) — its
   `script` field points at the Script. See `weegloo-webhook`.
+
+## Patterns — recognize when Script is the right tool
+
+Reach for a Script (rather than client-side orchestration, or a Webhook that only POSTs to a URL)
+whenever one of these fits. These are the situations an AI agent should map to Script:
+
+1. **Event → external call → follow-up work (Webhook + Script).** React to a Space event by calling a
+   third-party API and then *doing something with the result* — write a field, create a record,
+   ingest Media. Wire it by pointing a **Webhook's `script`** at the Script (runs automatically on
+   e.g. `Content.Publish`), or call `/execute` from the frontend. *Example:* on `Content.Publish`,
+   POST the item to a search-index API, then `ResourcePatch` an `indexedAt` value back onto it.
+   (`weegloo-webhook`.)
+2. **Ordered, all-or-nothing multi-step work.** Steps that must run **in a fixed order and never be
+   left half-done** belong in **one** Script, not a chain of separate client calls that can be
+   interrupted between steps. Statements run **sequentially, server-side**; wrap the risky middle in
+   **`Try`/`catch`/`finally`** to **compensate** (undo) on failure, and via `/execute` +
+   poll-by-`requestId` the caller can confirm success or retry the whole unit. *Example:* *reserve
+   stock → charge → create order*, with `catch` releasing the reservation if a later step throws.
+3. **Concurrency-safe writes with `version` (optimistic locking).** To mutate a shared row without
+   **lost updates**, read it (`ResourceRead`/`ResourceFind`), then `ResourcePatch`/`ResourceUpdate`
+   passing **`version: "{ /<read>/sys/version }"`**. If another writer changed the row meanwhile the
+   version no longer matches and the write **fails with a conflict** — `catch` it and retry
+   (re-read → re-apply). *Example:* safely increment a shared counter / like-count / remaining
+   inventory under concurrent calls.
+
+   ```jsonc
+   { "type": "ResourceRead", "resource": "Content", "target": { "sys": { "id": "{ /payload/id }" } }, "name": "row" },
+   { "type": "Try",
+     "body": [ { "type": "ResourcePatch", "resource": "Content",
+       "target": { "sys": { "id": "{ /row/sys/id }" } },
+       "version": "{ /row/sys/version }",
+       "fields": { "count": { "en-US": { "+": [ "{ /row/fields/count/en-US }", 1 ] } } } } ],
+     "catch": [ { "type": "Return", "value": { "ok": false, "retry": true }, "isError": true, "statusCode": 409 } ] }
+   ```
+4. **Controlled privilege delegation (act with the author's authority).** A Script runs its inner
+   Content/Media ops with the **Script author's** permissions, so it is a **safe, narrow privilege
+   grant**: expose a *single* privileged operation to callers who otherwise lack it. Give end users
+   only `script.Execute` (ideally pinned to that one Script via the **`self`** filter —
+   `weegloo-space-role`); they gain exactly that operation and nothing else. *Example:* end users
+   **cannot** write the `Log` (audit/activity) ContentType directly, but a Script `recordEvent`
+   **appends** a log entry on their behalf — so they can add entries only *through* the Script (which
+   fixes the shape and stamps the caller), yet still cannot read, edit, or delete arbitrary logs.
+   Same shape for: increment a protected counter, file a report into a moderation queue they can't
+   read, or grant a one-off write into an admin-only collection. (This is the positive side of the
+   *author gate* in **Secrets & auth** below — the author needs the real permission; the caller does
+   not.)
 
 ## Authoring vs execution (which plane)
 
@@ -78,30 +124,84 @@ see *The external-API job pattern* below.
 
 ## Statements
 
-Each statement has a `type`; most may carry a **`name`** so later statements reference its result as
-**`{ /<name>/… }`**. `resource` is **`"Content"` | `"Media"`**.
+Every statement carries a **`type`** (the discriminator — **always include it**) and an optional
+**`name`** that binds its result into the context as `{ /<name>/… }` for later statements. On
+resource statements, **`resource`** is **`Content` | `Media`**. Statements run top-to-bottom and stop
+at `Return`.
 
-| Statement | Purpose / key fields |
-|-----------|----------------------|
-| `SetVar` | `var`, `value` → readable as `{ /vars/<var> }` |
-| `If` | `condition` (JsonLogic), `then[]`, `else[]` |
-| `Loop` | `over` / `while` / `for`, `body[]`, `maxIterations` — **no `Http` inside a loop body** |
-| `Parallel` | `branches: [[…],[…]]` concurrent branches |
-| `Try` | `body[]`, `catch[]` (has `{ /error/… }`), `finally[]` |
-| `Return` | `value`, `isError` (bool), `statusCode` — **terminates** the script |
-| `ResourceRead` | one item by id: `resource`, `target`, `name` |
-| `ResourceFind` | first match or null: `resource`, `contentType`, `where`, `name` |
-| `ResourcePageRead` | paginated: `resource`, `contentType`, `where`, `order`, `limit`, `name` |
-| `ResourceCreate` | `resource`, `contentType` (Content), `fields` — **Media file ingest ⇒ Async** |
-| `ResourceUpdate` | full PUT: `target`, `version`, `fields` — **file re-ingest ⇒ Async** |
-| `ResourcePatch` | partial merge: `target`, `fields` (optional `version`) — **file update ⇒ Async** |
-| `ResourceDelete` | `target` — **Draft/Archived only** |
-| `ResourcePublish` / `ResourceUnpublish` / `ResourceArchive` / `ResourceUnarchive` | `target` state transitions |
-| `Http` | `method`, `url`, `headers[]`, `body`, `timeoutMs`, `name` — **external call ⇒ forces Async** |
+### Control flow
 
-**Media ingest inside a Script** = `ResourceCreate` with `resource: "Media"` and
-`fields.file.{locale}` = `{ "source": "{ /gen/body/data/0/url }", "encoding": "url" }` (or
-`"base64"`) — Weegloo downloads/decodes the bytes and stores a Media asset you can reference.
+- **`If`** — `condition` (JsonLogic → boolean), `then` (statements[]), **`else`** (statements[], optional).
+- **`Loop`** — one of **three modes** plus a required cap:
+  - `over`: a value expression resolving to an **array** (foreach);
+  - `while`: JsonLogic — loops **while true**;
+  - `for`: a counted range **`{ "from": int, "to": int, "step"?: int }`**;
+  - `maxIterations` (**required** — engine-enforced hard cap), `as` (binding name for the current
+    item/index, read as `{ /<as> }`), `body` (statements[]). **No `Http` / Media-ingest inside a loop body.**
+- **`Parallel`** — `branches: [[…],[…]]`; branches run **concurrently** and **cannot reference each
+  other's** results.
+- **`Try`** — `body` (statements[]); **`catch`** (optional, runs on failure — `/error` exposes
+  `{ message, statement }`); **`finally`** (optional, **always runs**). Wrap risky HTTP/writes here.
+- **`Return`** — `value` (optional value expression), `isError` (bool, default `false`; when `true`
+  the value is delivered as the response **`error`** instead of `return`), `statusCode` (default
+  `200`). **Terminates** the Script.
+
+### Variables & HTTP
+
+- **`SetVar`** — `var` (variable name; read as `{ /vars/<var> }`), `value` (value expression; may
+  reference the variable itself to **accumulate**).
+- **`Http`** — `method` (GET/POST/PUT/PATCH/DELETE), `url` (value expression), `headers`
+  (`[{ key, value, secret?: bool }]` — **`secret: true`** ⇒ stored **encrypted**, never exposed to
+  ServiceUsers, CMA-only), `body` (value expression / JSON), `timeoutMs` (per-call, ≤ 60s cap),
+  `retry` (default `0`; retries only when the response **status ≥ 400**; capped at 2). **Forces Async.**
+
+### Resource reads (`requiredAction: Read`; no writes)
+
+All three take **`from`**: **`Current`** (live draft — what CMA/ACMA read; **default**) or
+**`Published`** (the published snapshot CDA/ACDA serve).
+
+- **`ResourceRead`** — get one **by id**: `resource`, `target` (`{ sys: { id } }`; `sys.id` is a
+  value expression), `from`. Binds the **full resource** under `name` (`{ /name/fields/title/en-US }`);
+  a **missing** resource raises an error a `Try` can catch.
+- **`ResourceFind`** — **first match or `null`**: `resource`, `contentType` (scopes a Content find;
+  Media is space-flat), `where` (filter `field → { op: value }` — Weegloo list-filter operators,
+  `:self` supported), `order` (decides which match is "first"), `from`. Branch on existence with
+  `{ "==": [ "{ /name }", null ] }` (the find-then-upsert pattern).
+- **`ResourcePageRead`** — a **page**: `resource`, `contentType`, `where`, `order`, `limit`
+  (**≤ 100**), `cursor` (continuation = the previous result's `next`), `from`. Binds **`{ items, next }`**.
+
+### Resource writes (`requiredAction` per action)
+
+- **`ResourceCreate`** (Create) — `resource`, `contentType` (Content; only `sys.id`), `fields`.
+- **`ResourceUpdate`** (Edit) — `target`, `fields` — **full replacement**: fields you omit are
+  **cleared**. Content only (a Media file is create/ingest-only; use `ResourcePatch` for Media metadata).
+- **`ResourcePatch`** (Edit) — `target`, `fields` — **partial merge**: only the named fields (and,
+  within each, the named locales) are overwritten; everything else is preserved. On Media it patches
+  `title`/`description`; the **file is left untouched**.
+- **`ResourceDelete`** (Delete) — `target`. **Draft/Archived items only.** (No `version`.)
+- **`ResourcePublish` / `ResourceUnpublish` / `ResourceArchive` / `ResourceUnarchive`** — `target`
+  state transitions (each also takes `version`).
+
+**Shared write options:**
+
+| Option | On | Meaning |
+|--------|----|---------|
+| `fields` | Create/Update/Patch | field-key → locale-map value. **Media** keys are fixed: `title`/`description` (scalar) and `file` = a `{ source, encoding }` **ingest directive**. A `locale → null` entry **deletes** that locale bucket. |
+| `locale` | Create/Update/Patch | literal locale code **or** value expression; **omit for the space default locale**. |
+| `version` | Update/Patch/Publish/Unpublish/Archive/Unarchive | **optimistic lock** (value expression → Int). Present ⇒ the write applies only if the target's current `sys.version` matches; a mismatch aborts with a **version-conflict error** (catchable by `Try`). Omit ⇒ no check. |
+| `publish` | Create/Update/Patch | **default `true`** — publish after the write so CDA/ACDA deliver it; set `false` to keep it a draft. |
+| `propagateEvents` | **every write** | **default `false` — a Script's writes are SILENT**: they do **not** emit `EntityEvent`s, so **search indexing and Webhooks do NOT fire** on them. Set `true` (per action) when a write must index the row or trigger other Webhooks. |
+
+**Media ingest** — set `fields.file.{locale} = { "source": "…", "encoding": … }` on a Media
+**`ResourceCreate`** (Media **file** writes are create/ingest-only: `ResourcePatch` touches only
+`title`/`description`, and `ResourceUpdate` is Content-only). **`encoding`** is one of **`url`**
+(worker fetches the URL's bytes), **`base64`** (decode the value), or **`binary`** (the raw binary
+response body, e.g. straight from an `Http` call). A file ingest **forces Async** and is **banned
+inside a `Loop`**.
+
+**Ids are validated:** every `target.sys.id` / `contentType.sys.id` must resolve to a real id token
+matching **`^[A-Za-z0-9_-]{1,64}$`** — an unsubstituted placeholder (e.g. `"<POST_ID>"`), quotes, or
+whitespace is rejected with a clean **`400`** (NoSQL-injection guard).
 
 ## Value expressions — `{ /pointer }`
 
