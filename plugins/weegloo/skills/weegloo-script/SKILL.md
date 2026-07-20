@@ -92,7 +92,8 @@ whenever one of these fits. These are the situations an AI agent should map to S
    *inside* the Script, the secret store never reaches the client: a caller holding nothing but
    `script.Execute` can neither read another post's password nor skip the gate. No `Http` / ingest ⇒
    it can run **Sync**. (Anonymous callers carry `script.Execute` via a **`SpaceAccessToken`** — the
-   public token that authorizes `/execute` with no logged-in user; covered separately.)
+   Space-scoped token that, with a suitably narrow bound role, authorizes `/execute` for an
+   anonymous/public caller with no logged-in Weegloo User; see **`weegloo-space-access-token`**.)
 
    ```jsonc
    // Edit a post only if the supplied password matches the stored one.
@@ -389,6 +390,7 @@ path per `weegloo-global-rules`. Confirm current caps on the pricing page; do no
 
 - `weegloo-webhook` — event triggers that run a Script (or call a URL).
 - `weegloo-space-role` — the `script.Execute` permission and `:self` filter.
+- `weegloo-space-access-token` — the SpaceAccessToken that carries `script.Execute` for anonymous / public callers (role-scoped).
 - `weegloo-create-content-type` / `weegloo-default-locale` — result ContentType fields, locale buckets.
 - `weegloo-media-lifecycle` — when an ingested Media is deliverable.
 - `weegloo-api-endpoints` — base URLs, vendor JSON, OpenAPI discovery.
