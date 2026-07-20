@@ -1,6 +1,6 @@
 ---
 name: weegloo-script
-description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/PageRead, ResourceCreate/Update/Patch/Delete/Publish, Http, SetVar, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions, sync (10s) or async (60s, poll by requestId). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write), or run any "create a job → poll for the result" flow.
+description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/PageRead, ResourceCreate/Update/Patch/Delete/Publish, Http, SetVar, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions, sync (10s) or async (60s, poll by requestId). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
 ---
 
 # Weegloo — Script (declarative backend endpoints)
@@ -80,6 +80,39 @@ whenever one of these fits. These are the situations an AI agent should map to S
    read, or grant a one-off write into an admin-only collection. (This is the positive side of the
    *author gate* in **Secrets & auth** below — the author needs the real permission; the caller does
    not.)
+5. **Secret-gated edit/delete — ownership by a shared secret, not identity.** When the caller has **no
+   usable identity** to gate on — anonymous / public callers, so `createdBy :self` means nothing —
+   prove ownership with a **caller-supplied secret** the Script checks **server-side** against a store
+   the caller **cannot read**. Canonical case: an **anonymous board** — a post is created with a
+   `password`, and a later **edit or delete** must re-supply it. Keep the password in a **separate
+   credential ContentType** (one row per post: the post id + its password) on which the public role
+   has **no `Read`**. The Script, running with its **author's** delegated authority (Pattern 4 +
+   *Secrets & auth*), `ResourceFind`s that credential, compares, and **`Return`s an error on
+   mismatch** — only a match proceeds to the `ResourcePatch` / delete. Because the comparison happens
+   *inside* the Script, the secret store never reaches the client: a caller holding nothing but
+   `script.Execute` can neither read another post's password nor skip the gate. No `Http` / ingest ⇒
+   it can run **Sync**. (Anonymous callers carry `script.Execute` via a **`SpaceAccessToken`** — the
+   public token that authorizes `/execute` with no logged-in user; covered separately.)
+
+   ```jsonc
+   // Edit a post only if the supplied password matches the stored one.
+   // Public role holds script.Execute on THIS script only — NOT Read on ct_pw, NOT Edit on ct_post.
+   { "type": "ResourceFind", "resource": "Content", "contentType": { "sys": { "id": "ct_pw" } },
+     "where": { "postId": { "eq": "{ /payload/postId }" } }, "name": "cred" },
+   { "type": "If", "condition": { "or": [
+       { "==": [ "{ /cred }", null ] },
+       { "!=": [ "{ /cred/fields/password/en-US }", "{ /payload/password }" ] } ] },
+     "then": [ { "type": "Return", "isError": true, "statusCode": 403,
+                 "value": { "ok": false, "error": "bad-password" } } ] },
+   { "type": "ResourcePatch", "resource": "Content", "target": { "sys": { "id": "{ /payload/postId }" } },
+     "fields": { "body": { "en-US": "{ /payload/fields/body }" } } },
+   { "type": "Return", "value": { "ok": true } }
+   ```
+
+   **Delete** reuses the same gate, then — `ResourceDelete` accepts **Draft/Archived only** —
+   `ResourceUnpublish` the post (read it first for its `sys.version`) **before** `ResourceDelete`.
+   Prefer to **store a client-hashed value, not the raw password** (the Script compares either the
+   same way), so the credential store never holds plaintext.
 
 ## Authoring vs execution (which plane)
 
