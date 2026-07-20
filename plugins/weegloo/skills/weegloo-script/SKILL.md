@@ -173,11 +173,14 @@ All three take **`from`**: **`Current`** (live draft — what CMA/ACMA read; **d
 ### Resource writes (`requiredAction` per action)
 
 - **`ResourceCreate`** (Create) — `resource`, `contentType` (Content; only `sys.id`), `fields`.
-- **`ResourceUpdate`** (Edit) — `target`, `fields` — **full replacement**: fields you omit are
-  **cleared**. Content only (a Media file is create/ingest-only; use `ResourcePatch` for Media metadata).
-- **`ResourcePatch`** (Edit) — `target`, `fields` — **partial merge**: only the named fields (and,
-  within each, the named locales) are overwritten; everything else is preserved. On Media it patches
-  `title`/`description`; the **file is left untouched**.
+- **`ResourceUpdate`** (Edit) — `target`, `fields` — **full replacement** (Content **or** Media): the
+  resource's fields become exactly `fields`; any field/locale you **omit is cleared**. For **Media**,
+  the `file` locales you list are **re-ingested** and omitted ones removed.
+- **`ResourcePatch`** (Edit) — `target`, `fields` — **partial merge** (Content **or** Media): only the
+  named fields — and within each, the named locales — change; everything unmentioned is preserved. A
+  bucket set to literal `null` **deletes** it. For **Media**, a named `file` locale with a
+  `{ source, encoding }` directive **re-ingests** that locale (`null` deletes it); `title`/
+  `description` merge per locale.
 - **`ResourceDelete`** (Delete) — `target`. **Draft/Archived items only.** (No `version`.)
 - **`ResourcePublish` / `ResourceUnpublish` / `ResourceArchive` / `ResourceUnarchive`** — `target`
   state transitions (each also takes `version`).
@@ -192,12 +195,13 @@ All three take **`from`**: **`Current`** (live draft — what CMA/ACMA read; **d
 | `publish` | Create/Update/Patch | **default `true`** — publish after the write so CDA/ACDA deliver it; set `false` to keep it a draft. |
 | `propagateEvents` | **every write** | **default `false` — a Script's writes are SILENT**: they do **not** emit `EntityEvent`s, so **search indexing and Webhooks do NOT fire** on them. Set `true` (per action) when a write must index the row or trigger other Webhooks. |
 
-**Media ingest** — set `fields.file.{locale} = { "source": "…", "encoding": … }` on a Media
-**`ResourceCreate`** (Media **file** writes are create/ingest-only: `ResourcePatch` touches only
-`title`/`description`, and `ResourceUpdate` is Content-only). **`encoding`** is one of **`url`**
-(worker fetches the URL's bytes), **`base64`** (decode the value), or **`binary`** (the raw binary
-response body, e.g. straight from an `Http` call). A file ingest **forces Async** and is **banned
-inside a `Loop`**.
+**Media ingest** — set `fields.file.{locale} = { "source": "…", "encoding": "url" | "base64" }` on a
+Media **`ResourceCreate`**, **`ResourceUpdate`** (re-ingests the listed locales — full replace), or
+**`ResourcePatch`** (re-ingests just the named locales). **`encoding`** is **`url`** (the worker
+fetches the URL's bytes) or **`base64`** (decodes the value). *(The `Binary` encoding is **rejected**
+in Scripts with a `400` — use `url` or `base64`.)* A file ingest **forces Async** and is **banned
+inside a `Loop`**. A Media that is still **processing** cannot be updated/patched/deleted (busy), and
+publish is refused until all its files are processed.
 
 **Ids are validated:** every `target.sys.id` / `contentType.sys.id` must resolve to a real id token
 matching **`^[A-Za-z0-9_-]{1,64}$`** — an unsubstituted placeholder (e.g. `"<POST_ID>"`), quotes, or
