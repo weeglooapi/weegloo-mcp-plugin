@@ -78,6 +78,7 @@ Schema: **`weegloo-api-endpoints`** → CMA OpenAPI (**`CreateDeliveryAccessToke
 ## Related
 
 - **`weegloo-space-role`** — permission maps, **`createdBy.sys.id`**, **`:self`**, per-user private Content.
+- **`weegloo-space-access-token`** — the **write-capable** sibling (CMA data + CDA + Upload, one Space, bound role). Use it when the client needs to write; a DeliveryAccessToken is read-only.
 
 ## Important
 

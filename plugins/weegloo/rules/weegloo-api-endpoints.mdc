@@ -25,7 +25,7 @@ rules:
   - section: Two login models (read this before picking an API)
     items:
       - Weegloo has **two completely separate identity systems**. The API a caller may use is determined by which identity issued the token.
-      - **Weegloo User** — a Weegloo **platform account** (Space owner or **invited** Space member). **No self-signup** — onboarding is by invitation only. Bearer Token (a **Personal Access Token** for server/CI, or the token returned by the **Weegloo Console FE login popup** for browser admin UIs) authorizes **CMA**, **Upload**, and **CDA**. Mechanics: **`weegloo-user-login`** skill.
+      - **Weegloo User** — a Weegloo **platform account** (Space owner or **invited** Space member). Account sign-up is self-service, but membership in a given Organization/Space is **invite-or-own** (you must be invited to join someone else's). Bearer Token (a **Personal Access Token** for server/CI, or the token returned by the **Weegloo Console FE login popup** for browser admin UIs) authorizes **CMA**, **Upload**, and **CDA**. Mechanics: **`weegloo-user-login`** skill.
       - **Service User** — an end-user of the product the Space ships, signed in via **ServiceLogin** (e.g. Google OAuth). **Anyone may sign up**. Bearer Token (issued via `auth.weegloo.com`) authorizes **ACMA**, **ACDA**, and **Upload** — never CMA / CDA. The Upload path lets a member contribute media: **Upload** with the ServiceLogin Bearer, then **ACMA** Media create to attach the resulting asset (CMA Media is still Weegloo-User-only). Mechanics: **`weegloo-service-login`** skill (wire protocol + SDK: **`weegloo-service-login-sdk`**).
       - **Tokens do not cross identity boundaries.** A Service User Bearer must never be sent to CMA / CDA; a Weegloo User Bearer is not a valid caller on ACMA / ACDA. **Upload** is the one shared surface — both Weegloo User and Service User Bearers are accepted; the Media resource that follows is created on **CMA** (Weegloo User) or **ACMA** (Service User), matching the identity that did the upload.
 
@@ -131,7 +131,7 @@ rules:
 
   - section: Weegloo User login — token scope
     items:
-      - **Weegloo User** is the Weegloo **platform account** identity (Space owner or **invited** member). **No self-signup** — onboarding is via Space invitation.
+      - **Weegloo User** is the Weegloo **platform account** identity (Space owner or **invited** member). Account sign-up is self-service; membership in a given Space is **invite-or-own** (you create it or are invited).
       - A Weegloo User Bearer Token (a **Personal Access Token** for servers/CI, or the token returned by the **Weegloo Console FE login popup** for browsers) authorizes **CMA**, **Upload**, and **CDA**.
       - **Do not** ship a Personal Access Token to a browser — it is too privileged and too long-lived. Browser admin UIs use the FE popup mechanism. Mechanics and the popup flow live in **`weegloo-user-login`**.
       - Effective rights on a given Space come from the user's `SpaceRole` via Space membership. Use **`GET /v1/me/space-memberships`** to gate "is this user actually a member of *this* Space?" (see **`weegloo-global-rules`**).
@@ -149,6 +149,7 @@ rules:
     items:
       - **Public read-only site:** **CDA** with a least-privilege `DeliveryAccessToken` (`SpaceRole`). No ServiceLogin.
       - **Public site + team admin UI:** **CDA** for visitors; **CMA** for the team via **`weegloo-user-login`** (Weegloo User login — PAT for servers, console FE login popup for browsers). No ServiceLogin.
+      - **Scoped write into ONE Space (no full-Org PAT):** **CMA** (+ Upload / CDA) with a **`SpaceAccessToken`** bound to a `SpaceRole` scoped to the use — a backend importer / sync job, **or a public / browser client such as anonymous posting** (with a suitably narrow role). Details: **`weegloo-space-access-token`** skill.
       - **Members-only read service (open end-user sign-up):** **ServiceLogin** + **ACDA**. Configure `ServiceLogin.sys.defaultRole` to a least-privilege `ServiceUserRole`.
       - **Members read + write service (open end-user sign-up):** **ServiceLogin** + **ACMA** (member writes, scoped to own resources; moderators via `isAdmin`) + **ACDA** (member reads). Use **CDA** in addition for any resources that should also be readable by anonymous visitors.
       - **Composite service:** combine the above per caller identity. Each path uses the API matching the caller's identity for that path; tokens **do not** cross identity boundaries.

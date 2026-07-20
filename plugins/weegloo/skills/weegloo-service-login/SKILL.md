@@ -13,7 +13,7 @@ Weegloo has **two completely separate identity systems**. This skill is about mo
 |---|---|---|
 | Who is the identity? | A **Weegloo platform account** — the human who owns or was **invited** to a Space. | An **end-user of the product** the Space ships. |
 | User directory runs on… | **Weegloo**. | The **Space itself** (one ServiceLogin per Space, separate from Weegloo accounts). |
-| Self sign-up? | **No** — invitation only; not for the general public. | **Yes** — anyone may sign up via the configured OAuth provider(s). This is the whole point. |
+| Self sign-up? | **No** — it is a **login (authentication) feature only**, for a Weegloo User who **already** belongs to the Space; it has no registration step. (A Weegloo account is created on the Weegloo platform separately, and Space access is by ownership / invitation — not through this login.) | **Yes** — anyone may sign up via the configured OAuth provider(s). This is the whole point. |
 | Perspective | **Admin / staff** of the product. | **Member / customer / reader** of the product. |
 | Token grants access to… | **CMA**, **Upload**, **CDA**. | **ACMA**, **ACDA**, and **Upload**. Never CMA / CDA. Media uploads land via **Upload → ACMA** Media create. |
 

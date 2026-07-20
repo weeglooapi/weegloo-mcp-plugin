@@ -194,7 +194,8 @@ Each leaf maps to the concrete skill that actually does the work.
 - **Permissions**
   - **Role Management** → `weegloo-space-role`
   - **Access Control** (least-privilege tokens, scoped reads) → `weegloo-space-role` +
-    `weegloo-delivery-access-token`
+    `weegloo-delivery-access-token`; Space-scoped read+write token →
+    `weegloo-space-access-token`
 - **External Service Integration**
   - **API Connection / server-side automation** (call third-party APIs without a backend; compute or
     write-back Content/Media; "create a job → poll the result") → `weegloo-script` (Weegloo **Script**)
@@ -217,7 +218,7 @@ Each leaf maps to the concrete skill that actually does the work.
 | Public Sharing               | `weegloo-delivery-access-token` + `weegloo-cda-publish`                  |
 | Team Sharing                 | `weegloo-space-role` + `weegloo-service-login`                           |
 | Role Management              | `weegloo-space-role`                                                      |
-| Access Control               | `weegloo-space-role` + `weegloo-delivery-access-token`                   |
+| Access Control               | `weegloo-space-role` + `weegloo-delivery-access-token`; scoped write → `weegloo-space-access-token` |
 | API Connection / server-side automation | `weegloo-script` (Script; call external APIs + write results back to Content/Media) |
 | Webhook (event → URL or Script) | `weegloo-webhook`                                                     |
 
