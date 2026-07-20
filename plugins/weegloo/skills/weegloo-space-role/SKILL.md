@@ -1,6 +1,6 @@
 ---
 name: weegloo-space-role
-description: SpaceRole and ServiceUserRole permission rules — scope ContentType, Content, and Media with optional filters (contentType, createdBy, tag). Use createdBy.sys.id for a fixed creator or :self for the currently authenticated caller. Use when designing least-privilege roles, per-user private Content, or member-scoped ACMA/ACDA access. English only.
+description: SpaceRole and ServiceUserRole permission rules — scope ContentType, Content, Media, and Script with optional filters (contentType, createdBy, tag, self). Script adds an Execute action (call /execute); on Script only createdBy and self apply. Use createdBy.sys.id ':self' for the authenticated caller's own resources, or the `self` filter (a Refer to one entity) to pin a rule to exactly one resource — e.g. Execute a single specific Script. Use when designing least-privilege roles, per-user private Content, granting Script Execute (all / own / one specific), or member-scoped ACMA/ACDA access. English only.
 ---
 
 # Weegloo — SpaceRole & ServiceUserRole (`createdBy` filters)
@@ -10,7 +10,7 @@ description: SpaceRole and ServiceUserRole permission rules — scope ContentTyp
 - Creating or updating a **`SpaceRole`** (`cma_CreateSpaceRole`, `cma_UpdateSpaceRole`) for **Weegloo Users** (CMA / CDA / `DeliveryAccessToken`).
 - Creating or updating a **`ServiceUserRole`** (`cma_CreateServiceUserRole`, …) for **Service Users** (ACMA / ACDA).
 - Scoping permissions so a caller may only see or change **resources they created** (private notes, drafts, per-member data).
-- **Webhook + WriteBack** job ContentTypes — open **Create**, **Read / Edit / Delete** with **`:self`** only (**`weegloo-webhook-writeback`**).
+- **Script `Execute`** for a caller (usually `Allow: []`), or **async external-API job** ContentTypes — open **Create**, **Read / Edit / Delete** with **`:self`** only (**`weegloo-script`**).
 - Pinning access to **one specific creator** by user id (audit, delegation, or a fixed service account).
 
 Canonical API reference (overview + structure): **`weegloo-api-endpoints`** rule → *Weegloo documentation* → **SpaceRole**.
@@ -19,23 +19,38 @@ Canonical API reference (overview + structure): **`weegloo-api-endpoints`** rule
 
 ## Permission maps (`contentType`, `content`, `media`)
 
-Both **`SpaceRole`** and **`ServiceUserRole`** define three permission maps:
+Both **`SpaceRole`** and **`ServiceUserRole`** define these permission maps:
 
 | Map | Applies to |
 |-----|------------|
 | `contentType` | **ContentType** resources |
 | `content` | **Content** entries |
 | `media` | **Media** assets |
+| `script` | **Script** resources (declarative backend endpoints — `weegloo-script`) |
 
-Each map lists **actions** (`Read`, `Create`, `Edit`, `Delete`, `Publish`, `All`, …). Under each action, **`Allow`** or **`Deny`** holds an array of **filter rules**.
+Each map lists **actions**. Content/Media/ContentType use `Read`, `Create`, `Edit`, `Delete`,
+`Publish`, `Unpublish`, `Archive`, `Unarchive`, `All`. **`script` additionally supports `Execute`**
+(the right to call a Script's `/execute`) — an action unique to Script. Under each action,
+**`Allow`** or **`Deny`** holds an array of **filter rules**.
 
 | Filter key | Purpose |
 |------------|---------|
 | `contentType` | Limit to one **ContentType** (`Refer` with `targetType: "ContentType"`) |
-| `createdBy` | Limit to resources **created by** a given user |
+| `createdBy` | Limit to resources **created by** a given user (`:self` for the caller) |
 | `tag` | Limit by **Tag** |
+| `self` | Limit to **one specific resource by `Refer`** — pins the rule to exactly that entity (`Refer<Entity>`), e.g. one specific **Script**. |
 
 An **empty** rule list `[]` means the action applies to **all** resources of that kind (no filter).
+
+> **⚠️ `self` (filter) is NOT `:self` (the `createdBy` sentinel) — don't confuse them.**
+> `createdBy.sys.id: ":self"` = "resources created by **whoever is calling**". The **`self`** filter
+> is a **direct `Refer` to one specific resource** (by `sys.id` + `targetType`) — "**this exact
+> entity**", regardless of who created it. See *`self` — pin to one specific resource* below.
+
+> **On the `script` map, `createdBy` and `self` are the meaningful filters** — `contentType` and
+> `tag` do **not** apply to Scripts. Empty `Allow: []` = **all** Scripts; `createdBy :self` = only
+> Scripts the **caller created**; **`self`** = **one specific Script** (its `Refer`), e.g. "may
+> `Execute` **exactly this** Script and no other."
 
 Combine filters in one rule object when needed — e.g. restrict **Read** on **Content** of a given **ContentType** **and** only when **created by** the caller.
 
@@ -94,6 +109,38 @@ Use the reserved value **`:self`** in **`createdBy.sys.id`**:
 
 ---
 
+## `self` — pin a rule to one specific resource (`Refer`)
+
+Separate from **`createdBy`**, the **`self`** filter scopes a rule to **exactly one named resource**,
+by direct reference — regardless of who created it. Its value is a **`Refer`** to that entity
+(`Refer<Entity>`): set `sys.id` to the resource's id and `sys.targetType` to its type.
+
+```json
+"self": {
+  "sys": {
+    "type": "Refer",
+    "id": "<resourceId>",
+    "targetType": "Script"
+  }
+}
+```
+
+- **Primary use — Script.** On the `script` map, `self` pins the action to **one specific Script**.
+  e.g. `script.Execute.Allow = [ { "self": { "sys": { "id": "<scriptId>", "type": "Refer", "targetType": "Script" } } } ]`
+  lets the caller **`Execute` that one Script and no other** — the least-privilege way to expose a
+  single backend endpoint to a group of users without granting "execute any Script."
+- **Contrast with `createdBy`:** `createdBy :self` = "any resource **I created**" (dynamic, by
+  author); `self` = "**this one resource**" (fixed, by id) — independent of author.
+- **Contrast with `contentType`** (on Content): `contentType` scopes to a whole **type**; `self`
+  scopes to a **single instance**.
+- Fits any map where pinning one instance makes sense; on `script` it is one of the two meaningful
+  filters (with `createdBy`).
+
+> Reminder: **`self`** (this filter, a `Refer` to an entity) ≠ **`:self`** (the reserved
+> `createdBy.sys.id` value meaning the current caller). Same word, different mechanism.
+
+---
+
 ## Recipe — per-user private Content (Weegloo User)
 
 **Need:** Each console/API user may **read (and optionally edit)** only **their own** entries of a given **ContentType** — e.g. private notes.
@@ -135,16 +182,51 @@ For **`Create`**, use a **contentType-only** rule (no **`createdBy`**) when anyo
 
 ---
 
-## Recipe — Webhook job Request / Response Content
+## Recipe — async external-API job Content (Script-written)
 
-When a **ContentType** carries async **request** + **response** for an external API (**`weegloo-webhook-writeback`**):
+When a **ContentType** carries async **request** + **response** for an external API (written by a
+**`weegloo-script`**):
 
 | Action | `createdBy` filter |
 |--------|-------------------|
 | **`Create`** | **Omit** — allow new job rows for the job **ContentType** |
 | **`Read`**, **`Edit`**, **`Delete`**, … | **`":self"`** + job **ContentType** `Refer` |
 
-End users submit jobs (**Create**); they may only **read / change / delete their own** job Content. **WriteBack** still updates **`response`** platform-side after the external API succeeds.
+End users submit jobs (**Create**); they may only **read / change / delete their own** job Content.
+A **Script** (running with its author's delegated authority) writes **`response`** platform-side
+after the external API succeeds — the user's own role never needs `Edit` on the `response` field, so
+they cannot forge a completed job.
+
+---
+
+## Recipe — Script `Execute` (let a caller run a Script)
+
+Grant the caller the right to call a Script's `/execute`, without letting them author Scripts.
+
+- On the caller's role (**`ServiceUserRole`** for ServiceLogin → ACMA execute; **`SpaceRole`** for
+  Weegloo User / `DeliveryAccessToken`), add a **`script`** map granting **`Execute`**. Scope it:
+  - `Allow: []` → may Execute **any** Script (broad);
+  - `createdBy :self` → only Scripts the **caller created**;
+  - **`self` → exactly one specific Script** (recommended for exposing a single endpoint).
+  Do **not** grant `Create`/`Edit`/`Delete` unless the caller should author Scripts.
+
+```json
+"script": {
+  "Execute": {
+    "Allow": [
+      { "self": { "sys": { "type": "Refer", "id": "<scriptId>", "targetType": "Script" } } }
+    ]
+  }
+}
+```
+
+Use `"Execute": { "Allow": [] }` instead to allow executing **every** Script in the Space.
+
+> **Authoring gotcha (not a filter thing):** a Script runs its inner Content/Media ops with its
+> **author's** authority, not re-checked per statement at run time. So the **author's** role must
+> hold an **unconditional `Allow`** (no `contentType`/`createdBy`/`tag` filter) for **each**
+> Content/Media action the Script performs, or the save is rejected (`WGL403015`). Author Scripts as
+> a broadly-permissioned admin; keep end users to `Execute` only. Detail: **`weegloo-script`**.
 
 ---
 
@@ -187,5 +269,6 @@ OpenAPI field shapes: **`weegloo-api-endpoints`** → CMA API docs → **`Create
 - **`weegloo-delivery-access-token`** — bind a least-privilege **SpaceRole** to a CDA token.
 - **`weegloo-service-login`** — ServiceUserRole, `defaultRole`, `roleOverride`, `isAdmin`, ACMA ownership defaults.
 - **`weegloo-service-architecture`** — which role type each service pattern needs.
-- **`weegloo-webhook-writeback`** — async external API jobs; mandatory Create vs `:self` Read/Edit/Delete split.
+- **`weegloo-script`** — Script `Execute` permission, the author unconditional-Allow gate, and async external-API jobs (Create vs `:self` Read/Edit/Delete split).
+- **`weegloo-webhook`** — Webhook triggers that run a Script or POST to a URL.
 - **`weegloo-api-endpoints`** — API base URLs, docs index, `SpaceRole` reference link.

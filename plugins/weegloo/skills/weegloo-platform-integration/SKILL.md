@@ -55,8 +55,9 @@ capability the frontend implies is **actually wired and live**. Hold the whole f
      silently assume "the team will use the Weegloo Console."
    - **b. Which Weegloo resources does each feature imply?** e.g. a Google sign-in button + a
      personal "history" list → ServiceLogin + ServiceUser + a per-user-scoped ContentType; a
-     "generate image from a prompt" flow that calls a third-party API → a job ContentType +
-     Webhook/WriteBack; an image grid → Media + delivery.
+     "generate image from a prompt" flow that calls a third-party API → a **Script** (external `Http`
+     call + Media ingest / Content write-back) + a job/result ContentType; an image grid → Media +
+     delivery.
    - **c. Design each ContentType FROM the UI, not from a guess.** Read the actual inputs and
      outputs the UI binds to and derive fields, types, and validations: each form control → a field;
      a fixed set of choices (a ratio/size selector, status chips, a category dropdown) → an
@@ -127,7 +128,7 @@ skill governs. When you finish, the user-facing message must be **brief and plai
 - **Report only what was completed**, as a short list. Do not narrate the plan, the steps you took,
   the architecture, or what work remains/comes next.
 - **No Weegloo-internal jargon.** The person asking may not know Weegloo at all — terms like
-  `ContentType`, `ServiceUserRole`, `:self`, `ACMA`, `DeliveryAccessToken`, `WriteBack`, resource
+  `ContentType`, `ServiceUserRole`, `:self`, `ACMA`, `DeliveryAccessToken`, `Script`, resource
   `sys.id`s, status codes (404), etc. are meaningless to them. Describe outcomes in plain language
   (e.g. "the site is live at …", not "WebHosting resource reached state COMPLETED").
 - **No remaining-work tables or "give me these and I'll continue" wrap-ups** (per step 4, ask for a
@@ -195,8 +196,9 @@ Each leaf maps to the concrete skill that actually does the work.
   - **Access Control** (least-privilege tokens, scoped reads) → `weegloo-space-role` +
     `weegloo-delivery-access-token`
 - **External Service Integration**
-  - **API Connection** (call third-party APIs without a backend) → `weegloo-webhook-writeback`
-  - **Webhook** → `weegloo-webhook-writeback`
+  - **API Connection / server-side automation** (call third-party APIs without a backend; compute or
+    write-back Content/Media; "create a job → poll the result") → `weegloo-script` (Weegloo **Script**)
+  - **Webhook** (react to a Space event → call a URL **or** run a Script) → `weegloo-webhook`
 
 ## Capability → skill quick table
 
@@ -216,7 +218,8 @@ Each leaf maps to the concrete skill that actually does the work.
 | Team Sharing                 | `weegloo-space-role` + `weegloo-service-login`                           |
 | Role Management              | `weegloo-space-role`                                                      |
 | Access Control               | `weegloo-space-role` + `weegloo-delivery-access-token`                   |
-| API Connection / Webhook     | `weegloo-webhook-writeback`                                              |
+| API Connection / server-side automation | `weegloo-script` (Script; call external APIs + write results back to Content/Media) |
+| Webhook (event → URL or Script) | `weegloo-webhook`                                                     |
 
 If a request spans multiple rows, route through all matching skills — start with
 `weegloo-service-architecture` so the pieces fit one coherent architecture.
@@ -256,8 +259,8 @@ These are two different things; do not confuse them. Full mechanics and the crea
   you fix yourself with a placeholder — never ask the user for those.
 - **Do not bypass existing gates.** Architecture → `weegloo-service-architecture`; ContentType
   design → `weegloo-create-content-type` (+ `weegloo-default-locale` for multi-locale); CDA tokens
-  → `weegloo-delivery-access-token`; external-API jobs → `weegloo-webhook-writeback`; WebHosting
-  deploy → `weegloo-web-hosting`.
+  → `weegloo-delivery-access-token`; external-API / server-side automation → `weegloo-script`,
+  event triggers → `weegloo-webhook`; WebHosting deploy → `weegloo-web-hosting`.
 - **Respect the two identity systems.** "Login/Signup" splits into Weegloo User (admin) vs Service
   User (end-user). Do not ask the user to choose — infer the right identity model from the request
   (and integrate both where both clearly apply), defaulting sensibly rather than prompting.
