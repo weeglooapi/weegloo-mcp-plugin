@@ -1,6 +1,6 @@
 ---
 name: weegloo-user-login
-description: Weegloo User login — authenticate a Weegloo platform account (Space owner or invited user) so the caller can hit CMA, Upload, and CDA as an admin. NOT for the public; there is no self-signup — identity is provisioned by Weegloo via Space-membership invitations. Two mechanisms produce a Weegloo User Bearer Token, Personal Access Token (PAT) for server-side / CI / scripts, and the Weegloo Console FE login popup (origin-checked postMessage → sessionStorage) for browser apps including static sites on Weegloo WebHosting. Use when building an API-driven custom admin UI, a Weegloo-User-only "internal" product, or wiring CMA-authenticated editing from a static site. Contrast with `weegloo-service-login`, which is end-user sign-up for the product itself and whose token is scoped to ACMA / ACDA / Upload (never CMA / CDA).
+description: Weegloo User login — authenticate a Weegloo platform account (Space owner or invited user) so the caller can hit CMA, Upload, and CDA as an admin. This login only authenticates an existing Weegloo User — a Space owner or invited member; it is not a sign-up flow (account creation and Space membership happen outside it) and not the product's open end-user signup. Two mechanisms produce a Weegloo User Bearer Token, Personal Access Token (PAT) for server-side / CI / scripts, and the Weegloo Console FE login popup (origin-checked postMessage → sessionStorage) for browser apps including static sites on Weegloo WebHosting. Use when building an API-driven custom admin UI, a Weegloo-User-only "internal" product, or wiring CMA-authenticated editing from a static site. Contrast with `weegloo-service-login`, which is end-user sign-up for the product itself and whose token is scoped to ACMA / ACDA / Upload (never CMA / CDA).
 ---
 
 # Weegloo — User login (admin / platform account)
@@ -13,7 +13,7 @@ Weegloo has **two completely separate identity systems**. The rest of this skill
 |---|---|---|
 | Who is the identity? | A **Weegloo platform account** — the human who owns a Space, or who was **invited** to it as a Space member. | An **end-user of the product** the Space ships (e.g. a member of a forum the Space runs). |
 | Who runs the user directory? | **Weegloo** itself. One account, many Spaces (via memberships). | The **Space**. One directory per Space, **separate** from Weegloo accounts. |
-| Self sign-up? | **No.** Onboarding is by **Space invitation** (or by being a Space owner). The general public cannot get in. | **Yes.** Anyone can sign up through the product — that is the entire point. |
+| Self sign-up? | **No** — it is a **login (authentication) feature only**, for a Weegloo User who **already** belongs to the Space; it has no registration step. (A Weegloo account is created on the Weegloo platform separately, and Space access is by ownership / invitation — not through this login.) | **Yes.** Anyone can sign up through the product — that is the entire point. |
 | Perspective in the product | **Admin / staff** of the product. | **Member / customer / reader** of the product. |
 | Token authorises which APIs? | **CMA**, **Upload**, **CDA**. (Management plane + uploads + delivery.) | **ACMA**, **ACDA**, and **Upload**. Never CMA / CDA. Member media flow is Upload → ACMA Media create. |
 | Documented in | **`weegloo-user-login`** (this skill). | **`weegloo-service-login`** + **`weegloo-service-login-sdk`** skills. |
@@ -25,7 +25,7 @@ Weegloo has **two completely separate identity systems**. The rest of this skill
 Weegloo User login is the right model when **any** of the following are true:
 
 - **API-driven custom admin UI.** The team prefers to manage content through your own interface (CMA / Upload calls) instead of, or in addition to, the Weegloo Console. The site signs the admin in as their **Weegloo User** and calls CMA on their behalf.
-- **Weegloo-User-only "internal" product.** The whole product is gated to Weegloo Users on a particular Space — anyone who has not been **invited** to that Space cannot get past the login screen. This is the right pattern for staff dashboards, internal tooling, and secret previews — **not** for paid member areas (use Service User for paid customers).
+- **Weegloo-User-only "internal" product.** The whole product is gated to Weegloo Users on a particular Space — anyone who is not a **member** of that Space (its owner or an invited member) cannot get past the login screen. This is the right pattern for staff dashboards, internal tooling, and secret previews — **not** for paid member areas (use Service User for paid customers).
 - **Server-side / CI scripts that talk to Weegloo.** Backfills, scheduled jobs, build-time content fetches, deploy automation. These run with a Weegloo User identity supplied as a **PAT**.
 
 It is **wrong** to use Weegloo User login for end-users of a product (paid members, community readers, forum posters, app sign-ups). Use **ServiceLogin** for that — see **`weegloo-service-login`**.
