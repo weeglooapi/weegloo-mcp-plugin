@@ -209,11 +209,27 @@ All three take **`from`**: **`Current`** (live draft — what CMA/ACMA read; **d
   value expression), `from`. Binds the **full resource** under `name` (`{ /name/fields/title/en-US }`);
   a **missing** resource raises an error a `Try` can catch.
 - **`ResourceFind`** — **first match or `null`**: `resource`, `contentType` (scopes a Content find;
-  Media is space-flat), `where` (filter `field → { op: value }` — Weegloo list-filter operators,
-  `:self` supported), `order` (decides which match is "first"), `from`. Branch on existence with
+  Media is space-flat), `where` (filter `fields.<name> → { op: value }` — Weegloo list-filter operators,
+  `:self` supported; see the key-format note below), `order` (decides which match is "first"), `from`. Branch on existence with
   `{ "==": [ "{ /name }", null ] }` (the find-then-upsert pattern).
 - **`ResourcePageRead`** — a **page**: `resource`, `contentType`, `where`, `order`, `limit`
   (**≤ 100**), `cursor` (continuation = the previous result's `next`), `from`. Binds **`{ items, next }`**.
+
+> **`where` / `order` field keys — a content field MUST be `fields.<apiName>`, never the bare name (the
+> #1 mistake).** Write **`fields.postId`**, not `postId` — a bare content-field name is not recognized and
+> fails with **`WEB400002` "'…' 는 존재하지 않는 필드입니다 / … does not exist"**. The space **default
+> locale is applied automatically** to a `fields.<name>` key, so **do not hand-append a locale**: use
+> `fields.postId` (default locale) — `postId.ko-KR` and bare `postId` both fail. Only to target a
+> **non-default** locale do you write the full `fields.<name>.<locale>` (e.g. `fields.postId.en-US`).
+> **Exceptions (no `fields.` prefix):** **`sys.*`** fields (`sys.createdAt`, `sys.status`, …) and the
+> **`createdBy`** convenience (with `:self`) are used **as-is**. The same key rules apply to `order`
+> tokens — e.g. `order: "-fields.score"` or `"-sys.createdAt"`.
+>
+> ```jsonc
+> // ✅ correct                                  // ❌ wrong — WEB400002
+> "where": { "fields.postId": { "eq": "…" } }    "where": { "postId":          { "eq": "…" } }
+>                                                 "where": { "postId.ko-KR":    { "eq": "…" } }
+> ```
 
 ### Resource writes (`requiredAction` per action)
 
