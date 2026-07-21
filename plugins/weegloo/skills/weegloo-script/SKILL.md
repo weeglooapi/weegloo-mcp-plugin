@@ -187,7 +187,18 @@ at `Return`.
 - **`Http`** — `method` (GET/POST/PUT/PATCH/DELETE), `url` (value expression), `headers`
   (`[{ key, value, secret?: bool }]` — **`secret: true`** ⇒ stored **encrypted**, never exposed to
   ServiceUsers, CMA-only), `body` (value expression / JSON), `timeoutMs` (per-call, ≤ 60s cap),
-  `retry` (default `0`; retries only when the response **status ≥ 400**; capped at 2). **Forces Async.**
+  `retry` (default `0`; retries only when the response **status ≥ 400**; capped at 2),
+  `ignoreStatusCode` (default `false`). Binds **`{ status, body }`**. **The response body is capped at
+  10 MiB** — a larger response **throws**, failing the statement (an enclosing `Try` catches it via
+  `{ /error/message }`, same as any `Http` failure; this size cap is about the body, independent of the
+  status code). So never pull large binaries (e.g. raw or base64 image bytes) back through `Http` — have
+  the provider return a **URL** and ingest it as Media with `encoding: "url"` (see the external-API job
+  pattern). By default a final response
+  **status ≥ 400** (after any retries) **fails the statement** — an enclosing `Try` catches it (uncaught
+  ⇒ the engine surfaces a **502**). Because a failed statement binds no result, read the failure via
+  `catch`'s **`{ /error/message }`** (it carries the status + a body snippet), **not** `{ /<name>/body }`.
+  Set **`ignoreStatusCode: true`** to bind `{ status, body }` as-is for **any** status and branch on
+  `{ /<name>/status }` yourself. **Forces Async.**
 
 ### Resource reads (`requiredAction: Read`; no writes)
 
