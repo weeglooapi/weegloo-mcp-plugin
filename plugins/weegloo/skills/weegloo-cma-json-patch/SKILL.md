@@ -7,7 +7,7 @@ description: Weegloo CMA/ACMA updates - prefer HTTP PATCH with RFC 6902 JSON Pat
 
 ## When to use
 
-- When updating **ContentType**, **Content**, or **Media** over **CMA** or **ACMA** REST APIs (application code or design - agents still prefer **MCP tools** where applicable).
+- When updating a document over the **CMA** or **ACMA** REST APIs (application code or design - agents still prefer **MCP tools** where applicable). **Which resources take `PATCH` differs by plane:** on **CMA** — **ContentType**, **Content**, and **Media** (plus many other management resources); on **ACMA** — **Content only** (ACMA **Media** is create/read/delete with **no update** endpoint, and **ContentType** is not an ACMA resource — it is CMA-only).
 - When choosing between **full replacement** and **partial** updates.
 
 ## Prefer `PATCH` over `PUT` for updates

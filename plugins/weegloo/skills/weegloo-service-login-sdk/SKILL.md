@@ -103,7 +103,7 @@ Successful response:
 {
   "accessToken":       "...",
   "tokenType":         "Bearer",
-  "scope":             ["App"],
+  "scope":             ["SERVICE_OAUTH_ACCESS_TOKEN"],
   "createdAt":         "2026-04-16T12:12:21.602Z",
   "expiresAt":         "2026-06-16T12:12:21.602Z",
   "refreshToken":      "...",

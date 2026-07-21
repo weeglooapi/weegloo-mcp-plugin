@@ -38,9 +38,9 @@ Each map lists **actions**. Content/Media/ContentType use `Read`, `Create`, `Edi
 | `contentType` | Limit to one **ContentType** (`Refer` with `targetType: "ContentType"`) |
 | `createdBy` | Limit to resources **created by** a given user (`:self` for the caller) |
 | `tag` | Limit by **Tag** |
-| `self` | Limit to **one specific resource by `Refer`** — pins the rule to exactly that entity (`Refer<Entity>`), e.g. one specific **Script**. |
+| `self` | Limit to **one specific resource by `Refer`** — pins the rule to exactly that entity (`Refer<Entity>`), e.g. one specific **Script**. **Valid only on the `contentType` and `script` maps** (rejected on `content` / `media` at save with `WGL400020`). |
 
-An **empty** rule list `[]` means the action applies to **all** resources of that kind (no filter).
+An **empty `Allow` list `[]`** means the action applies to **all** resources of that kind (no filter). ⚠️ An **empty `Deny` list `[]` is NOT the mirror image — it denies *everything* of that kind** (blocks the action entirely), so `[]` does not universally mean "no filter."
 
 > **⚠️ `self` (filter) is NOT `:self` (the `createdBy` sentinel) — don't confuse them.**
 > `createdBy.sys.id: ":self"` = "resources created by **whoever is calling**". The **`self`** filter
@@ -129,12 +129,17 @@ by direct reference — regardless of who created it. Its value is a **`Refer`**
   e.g. `script.Execute.Allow = [ { "self": { "sys": { "id": "<scriptId>", "type": "Refer", "targetType": "Script" } } } ]`
   lets the caller **`Execute` that one Script and no other** — the least-privilege way to expose a
   single backend endpoint to a group of users without granting "execute any Script."
+- **On the `contentType` map — pin to one ContentType.** To scope a `contentType`-map action (e.g.
+  `Read`/`Edit` on ContentType definitions) to a **single** ContentType, use `self` (a `Refer` with
+  `targetType: "ContentType"`). On the `contentType` map the **`contentType` *filter* is rejected** —
+  `self` is the way to narrow it to one type.
 - **Contrast with `createdBy`:** `createdBy :self` = "any resource **I created**" (dynamic, by
   author); `self` = "**this one resource**" (fixed, by id) — independent of author.
 - **Contrast with `contentType`** (on Content): `contentType` scopes to a whole **type**; `self`
   scopes to a **single instance**.
-- Fits any map where pinning one instance makes sense; on `script` it is one of the two meaningful
-  filters (with `createdBy`).
+- **Valid only on the `contentType` and `script` maps** — using `self` on `content` or `media` is
+  rejected at save (`WGL400020`). On `script` it is one of the two meaningful filters (with `createdBy`);
+  on `contentType` it pins the rule to one specific ContentType.
 
 > Reminder: **`self`** (this filter, a `Refer` to an entity) ≠ **`:self`** (the reserved
 > `createdBy.sys.id` value meaning the current caller). Same word, different mechanism.

@@ -89,12 +89,12 @@ rules:
       - Do NOT use /organizations for "my organizations"; use /me/organization-memberships instead.
       - **Response shape — the related resource is nested under `sys`, NOT at the item root.** On a `SpaceMembership` the Space id is at **`item.sys.space.sys.id`** (and on an `OrganizationMembership`, **`item.sys.organization.sys.id`**). Reading the flat path `item.space.sys.id` yields **`undefined`** — a common membership-gate bug where every real member is wrongly rejected. To gate "is this user a member of *this* Space?", match `SPACE_ID` against `item.sys.space.sys.id`. Detail + correct/wrong snippets: **`weegloo-user-login`** skill.
 
-  - section: ACMA / ACDA Content paths are nested under ContentType (no flat /contents)
+  - section: ACMA Content paths are nested under ContentType (no flat /contents); ACDA has both
     items:
-      - On **ACMA** and **ACDA**, every Content operation **MUST** address the Content **under its ContentType**: list/create at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**, and get/update/delete at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`**.
-      - **The CMA/CDA-style flat Content paths do NOT exist on ACMA** — never call **`/v1/spaces/{spaceId}/contents`** or **`/v1/spaces/{spaceId}/contents/{contentId}`** on **ACMA** (they return **404**). On **ACDA**, use the same **nested** form for parity and reliability — do **not** assume a flat `/contents` path is available.
-      - You must know the **`contentTypeId`** to address a Content on ACMA/ACDA. If you only hold a `contentId`, resolve its ContentType first (from the resource you already have, or by listing under the ContentType) — do **not** fall back to a flat path.
-      - **Wrong:** `https://acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}`. **Correct:** `https://acma.weegloo.com/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`.
+      - On **ACMA**, every Content operation **MUST** address the Content **under its ContentType**: list/create at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**, and get/update/delete at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`**.
+      - **The CMA/CDA-style flat Content paths do NOT exist on ACMA** — never call **`/v1/spaces/{spaceId}/contents`** or **`/v1/spaces/{spaceId}/contents/{contentId}`** on **ACMA** (they return **404**). **ACDA is different:** it exposes **both** the nested form **and** a flat read — `GET /v1/spaces/{spaceId}/contents` (list) and `GET /v1/spaces/{spaceId}/contents/{contentId}` (get one). Prefer nested on ACDA for parity, but the flat read is supported.
+      - **The `contentTypeId` requirement is ACMA-only.** On **ACMA**, if you hold only a `contentId`, resolve its ContentType first (from the resource you have, or by listing under the ContentType) — do **not** fall back to a flat path. On **ACDA** you *may* fetch one Content by `contentId` alone via the flat path.
+      - **Wrong (ACMA):** `https://acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}` (404). **Correct (ACMA):** `https://acma.weegloo.com/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`.
       - This is an **application-code** rule (ACMA/ACDA are called from product code, not by the agent over MCP). Base URLs and the full ACMA/ACDA contrast live in **`weegloo-api-endpoints`**.
 
   - section: Resource Search
@@ -102,7 +102,7 @@ rules:
       - List endpoints share common query params — `limit`, `skip`, `order`, `include`, `select`, `filter`. **Shapes, defaults, and examples are canonical at https://docs.weegloo.com/api/reference/common/query-parameters — read it rather than guessing.**
       - Tripwires for application code (enforced server-side, easy to get wrong):
           - `limit`: **hard max 100** — a larger value is rejected. To read more, page via `links.next`; never hardcode 200/500/1000.
-          - `skip`: do NOT use for paging — use cursors (`next`/`prev`, see Pagination Handling).
+          - `skip`: a real offset param, but **capped at 100** — fine for a small jump, useless for deep paging. Page with cursors (`next`/`prev`, see Pagination Handling) instead.
           - `include=1` resolves related resources (e.g. `createdBy`); `select` projects fields — see the reference above.
           - **References are NEVER embedded.** A Content does **not** carry its Media (or any linked Content/Space/Organization/User) inline — a reference field holds only a stub `{ "sys": { "id": "abc", "type": "Refer", "targetType": "Media" } }`. To get the real resource: (a) read `sys.id` and fetch it (e.g. `GET .../medias/{id}`), or (b) pass `?include=1` and read it from the response's **singular `include` object keyed by PascalCase `targetType`** (`include.Media`, `include.Content`, `include.User`, …). Do **not** assume `fields.image`/`fields.file`/an author already hold the asset URL or the linked document. Detail: **`weegloo-api-query-optimization`** / **`weegloo-default-locale`** skills.
 
@@ -112,7 +112,7 @@ rules:
       - `links.next`: Full path for the next page (e.g., /v1/market/apps?limit=6&order=-sys.createdAt,sys.id&next=CURSOR). If absent, there are no more pages.
       - `links.prev`: Full path for the previous page. If absent, there is no previous page.
       - To fetch the next page, use the `next` query parameter value from `links.next` (extract from the URL) and pass it as the `next` param in your next request. Alternatively, call the full path in `links.next` directly.
-      - Do NOT use `skip`; pagination is cursor-based only.
+      - `skip` is a working offset but **capped at 100** — use the `next`/`prev` cursors for anything beyond the first pages, not offset paging.
 
   - section: Resource Updates
     items:

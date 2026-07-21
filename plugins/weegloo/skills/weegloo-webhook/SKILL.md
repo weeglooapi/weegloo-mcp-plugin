@@ -34,13 +34,13 @@ A **Webhook** reacts to **Space events**. On a matching event it performs **exac
 |-------|-------|
 | `name` | 1–64 chars |
 | `activate` | boolean; `false` = nothing fires |
-| `topics` | array of `"{resource}.{action}"` — resource ∈ Content / Media / ContentType; action ∈ **Create, Save, Delete, Publish, Unpublish, Archive, Unarchive** (e.g. `"Content.Create"`) |
-| `filters` | narrow which events fire — by `sys.contentType.sys.id`, specific item, `createdBy`, last editor; operators `EQ` / `NE` / `IN` / regex / etc. |
+| `topics` | array of `"{resource}.{action}"` — resource ∈ **Content / ContentType / Media / Comment**; action ∈ **Create, Save, Delete, Publish, Unpublish, Archive, Unarchive** (e.g. `"Content.Create"`). **`*` wildcards** are allowed on either side: `Content.*`, `*.Publish`, and `*.*` are all valid subscriptions |
+| `filters` | narrow which events fire — keys `sys.id` (a specific item), `sys.contentType.sys.id`, `sys.createdBy.sys.id`, `sys.updatedBy.sys.id` (last editor); operators **`EQ`, `NE`, `IN`, `NOT_IN`, `REGEX`, `NOT_REGEX`** |
 | `url` | external endpoint — **mutually exclusive with `script`** |
 | `script` | `Refer` → a Script to run instead of the URL — **mutually exclusive with `url`** |
 | `headers` | 0–30 `WebhookHeader`s; mark auth/keys as **`secret: true`** (encrypted at rest) |
 | `httpBasicUsername` / `httpBasicPassword` | optional Basic auth for the URL path |
-| `transformation` | shapes the outbound request: `method` (GET/POST/PUT/DELETE/PATCH, default POST), `contentType`, `body` (JSON-Pointer templating like `{ /payload/sys/id }`), `includeBody` |
+| `transformation` | **required** object that shapes the outbound URL request (its members all default, so `{}` suffices): `method` (GET/POST/PUT/DELETE/PATCH, default POST), `contentType`, `body` (JSON-Pointer templating like `{ /payload/sys/id }`), `includeBody` (default `true`) |
 | `runAs` | **`HookOwner`** (default; the webhook's creator) or **`EventUser`** (the user who caused the change) |
 
 **Exactly one of `url` and `script`.** Setting both, or neither, is rejected (**`WGL422061`**).
@@ -66,11 +66,13 @@ index, then `ResourcePatch`es an `indexedAt` value back onto it. (Full patterns:
   or call the Script from the frontend via `/execute` and poll `requestId` — `weegloo-script`.)
 - The **triggering resource becomes the Script's `payload`** (read it as `{ /payload/... }`).
 - **`runAs` is attribution only, not authorization.** It sets who the resource writes are attributed
-  to (`HookOwner` = the webhook's creator; `EventUser` = the triggering user). The **only permission
-  gate** is that the **Webhook's creator holds Script `Execute`** on that Script **at save time**;
-  after that the linked Script runs with the author's delegated authority and its inner ops are not
-  per-statement permission-checked. (So the author-of-Script must have unconditional Content/Media
-  permissions — see `weegloo-script`.)
+  to (`HookOwner` = the webhook's creator; `EventUser` = the user who caused the change). Under
+  `EventUser`, triggers with no user — `ContentType` and `Comment` events — fall back to the creator.
+- **Permissions.** Creating/editing the Webhook requires the caller's role to hold the Space's
+  **webhook-settings** permission (`SETTING_WEBHOOK`) — there is no Script-`Execute` check performed at
+  webhook-save time. When the Webhook fires, the linked Script runs **fire-and-forget with its
+  author's delegated authority** (its inner ops are not re-checked per statement), so the **Script's
+  author** must hold the unconditional Content/Media permissions the Script needs — see `weegloo-script`.
 
 ## Topics & filters
 

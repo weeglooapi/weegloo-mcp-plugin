@@ -22,16 +22,16 @@ description: Use when creating or updating Content in any localized or multi-lan
 5. **Single locale for the whole product** (**`localized: true`**): put the value **only under the default locale**. Other requested locales resolve to it **only if their `fallbackCode` chain reaches the default**; without that, they read **empty**. Do not assume automatic fallback to the default.
 6. **Read response SHAPE depends on the API plane — this is the #1 source of locale bugs.** The locale *buckets* in points 2-4 are how the **management plane (CMA / ACMA)** returns fields: **`fields.{name}` is ALWAYS a per-locale map**, so you read **`fields.{name}.{locale}`**. The **delivery plane (CDA / ACDA)** is different: by default it **flattens** to one locale, so **`fields.{name}` is the value itself** (a scalar or a Refer object) — indexing it by `[locale]` yields `undefined`. Only **`locale=*`** makes delivery return buckets. So `fields.prompt["en-US"]` is correct against CMA but **wrong** against a default CDA/ACDA read, where it must be `fields.prompt`. See *Management vs delivery* below.
 
-## Content creation: default locale on every field
+## Content creation: locale presence on create
 
-When **creating** **Content** (CMA / MCP), **each field** in the payload must include a value under the space **default locale**.
+The create-time locale-presence check applies **only to `required` + `localized` fields** — and for those it requires a value under **every non-optional locale** the space defines (the space **default is always non-optional**, so it is always among them). Fields that are **not `required`** have **no** locale-presence requirement — an optional localized field may be created with only `ko-KR` (no default) and it passes.
 
-- If the space default is **`en-US`**, then for **every** field you set, the **`en-US`** bucket must exist (e.g. **`fields.title["en-US"]`**, **`fields.body["en-US"]`**, … for **`localized: true`** fields). You cannot create a document that only fills **`ko-KR`** or **`fr-FR`** while leaving **`en-US`** empty for those fields.
-- **`localized: false`** fields still store **only** under the default locale in CMA-there is no separate “other locale” slot; the same **default-locale** rule applies as a **single** bucket.
-- This is **stricter than “populate default when you touch a field”** in the abstract: **create** is where editors and integrations most often miss the default bucket-validate or merge so **default locale is always written** for each field in the create body.
+- **Required, localized** field in a space whose non-optional locales are e.g. `en-US` (default) + `ko-KR` → you must populate **both**; "just the default" is **insufficient** (`WGL400006`). In a single-locale space (only the default is non-optional) this reduces to "populate the default."
+- **`localized: false`** fields store **only** under the default-locale key — a single bucket, no other locale slot.
+- **Practical default:** when unsure, always write the space **default-locale** bucket for each field you set — it satisfies the requirement for required fields and is never wrong. A **missing default bucket** on a required field is the most common create mistake.
 
 ```jsonc
-// Wrong (bare scalar - returns WGL400006 "required property '<field>' not found")
+// Wrong (bare scalar - a field value MUST be a per-locale map; a non-object value is rejected with CORE422007 "Unprocessable Entity")
 { "fields": { "slug": "hello-world", "title": "Hello World" } }
 
 // Right (en-US default; same shape for localized: true AND false)
@@ -45,7 +45,7 @@ When **creating** **Content** (CMA / MCP), **each field** in the payload must in
 
 Use this when the stored value **never differs by locale**-same logical value for every language (e.g. opaque **IDs**, **SKUs**, or one global **Refer → Media** like a **profile thumbnail** that is not localized per language).
 
-- **Meaning for Content writes:** the field is **not** a multi-locale map. CMA only allows a value in the **default locale** bucket for that field. You **cannot** set `fields.myField["fr-FR"]` etc.; non-default locale keys are invalid for that field.
+- **Meaning for Content writes:** the field is **not** a multi-locale map — its value belongs in the **default-locale** bucket only. A non-default key like `fields.myField["fr-FR"]` is **rejected on `PATCH`** (schema validation); on **create / PUT** it is not schema-checked, but such keys are **meaningless** (never delivered), so keep to the default bucket.
 - **Meaning for reads:** the value lives in the **default bucket only**. Under a non-default **`locale=X`** read it appears **only if X's `fallbackCode` chain reaches the default**; otherwise the field reads **empty** for X. It is **not** auto-mirrored into every locale.
 - **Contrast:** **`localized: true`** = per-locale copy (titles, bios); default locale still **required** when you populate the field, plus optional other locales.
 - **CareerResume hindsight:** **`profileImage`** (and similar single global assets) would fit **`localized: false`** on the **resumeProfile** ContentType so editors are not pushed to duplicate the same Media refer across every locale bucket-see **`weegloo-create-content-type`** for where to set the flag in the schema.

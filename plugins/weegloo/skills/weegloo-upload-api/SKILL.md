@@ -114,8 +114,8 @@ to the `Upload.sys.id` from Step 1:
       "en-US": {
         "fileName":    "photo.png",
         "contentType": "image/png",
-        "mimeGroups":  ["Image"],     // Attachment|Plaintext|Image|Audio|Video|RichText|Presentation|Spreadsheet|PdfDocument|Archive|Code|Markup
-        "upload": { "sys": { "id": "<Upload.sys.id>", "type": "Refer", "targetType": "Upload" } }
+        "upload":      { "sys": { "id": "<Upload.sys.id>", "type": "Refer", "targetType": "Upload" } }
+        // note: NO "mimeGroups" here — the server computes it from contentType. Optional "state" defaults to "PENDING".
       }
     }
   }
@@ -123,11 +123,11 @@ to the `Upload.sys.id` from Step 1:
 ```
 
 - Optional header **`X-Weegloo-Ignore-Publish: true`** skips auto-publish after create.
-- **Verify the exact create field against the live OpenAPI** (`weegloo-api-endpoints` → CMA/ACMA
-  docs). The published create schema (`TypedMediaFile`) currently lists only
-  `fileName`/`contentType`/`mimeGroups`; the `upload` Refer binding shown above comes from the
-  shared `File` / `IconInput` schemas (`upload: ReferUpload`). Follow the OpenAPI — do not invent
-  other field names.
+- The create-from-upload file object is `TypedMediaFile.UnprocessedUpload`, whose input fields are
+  **`fileName`, `contentType`, `upload` (a `Refer` → `Upload`), and optional `state`** (defaults
+  `PENDING`). The **`upload` Refer is a first-class field of this variant** — not inherited from any
+  `File`/`IconInput` schema. **`mimeGroups` is derived server-side from `contentType`** — do not send
+  it. (Confirm against the live OpenAPI via `weegloo-api-endpoints` → CMA/ACMA; don't invent field names.)
 - After create, the platform **processes the file and auto-moves `sys.status` to `Published`** on
   success. **Do not reference the Media from Content until it is Published** and the locale
   `file.{locale}.state` is not `PENDING`/`PROCESSING`/`FAILED`. Full rules: `weegloo-media-lifecycle`.

@@ -170,12 +170,13 @@ at `Return`.
   - `over`: a value expression resolving to an **array** (foreach);
   - `while`: JsonLogic — loops **while true**;
   - `for`: a counted range **`{ "from": int, "to": int, "step"?: int }`**;
-  - `maxIterations` (**required** — engine-enforced hard cap), `as` (binding name for the current
-    item/index, read as `{ /<as> }`), `body` (statements[]). **No `Http` / Media-ingest inside a loop body.**
+  - `maxIterations` (**required** — engine-enforced hard cap), `as` (binding name, read as `{ /<as> }`:
+    `over` binds the current **element** (no index), `while` the **0-based iteration counter**, `for` the
+    **current counter value**), `body` (statements[]). **No `Http` / Media-ingest inside a loop body.**
 - **`Parallel`** — `branches: [[…],[…]]`; branches run **concurrently** and **cannot reference each
   other's** results.
 - **`Try`** — `body` (statements[]); **`catch`** (optional, runs on failure — `/error` exposes
-  `{ message, statement }`); **`finally`** (optional, **always runs**). Wrap risky HTTP/writes here.
+  `{ message }` only, read as `{ /error/message }`); **`finally`** (optional, **always runs**). Wrap risky HTTP/writes here.
 - **`Return`** — `value` (optional value expression), `isError` (bool, default `false`; when `true`
   the value is delivered as the response **`error`** instead of `return`), `statusCode` (default
   `200`). **Terminates** the Script.
@@ -186,7 +187,7 @@ at `Return`.
   reference the variable itself to **accumulate**).
 - **`Http`** — `method` (GET/POST/PUT/PATCH/DELETE), `url` (value expression), `headers`
   (`[{ key, value, secret?: bool }]` — **`secret: true`** ⇒ stored **encrypted**, never exposed to
-  ServiceUsers, CMA-only), `body` (value expression / JSON), `timeoutMs` (per-call, ≤ 60s cap),
+  ServiceUsers, CMA-only), `body` (value expression / JSON), `timeoutMs` (per-call; omitted ⇒ **30s** default, hard cap **60s**),
   `retry` (default `0`; retries only when the response **status ≥ 400**; capped at 2),
   `ignoreStatusCode` (default `false`). Binds **`{ status, body }`**. **The response body is capped at
   10 MiB** — a larger response **throws**, failing the statement (an enclosing `Try` catches it via
@@ -198,7 +199,9 @@ at `Return`.
   ⇒ the engine surfaces a **502**). Because a failed statement binds no result, read the failure via
   `catch`'s **`{ /error/message }`** (it carries the status + a body snippet), **not** `{ /<name>/body }`.
   Set **`ignoreStatusCode: true`** to bind `{ status, body }` as-is for **any** status and branch on
-  `{ /<name>/status }` yourself. **Forces Async.**
+  `{ /<name>/status }` yourself. **Forces Async.** Script `Http` draws on the Organization's **webhook
+  outbound-network quota** — if that feature is quota-suspended the call fails with a catchable
+  **`WGL403012`** (Forbidden), and request bytes are metered against it.
 
 ### Resource reads (`requiredAction: Read`; no writes)
 
@@ -250,8 +253,8 @@ All three take **`from`**: **`Current`** (live draft — what CMA/ACMA read; **d
 
 | Option | On | Meaning |
 |--------|----|---------|
-| `fields` | Create/Update/Patch | field-key → locale-map value. **Media** keys are fixed: `title`/`description` (scalar) and `file` = a `{ source, encoding }` **ingest directive**. A `locale → null` entry **deletes** that locale bucket. |
-| `locale` | Create/Update/Patch | literal locale code **or** value expression; **omit for the space default locale**. |
+| `fields` | Create/Update/Patch | field-key → value. If `locale` is **set**, each value is a **bare** value written into that one locale; if `locale` is **omitted**, each value must itself be an explicit **`{ "<locale>": value }` map** (a non-map value ⇒ `400`). **Media** keys are fixed: `title`/`description` (scalar) and `file` = a `{ source, encoding }` **ingest directive**. A `locale → null` entry **deletes** that locale bucket. |
+| `locale` | Create/Update/Patch | literal locale code **or** value expression. **Set it** to write bare `fields` values into that single locale; **omit it** and every `fields` value must be a `{ "<locale>": value }` map. Omitting `locale` does **not** default to the space locale. |
 | `version` | Update/Patch/Publish/Unpublish/Archive/Unarchive | **optimistic lock** (value expression → Int). Present ⇒ the write applies only if the target's current `sys.version` matches; a mismatch aborts with a **version-conflict error** (catchable by `Try`). Omit ⇒ no check. |
 | `publish` | Create/Update/Patch | **default `true`** — publish after the write so CDA/ACDA deliver it; set `false` to keep it a draft. |
 | `propagateEvents` | **every write** | **default `false` — a Script's writes are SILENT**: they do **not** emit `EntityEvent`s, so **search indexing and Webhooks do NOT fire** on them. Set `true` (per action) when a write must index the row or trigger other Webhooks. |
@@ -282,7 +285,7 @@ Any string value may embed a pointer. Roots:
 
 - **Single pointer** preserves the source type (`{ /payload/fields/count }` stays a number).
 - **Mixed template** concatenates as string (`"page-{ /payload/fields/n }-of-10"`).
-- Missing path → **`null`** (single pointer) or **`""`** (mixed). Escape a literal brace as `\{`.
+- Missing path → **`null`** (single pointer) or **`""`** (mixed). **There is no brace-escape mechanism** — any `{ /… }`-shaped substring (brace, optional space, a `/pointer`, optional space, brace) is always resolved; other braces (e.g. a JSON literal `{"k":…}` not followed by `/`) are already left as-is.
 - **JsonLogic** operators in `condition`/`value`: `if`/`?:`, `and`/`or`/`!`/`!!`,
   `==`/`!=`/`===`/`!==`/`<`/`<=`/`>`/`>=`, `+`/`-`/`*`/`/`/`%`, `min`/`max`, `cat`, `in`, `merge`.
   Operands resolve pointers first, then apply the op: `{ "+": [ "{ /vars/n }", 1 ] }`.
@@ -308,13 +311,13 @@ Any string value may embed a pointer. Roots:
 | Per-`Http` `timeoutMs` cap | **60s** |
 | Max `Http` **response body** size | **10 MiB** (larger ⇒ statement throws) |
 | Async result TTL (poll before it expires) | **~30s** |
-| Max result size (the Script `Return` value) | **~10 KB** |
+| Max async result size (whole response JSON) | **10 KB** (larger ⇒ replaced by a 500 error) |
 | `Http` inside a `Loop` body | **forbidden** |
 
 **Save-time validation** also enforces: `executionMode` must be `Async` if any statement is
 `ExternalIo`/MediaIngest/long-running; statement binding **`name`**s must be non-blank, unique, must
 not contain `/` or `~`, and must not be a reserved root (`payload`/`headers`/`vars`/`error`). A
-definition that violates a limit or rule is rejected at create/update (`WGL400021`–`WGL400034`).
+definition that violates a limit or rule is rejected at create/update (`WGL400021`–`WGL400027`, `WGL400032`–`WGL400034`).
 
 ## Secrets & auth
 

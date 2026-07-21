@@ -73,6 +73,15 @@ This flag is part of the **ContentType** field definition. It tells Weegloo whet
 
 ---
 
+## Field flags: `required` and `disabled` (top-level, not validations)
+
+Beyond `type` / `localized` / `validations`, each field definition carries two **top-level booleans** (siblings of `type`, **not** entries in `validations`):
+
+- **`required`** (default `false`) — makes the field **mandatory**. There is **no "required" validation type**; mandatoriness is this flag. For a `required` **localized** field, Content create must supply a value for **every non-optional locale** (the space default is always non-optional) — see **`weegloo-default-locale`**. A non-`required` field has **no** locale-presence requirement.
+- **`disabled`** (default `false`) — disables the field without deleting it.
+
+---
+
 ## Validations: default rule
 
 For each field, ask:
@@ -92,13 +101,13 @@ Authoritative shape: **OpenAPI `FieldValidation`** for **`CreateContentType`** (
 
 | Key | Purpose | Payload shape (summary) |
 |-----|---------|---------------------------|
-| **`regexp`** | Value must match a regex | `{ "pattern": "...", "flags": "..." }` - **`pattern` required** |
-| **`prohibitRegexp`** | Value must **not** match | Same as `regexp` |
-| **`size`** | String length (typical for text fields) | `{ "min": int, "max": int }` (int32) |
-| **`in`** | Allow-list of permitted values | JSON array of allowed values (schema: `array`, items unconstrained in spec - use strings/numbers as appropriate) |
+| **`regexp`** | Value must match a regex (**ShortText / LongText** only) | `{ "pattern": "..." (required, ≤ 256 chars), "flags": "..." (subset of `imus` only) }` |
+| **`prohibitRegexp`** | Value must **not** match (**ShortText / LongText** only) | Same as `regexp` |
+| **`size`** | Length **or element count** — String char length (**ShortText / LongText / RichText**), **Array** element count, or **Json** (not text-only) | `{ "min": int64, "max": int64 }` (Long; bounded to the JS safe-integer range ±9007199254740991) |
+| **`in`** | Allow-list of permitted values (**ShortText / LongText / Long / Number** — includes **numeric** allow-lists, not just text) | JSON array of allowed values (strings for text fields, numbers for Long / Number) |
 | **`range`** | Numeric bounds | `{ "min": number, "max": number }` - for **Number** / **Long** |
 | **`dateRange`** | Instant bounds | `{ "min", "max", "after", "before" }` as **date-time** strings - for **Date** |
-| **`unique`** | Uniqueness constraint | `true` / `false` |
+| **`unique`** | Uniqueness constraint (**ShortText / Long / Number / Date** only — **rejected** on LongText / RichText) | `true` / `false` |
 | **`mediaMimetypeGroup`** | Allowed media categories | Array of enum: `Attachment`, `Plaintext`, `Image`, `Audio`, `Video`, `RichText`, `Presentation`, `Spreadsheet`, `PdfDocument`, `Archive`, `Code`, `Markup` |
 | **`mediaImageDimensions`** | Image width/height bounds | `{ "width": { "min", "max" }, "height": { "min", "max" } }` (int32) |
 | **`mediaFileSize`** | File size in bytes | `{ "min": int64, "max": int64 }` |
@@ -128,7 +137,7 @@ Combine constraints in **one** `validations[]` element when they share the same 
 ```
 
 - Escape backslashes in JSON: `\\d` not `\d`.
-- Optional **`flags`** on `regexp` / `prohibitRegexp` per CMA OpenAPI `RegexpParameter` (**`weegloo-api-endpoints`**).
+- Optional **`flags`** on `regexp` / `prohibitRegexp` — only the characters **`i`, `m`, `u`, `s`** are allowed, and `pattern` is capped at **256 chars**. `regexp` / `prohibitRegexp` apply to **ShortText / LongText** fields only.
 
 **Optional ShortText** (empty **or** `YYYY.MM`):
 
@@ -143,7 +152,7 @@ Combine constraints in **one** `validations[]` element when they share the same 
 
 ## `in` - allow-list (console: **Accept only specified values**)
 
-For **enum-like** ShortText (including **empty string** as a permitted value), prefer **`in`** over **`regexp`**.
+For **enum-like** ShortText (including **empty string** as a permitted value), prefer **`in`** over **`regexp`**. `in` also accepts **numeric** allow-lists on **Long / Number** (and works on **LongText**), so it is not ShortText-only.
 
 **Example** - optional kind: empty, `employment`, or `activity`:
 
@@ -223,7 +232,7 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 - **RichText**: **Not** full-text indexed; **not searchable** via Weegloo full-text. Use for long (or structured) body copy **without** CDA full-text search-**not** synonymous with Markdown/markup as a type rule.
 - **Location**: Stored values support geographic searches such as `near` or `within`; suitable for storing latitude and longitude coordinates.
 
-**Mapping types → `validations`:** For **Array**, define element type under **`items`**; per-element rules go in **`items.validations`**. Prefer **`dateRange`** on **Date**, **`range`** on **Number** / **Long**, **`regexp` / `prohibitRegexp` / `size` / `in` / `unique`** on text-like fields, and on **Refer** use **`referContentType`** (→ Content), or **`mediaMimetypeGroup` / `mediaFileSize` / `mediaImageDimensions`** (→ Media) when the product requires it - see **`FieldValidation`** above and **`weegloo-api-endpoints`** for CMA schema links.
+**Mapping types → `validations` (each validation has its own allowed types):** For **Array**, define element type under **`items`**; per-element rules go in **`items.validations`**. Use: **`dateRange`** on **Date**; **`range`** on **Number / Long**; **`regexp` / `prohibitRegexp`** on **ShortText / LongText**; **`size`** on **ShortText / LongText / RichText / Array / Json**; **`in`** on **ShortText / LongText / Long / Number**; **`unique`** on **ShortText / Long / Number / Date**; on **Refer** use **`referContentType`** (→ Content) or **`mediaMimetypeGroup` / `mediaFileSize` / `mediaImageDimensions`** (→ Media). See **`FieldValidation`** above and **`weegloo-api-endpoints`** for CMA schema links.
 
 ---
 
