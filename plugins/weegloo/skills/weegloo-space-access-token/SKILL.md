@@ -11,7 +11,7 @@ description: Create a Weegloo SpaceAccessToken (CMA) — a read+write token conf
 - When the user asks for a **"Space token"**, a **"scoped API key that can write to this Space"**, an **anonymous-write / public-submit token**, or a token **narrower than a Personal Access Token** but **write-capable** (unlike a read-only DeliveryAccessToken).
 - Via MCP **`cma_CreateSpaceAccessToken`** (or the equivalent CMA flow) under `/spaces/{spaceId}/space-access-tokens`.
 
-**Where it runs and what it can do are the user's decision, governed by the bound role** (see the hard rules). For pure public **reads**, a read-only **`DeliveryAccessToken`** is simpler; for end-user sign-in use **`weegloo-service-login`**.
+**Where it runs and what it can do are the user's decision, governed by the bound role** (see the hard rules). For a client that **only reads** (no write path), a read-only **`DeliveryAccessToken`** is simpler — **but when the same client already carries a SpaceAccessToken for writes, do not add a separate DAT for reads; read through that same SAT** (it authorizes CDA). See *One exposed key beats two* below. For end-user sign-in use **`weegloo-service-login`**.
 
 ## What it is (identity + scope)
 
@@ -35,7 +35,17 @@ Privilege ordering: **`PersonalAccessToken` ⊃ `SpaceAccessToken` ⊃ `Delivery
 | **SpaceAccessToken** | `SPCAT` | **CMA data + CDA + Upload** (read **and** write) | one Space, bound `SpaceRole` | **Anywhere** — governed by the bound role (server, or a public client with a narrow role) |
 | **PersonalAccessToken** | — | Weegloo-User rights minus web-only account ops | the user's Org(s) + every Space they belong to | **Server-side** (broad; CI / scripts) |
 
-Browser that only **reads** → **DeliveryAccessToken** (simpler, no write). **Scoped write** — anywhere, including public / anonymous — → **SpaceAccessToken** with a role scoped to that use. Broad **cross-Space / Organization** reach → **PAT** (keep it server-side — it is broad and long-lived).
+Browser that only **reads, with no write path** → **DeliveryAccessToken** (simpler, no write). **Scoped write** — anywhere, including public / anonymous — → **SpaceAccessToken** with a role scoped to that use; **if that same client also needs to read, read through this SAT (it authorizes CDA) instead of adding a DAT** — see *One exposed key beats two*. Broad **cross-Space / Organization** reach → **PAT** (keep it server-side — it is broad and long-lived).
+
+### One exposed key beats two (read + write from the same client)
+
+A client that must **write** already carries a SpaceAccessToken, and a SAT **already authorizes CDA read**. So for a client that both reads and writes — e.g. an **anonymous board** (list posts + create/edit/delete) — do **not** issue a separate read-only `DeliveryAccessToken` beside it. Read through the **same SAT**.
+
+Why: the two-token split (DAT for reads + SAT for writes) and a single SAT expose the **same capability union** — splitting does not shrink what a leaked client can do. It only places **two secrets in an untrusted client instead of one** (more to leak, rotate, and audit) for no blast-radius gain. Both tokens ship in the same bundle anyway, so "the DAT leaks harmlessly on its own" does not hold. When the capability is identical, fewer embedded secrets is strictly better.
+
+Scope the single SAT's role to exactly the union the client needs — e.g. `content.Read` + `media.Read` on the public ContentType(s) **plus** `script.Execute` (and `media.Create` for uploads) — and keep any secret-bearing ContentType (a password / credential store) **Read-denied**, exactly as you would with a DAT.
+
+**Split into a separate DAT only for a concrete reason** — most commonly **independent revocation** (delete the SAT to kill writes while public reads keep working on the DAT), or read and write living in **different clients / tiers**. Absent such a reason, prefer one key. The "a DAT is simpler for pure reads" guidance above assumes a read-only client with **no** write token; it does not apply once a write SAT is already exposed to that client.
 
 ---
 
