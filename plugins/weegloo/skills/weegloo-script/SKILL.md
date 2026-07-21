@@ -290,8 +290,9 @@ Any string value may embed a pointer. Roots:
 | Max statements (nested included) | **15** |
 | `Http` retry cap | **2** |
 | Per-`Http` `timeoutMs` cap | **60s** |
+| Max `Http` **response body** size | **10 MiB** (larger ⇒ statement throws) |
 | Async result TTL (poll before it expires) | **~30s** |
-| Max result size | **~10 KB** |
+| Max result size (the Script `Return` value) | **~10 KB** |
 | `Http` inside a `Loop` body | **forbidden** |
 
 **Save-time validation** also enforces: `executionMode` must be `Async` if any statement is
@@ -387,6 +388,13 @@ Minimal cookbook (call LLM, write result Content, return id):
   ] }
 }
 ```
+
+> **Large `Http` responses — image / file generation.** The `Http` response body is capped at **10 MiB**
+> (see *Statements → Http* and the limits table). A generation API that returns the asset **inline as
+> base64** can exceed that and make the call **throw**, so prefer a provider mode that returns a **URL**
+> to the generated asset (a tiny JSON response), then hand that URL to the **Media** ingest with
+> **`encoding: "url"`** — the ingest worker fetches the bytes on its own path, **not** through the
+> 10 MiB `Http` cap. Reserve `encoding: "base64"` for assets you are sure stay well under 10 MiB.
 
 Locale: write Content/Media fields under the **default locale** bucket (`fields.text.en-US`) unless
 the field is `localized: true` — see `weegloo-default-locale`.
