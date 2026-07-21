@@ -3,32 +3,33 @@ id: weegloo-version
 type: rule
 title: Weegloo Plugin Version Check
 description: >
-  Periodically (at most once every two weeks) checks whether the installed Weegloo
-  skills/rules are outdated and, only then, tells the user in plain language and offers a
-  refresh command. Stays completely silent the rest of the time.
-installed_version: "{{WEEGLOO_INSTALLED_VERSION}}"
+  On the first Weegloo request of each session (and again every few hours in a long-running
+  session) checks whether the installed Weegloo skills/rules are outdated by comparing a
+  locally-stored version against the live version endpoint. Stays silent unless an update is
+  available.
 ---
 
 rules:
-  - section: Weegloo plugin update check (silent by default; surfaces at most once every {{WEEGLOO_CHECK_INTERVAL_DAYS}} days)
+  - section: Weegloo plugin update check (runs each session; silent unless an update is available)
     items:
-      - **When this applies:** only on the user's FIRST Weegloo-related request in a session (anything touching a Space, ContentType, Content, Media, WebHosting, or token). Never for non-Weegloo work, and at most once per session.
-      - **Always speak in the user's language, and NEVER expose internal mechanics as jargon.** The user should never see bare phrases like "updating the stamp", "fetching the manifest", or "querying git". If you take an action the user can see (writing a local file, making a network request), explain it first in one plain sentence (see Step B).
-      - **If `{{WEEGLOO_INSTALLED_VERSION}}` is `unknown` or empty, do nothing at all** (this install predates version info).
-      - **All dates are the user's LOCAL calendar date (`YYYY-MM-DD`).** Use local time consistently — both for "today" when measuring the gap against `last_check` AND when writing `last_check` — so the {{WEEGLOO_CHECK_INTERVAL_DAYS}}-day window is never skewed across timezones. (The installer also stamps the local date at install time, so the two always agree.)
-      - **Step A — decide whether it's even time to check. This step is SILENT: no message, no network, and it must not cause any prompt.** Quietly read the JSON file at `{{WEEGLOO_STAMP_PATH}}` (a relative path is resolved against the project root) and read its `last_check` date (`YYYY-MM-DD`).
-          - **If fewer than {{WEEGLOO_CHECK_INTERVAL_DAYS}} days have passed since `last_check`: STOP immediately — say NOTHING, fetch NOTHING, and just proceed with the user's request.** This is the normal, everyday case and must be completely invisible.
-          - If the file is missing or unreadable, treat it as "due", but only create it (the write in Step B) and SKIP the network fetch this one time.
-      - **Step B — the periodic check. Reach here ONLY when {{WEEGLOO_CHECK_INTERVAL_DAYS}}+ days have passed.** This step writes a small local file and makes one network request, either of which the user's agent may show as a permission prompt — so they must not come out of nowhere.
-          - **First, say ONE short plain line and nothing else** — that you're checking whether the Weegloo plugin is up to date, e.g. *"Checking whether the Weegloo plugin is up to date."* Do NOT mention the cadence ("every two weeks"), and do NOT narrate the steps below (never say things like "recording the check", "updating the file", or "fetching the latest version"). Say that one line, then do everything below quietly.
-          - **Then, silently (announce nothing), record that the check ran:** write `{ "last_check": "<today as YYYY-MM-DD, local date>" }` to `{{WEEGLOO_STAMP_PATH}}`, regardless of the outcome below. This is what limits the check to once per {{WEEGLOO_CHECK_INTERVAL_DAYS}} days — important so that many people behind one office IP don't repeatedly hit the server.
-          - **Then, silently, look up the latest version:** GET `{{WEEGLOO_MANIFEST_URL}}` and read its top-level `version`.
-          - **If it can't be reached** (offline, error, or no `version` field): say one short line like *"Couldn't check for Weegloo updates right now — skipping."* and continue. Never block the user's work.
-      - **Result — already up to date** (`version` equals `{{WEEGLOO_INSTALLED_VERSION}}`): say one short line, e.g. *"Weegloo plugin is up to date."*, then continue with the request.
-      - **Result — an update is available** (`version` differs): show one clear, self-contained line plus the command, e.g.:
-          - *"📦 A Weegloo skills/rules update is available (installed `{{WEEGLOO_INSTALLED_VERSION}}` → latest `<fetched version>`). To update, run the command below."*
-          - **Update command — skills/rules only, no MCP change, no token needed:** `{{WEEGLOO_UPDATE_COMMAND}}`
-          - **Do not auto-run it.** It re-downloads and OVERWRITES the installed skill/rule files, so let the user approve. (A user who wants zero-touch updates can allowlist `npx weegloo` in their agent's permissions — their choice, not yours to assume.)
-          - After a successful update, tell the user the new skills/rules take effect in a NEW session/conversation (the current session keeps what it loaded at startup). The next check is ~{{WEEGLOO_CHECK_INTERVAL_DAYS}} days out.
-          - **If the user declines or says "later", drop it** and continue with their request. Because you already recorded today's date, it won't reappear for ~{{WEEGLOO_CHECK_INTERVAL_DAYS}} days.
+      - **When this applies — run the check when BOTH the trigger and the cadence allow:**
+          - **Trigger:** only on a Weegloo-related request (anything touching a Space, ContentType, Content, Media, WebHosting, or token). Never for non-Weegloo work.
+          - **Cadence:** run it on the **FIRST** Weegloo request of the session, and then — only in a session that stays alive long enough — **again once every {{WEEGLOO_CHECK_INTERVAL_HOURS}} hours**. There is intentionally **NO cross-session calendar throttle**: every new session checks once, no matter how recently the last check ran.
+      - **This check is SILENT.** Do NOT announce that you're checking, and say NOTHING when the plugin is already up to date — only speak when an update is actually available (final item). Never expose internal mechanics as jargon.
+      - **Step A — decide whether to run the check now.** Quietly read the JSON stamp at `{{WEEGLOO_STAMP_PATH}}` (a relative path resolves against the project root): its `version` (the installed version) and `last_check` (an ISO-8601 LOCAL timestamp of when the check last ran, e.g. `2026-07-21T14:30:00`).
+          - **Run the check now if EITHER:** (a) you have **not yet checked in THIS session** (this is your first Weegloo request this session), **OR** (b) at least **{{WEEGLOO_CHECK_INTERVAL_HOURS}} hours** have elapsed between `last_check` and the current local time.
+          - **Otherwise STOP silently** — you already checked recently in this session; say nothing, fetch nothing, and just proceed with the user's request.
+          - **If the stamp is missing/unreadable, or `last_check`/`version` (or `skills`/`rules`) fields are absent, do NOT error — treat any missing field as empty/unknown** and treat the check as due (run it).
+      - **Step B — run the check, quietly (announce nothing):**
+          - **Look up the latest version:** `GET {{WEEGLOO_VERSION_URL}}` — public, **no auth** — and read its top-level `version` (a string, e.g. `"12"`). Do **not** send an `Accept: application/json` header (see `weegloo-api-endpoints`). *(This one read-only GET is a sanctioned exception to the "agents use MCP tools only" rule — it has no MCP tool; see `weegloo-api-endpoints` / `weegloo-global-rules`.)*
+          - **Record that the check ran — WITHOUT losing the `version`:** rewrite the stamp at `{{WEEGLOO_STAMP_PATH}}` with **`last_check` set to the current LOCAL timestamp** (ISO-8601 `YYYY-MM-DDTHH:mm:ss`) **and the existing `version` value PRESERVED** — i.e. `{ "version": "<the version you just read>", "last_check": "<now>" }`. **Never drop the `version` field** — it is exactly what the next check compares against. If the stamp had no `version`, write just `{ "last_check": "<now>" }`.
+          - **If the endpoint can't be reached** (offline, error, or no `version` field): skip silently — say nothing and proceed. Never block the user's work, and do not nag.
+      - **Result — compare** the stamp's `version` (installed) with the endpoint's `version` (current):
+          - **Both present and EQUAL → up to date: SAY NOTHING**, just continue with the user's request.
+          - **Present and DIFFERENT — OR the stamp has NO `version` (an older install that predates version tracking) → an update is available.** Show one clear, self-contained line plus the command:
+              - *"📦 A Weegloo update is available (installed `<stamp version, or "unknown">` → latest `<fetched version>`). To update, run the command below."*
+              - **Update command:** `{{WEEGLOO_UPDATE_COMMAND}}`
+              - **This refreshes the skills + rules to the latest — it runs unattended and needs no token** (the weegloo MCP is a remote server that is always current, so it is not reinstalled). **Do not auto-run it** — it overwrites the installed files, so let the user approve. (A user who wants zero-touch updates can allowlist `npx weegloo` in their agent's permissions — their choice, not yours to assume.)
+              - After a successful update, tell the user the new skills/rules take effect in a NEW session/conversation (the current session keeps what it loaded at startup).
+              - **If the user declines or says "later", drop it** and continue with their request. You already updated `last_check`, so it won't reappear this session for {{WEEGLOO_CHECK_INTERVAL_HOURS}} hours (a new session will check again).
       - This check never replaces other gates (selecting the working Organization/Space, invoking the right skill before designing). Handle it as a quick aside, then follow the normal Weegloo workflow.

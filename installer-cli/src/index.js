@@ -1,7 +1,7 @@
 import { select, checkbox, password, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { PKG_PLUGIN_REF, listBranches, loadResources } from './github.js';
+import { PKG_PLUGIN_REF, listBranches, loadResources, loadCurrentVersion } from './github.js';
 import { orderBranchesForPicker } from './versions.js';
 import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
 import { installCursor } from './cursor.js';
@@ -469,10 +469,30 @@ async function main() {
 
   console.log();
 
+  // Record-based cleanup inputs. `installed*Ids` is what we are installing THIS run (the user's
+  // selection). `manage*` says whether this run owns that kind at all — false for MCP-only or
+  // when the kind is ignored, in which case the installer leaves that kind's prior record and
+  // files untouched. The installer diffs these against version-check.json's stored record to
+  // remove skills/rules previously installed but no longer installed (deleted upstream OR
+  // deselected), then rewrites the record.
+  const manageSkills = installSkillsRules && !config.ignoreSkill;
+  const manageRules = installSkillsRules && !config.ignoreRule;
+  const installedSkillIds = skills.map((s) => s.id);
+  const installedRuleIds = rules.map((r) => r.id);
+
+  // The installed version is the live value from the version endpoint at install time; the
+  // weegloo-version rule later re-fetches that endpoint and compares. Only needed when we install
+  // skills/rules (that is when the stamp is written). Best-effort: on failure we stamp no version,
+  // which the rule treats as "unknown".
+  let currentVersion = null;
+  if (installSkillsRules) {
+    currentVersion = await loadCurrentVersion();
+  }
+
   const answers = {
     token: installMcp ? token : undefined,
     pluginRef,
-    version: resources.version,
+    version: currentVersion,
     mcpGroup,
     skills,
     rules,
@@ -481,6 +501,10 @@ async function main() {
     host,
     installMcp,
     installSkillsRules,
+    manageSkills,
+    manageRules,
+    installedSkillIds,
+    installedRuleIds,
   };
 
   if (ide === 'cursor') {

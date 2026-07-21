@@ -53,9 +53,10 @@
 | 1 | 버전 목록(picker) | `GET /{repo}.git/info/refs?service=git-upload-pack` | **github.com** git smart-HTTP (**core 버킷 밖**) | `-a`도 동일(develop 포함 전체를 받아 클라에서 필터). 실패 시 폴백 `['latest']` |
 | 2 | skill/rule **목록 + 콘텐츠** | `GET /{repo}/{ref}/plugins/weegloo/installer-manifest.json` (→ 루트 폴백) | raw.githubusercontent.com | **1요청으로 목록+전체 콘텐츠 임베드** → #4·#5(per-file 다운로드) 제거 |
 | 3 | MCP 설정 | manifest `mcp` 블록에 **흡수**(런타임 별도 fetch 없음) | — | 빌드 시 브랜치 `.mcp.json` → manifest. 없으면 기본 URL |
-| 4 | manifest 못 받을 때 | **없음 — fail fast**(에러 + `exit 1`) | — | `loadResources`→null → 조용한 degradation 금지 |
+| 4 | 현재 버전(자체 업데이트) | `GET https://ai.weegloo.com/v1/version` | **ai.weegloo.com** (weegloo API, 공개·무인증) | skills/rules 설치 시 1회(`loadCurrentVersion` ← `index.js`). `{ "version": "<str>" }` → `version-check.json` 에 기록. 실패 시 null → 스탬프 version 생략(설치 안 막음). `weegloo-version` 규칙이 재조회해 비교 |
+| 5 | manifest 못 받을 때 | **없음 — fail fast**(에러 + `exit 1`) | — | `loadResources`→null → 조용한 degradation 금지 |
 
-**설치 1회당 합계 (default 경로):** api core **0** + info/refs **1** + raw **1**(manifest = 콘텐츠 + MCP 설정 통합). CI(`--ref`/`WEEGLOO_REF`)면 picker 스킵 → 총 raw **1**.
+**설치 1회당 합계 (default 경로):** api core **0** + info/refs **1** + raw **1**(manifest = 콘텐츠 + MCP 설정 통합) + ai.weegloo.com **1**(버전, skills/rules 설치 시). CI(`--ref`/`WEEGLOO_REF`)면 picker 스킵.
 
 ---
 
@@ -78,7 +79,8 @@
 - **`/branches`** (as-is) — JSON 배열, `[].name`(브랜치명)만 사용. *(api core, REST 문서 계약)*
 - **`/contents/{path}`** (as-is) — JSON 배열, `[].type`(`dir`/`file`) + `[].name`. *(api core, REST 문서 계약)*
 - **`info/refs`** (to-be) — `application/x-git-upload-pack-advertisement` pkt-line 텍스트. 정규식 `[0-9a-f]{40} refs/heads/<name>`로 브랜치 추출(**첫 ref 줄의 capability 문자열은 `\0`/공백에서 절단**). *(포맷=git 프로토콜 스펙=A, 한도=관측=D)*
-- **`installer-manifest.json`** (to-be) — **우리 스키마(B)**: `{ schemaVersion, repoContentPrefix, mcp:{weeglooUrl,uploadApiUrl}, skills:[{id, files:{name:content}}], rules:[{id, content}] }`. 휘발성 필드 없음(멱등성).
+- **`installer-manifest.json`** (to-be) — **우리 스키마(B)**: `{ schemaVersion, repoContentPrefix, mcp:{weeglooUrl,uploadApiUrl}, skills:[{id, files:{name:content}}], rules:[{id, content}] }`. 휘발성 필드 없음(멱등성). *(주: `version` 필드(콘텐츠 해시)는 더 이상 자체 업데이트 비교에 쓰지 않음 — 아래 버전 엔드포인트로 대체.)*
+- **`ai.weegloo.com/v1/version`** (to-be) — 공개·무인증 JSON `{ "version": "<string>" }`, top-level `version`만 사용(문자/숫자 모두 문자열화). 설치 시 `version-check.json` 에 기록하고 `weegloo-version` 규칙이 재조회해 설치본과 비교. 실패(오프라인/비200/필드 없음)는 **null → 스탬프 version 생략**(설치 안 막음). *(우리 API=B, 공개 GET)*
 - **`.mcp.json`** — (as-is) 별도 raw fetch로 `mcpServers.weegloo.url` + `mcpServers['weegloo-upload'].env.UPLOAD_API_URL` 읽음. (to-be) **빌드 시 manifest `mcp` 블록으로 흡수** → 런타임 별도 fetch 제거. 없으면 기본 URL.
 - **raw 파일 본문** — 텍스트 그대로 디스크 기록.
 

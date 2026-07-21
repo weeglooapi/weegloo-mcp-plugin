@@ -5,8 +5,8 @@ import { spawn } from 'child_process';
 import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
-import { writeContentFile, uploadServerCommand } from './io.js';
-import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from './self-update.js';
+import { writeContentFile, uploadServerCommand, removeSkillDirs, SAFE_ID } from './io.js';
+import { applySelfUpdateTemplate, syncInstalledRecord } from './self-update.js';
 
 /**
  * @param {'global' | 'project'} scope
@@ -249,6 +249,46 @@ export function upsertRuleInAgentsMd(agentsPath, ruleName, content) {
   write(prefix ? `${prefix}\n${section}` : section.trimStart());
 }
 
+/**
+ * Removes the named weegloo rule sections from a Markdown context file (AGENTS.md / GEMINI.md)
+ * — the marker-embedded counterpart to io.js `removeRuleFiles`. `ids` is the stale set from
+ * the install-record diff; for each, the `<!-- weegloo:<id> -->` … `<!-- /weegloo:<id> -->`
+ * block is cut, leaving hand-written prose between/around sections intact. Ids are SAFE_ID-
+ * guarded. Rewrites with the same single leading UTF-8 BOM discipline as upsertRuleInAgentsMd.
+ * No-op (returns []) when `ids` is empty, the file is missing, or no section actually matched.
+ *
+ * @param {string} mdPath
+ * @param {string[]} ids  stale rule ids to remove
+ * @returns {string[]} ids whose section existed and was removed
+ */
+export function removeRuleMarkers(mdPath, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return [];
+  if (!fs.existsSync(mdPath)) return [];
+
+  let existing = fs.readFileSync(mdPath, 'utf-8');
+  if (existing.charCodeAt(0) === 0xfeff) existing = existing.slice(1);
+
+  let body = existing;
+  const removed = [];
+  for (const id of ids) {
+    if (typeof id !== 'string' || !SAFE_ID.test(id)) continue;
+    const marker = `<!-- weegloo:${id} -->`;
+    const endMarker = `<!-- /weegloo:${id} -->`;
+    const start = body.indexOf(marker);
+    if (start === -1) continue;
+    const end = body.indexOf(endMarker, start);
+    if (end === -1) continue;
+    const before = body.slice(0, start).trimEnd();
+    const after = body.slice(end + endMarker.length).trimStart();
+    body = [before, after].filter(Boolean).join('\n\n');
+    removed.push(id);
+  }
+  if (removed.length === 0) return [];
+
+  fs.writeFileSync(mdPath, `${UTF8_BOM}${body ? `${body}\n` : ''}`, 'utf-8');
+  return removed;
+}
+
 export async function installCodex({
   token,
   pluginRef,
@@ -261,6 +301,10 @@ export async function installCodex({
   host,
   installMcp,
   installSkillsRules,
+  manageSkills = false,
+  manageRules = false,
+  installedSkillIds = [],
+  installedRuleIds = [],
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
   rules = applySelfUpdateTemplate(rules, { version, agent: 'codex', ref: pluginRef, scope });
@@ -364,9 +408,26 @@ export async function installCodex({
     }
   }
 
-  // Arm the version-check throttle stamp so the weegloo-version rule's 14-day window starts.
-  if (installSkillsRules && rules.some((r) => r.id === SELF_UPDATE_RULE_ID)) {
-    const stampPath = writeVersionStamp(scope);
+  // Reconcile with the version-check.json record: remove any skill/rule we installed before but
+  // are not installing now (deleted upstream OR deselected), rewrite the record, and re-stamp the
+  // version check. Codex rules live as marker sections inside AGENTS.md.
+  if (installSkillsRules) {
+    const { removedSkills, removedRules, stampPath } = syncInstalledRecord({
+      scope,
+      version,
+      manageSkills,
+      installedSkillIds,
+      removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
+      manageRules,
+      installedRuleIds,
+      removeRules: (ids) => removeRuleMarkers(instructionsPath, ids),
+    });
+    if (removedSkills.length > 0) {
+      console.log(chalk.dim(`  - Removed ${removedSkills.length} stale skill(s): ${removedSkills.join(', ')}`));
+    }
+    if (removedRules.length > 0) {
+      console.log(chalk.dim(`  - Removed ${removedRules.length} stale rule(s): ${removedRules.join(', ')}`));
+    }
     if (stampPath) console.log(chalk.dim(`  - Version check armed  → ${stampPath}`));
   }
 

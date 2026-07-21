@@ -4,9 +4,9 @@ import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
-import { writeContentFile, uploadServerCommand } from './io.js';
-import { upsertRuleInAgentsMd } from './codex.js';
-import { applySelfUpdateTemplate, writeVersionStamp, SELF_UPDATE_RULE_ID } from './self-update.js';
+import { writeContentFile, uploadServerCommand, removeSkillDirs } from './io.js';
+import { upsertRuleInAgentsMd, removeRuleMarkers } from './codex.js';
+import { applySelfUpdateTemplate, syncInstalledRecord } from './self-update.js';
 
 /**
  * Antigravity (Google's agentic IDE, Gemini-based) target.
@@ -82,6 +82,10 @@ export async function installAntigravity({
   scope,
   installMcp,
   installSkillsRules,
+  manageSkills = false,
+  manageRules = false,
+  installedSkillIds = [],
+  installedRuleIds = [],
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
   rules = applySelfUpdateTemplate(rules, { version, agent: 'antigravity', ref: pluginRef, scope });
@@ -174,9 +178,26 @@ export async function installAntigravity({
     }
   }
 
-  // Arm the version-check throttle stamp so the weegloo-version rule's 14-day window starts.
-  if (installSkillsRules && rules.some((r) => r.id === SELF_UPDATE_RULE_ID)) {
-    const stampPath = writeVersionStamp(scope);
+  // Reconcile with the version-check.json record: remove any skill/rule we installed before but
+  // are not installing now (deleted upstream OR deselected), rewrite the record, and re-stamp the
+  // version check. Antigravity rules live as marker sections inside GEMINI.md / AGENTS.md.
+  if (installSkillsRules) {
+    const { removedSkills, removedRules, stampPath } = syncInstalledRecord({
+      scope,
+      version,
+      manageSkills,
+      installedSkillIds,
+      removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
+      manageRules,
+      installedRuleIds,
+      removeRules: (ids) => removeRuleMarkers(rulesFile, ids),
+    });
+    if (removedSkills.length > 0) {
+      console.log(chalk.dim(`  - Removed ${removedSkills.length} stale skill(s): ${removedSkills.join(', ')}`));
+    }
+    if (removedRules.length > 0) {
+      console.log(chalk.dim(`  - Removed ${removedRules.length} stale rule(s): ${removedRules.join(', ')}`));
+    }
     if (stampPath) console.log(chalk.dim(`  - Version check armed  → ${stampPath}`));
   }
 

@@ -78,7 +78,7 @@ rules:
     items:
       - Always use the designated MCP tools for creating, reading, updating, or deleting resources.
       - Direct API calls or manual edits outside MCP tools, including Swagger or direct HTTP requests, are prohibited.
-      - **Single exception:** the read-only **`GET https://cma.weegloo.com/v1/policy/terms`** fetch defined by the **`weegloo-terms-consent`** rule (it has no MCP tool). Nothing else may be called over raw HTTP by the agent.
+      - **Exceptions (only these two):** the read-only, unauthenticated GETs **`GET https://cma.weegloo.com/v1/policy/terms`** (the **`weegloo-terms-consent`** rule) and **`GET https://ai.weegloo.com/v1/version`** (the **`weegloo-version`** update check) — neither has an MCP tool. Nothing else may be called over raw HTTP by the agent.
       - Deploy scripts (e.g. `scripts/deploy-weegloo.mjs`) that call Weegloo APIs directly must NOT be used for deployment. Use MCP tools instead.
       - For human developers performing local development or testing, direct API calls are allowed.
 
