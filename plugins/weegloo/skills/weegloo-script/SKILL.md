@@ -208,15 +208,21 @@ at `Return`.
 All three take **`from`**: **`Current`** (live draft — what CMA/ACMA read; **default**) or
 **`Published`** (the published snapshot CDA/ACDA serve).
 
+The two **search** reads (`ResourceFind` / `ResourcePageRead`) additionally take **`advanced`** (bool,
+default `false`) — **Advanced Search** over Content (see the *Advanced Search* callout below). It does
+**not** apply to `ResourceRead` (get-one-by-id never searches) nor to Media reads.
+
 - **`ResourceRead`** — get one **by id**: `resource`, `target` (`{ sys: { id } }`; `sys.id` is a
   value expression), `from`. Binds the **full resource** under `name` (`{ /name/fields/title/en-US }`);
   a **missing** resource raises an error a `Try` can catch.
 - **`ResourceFind`** — **first match or `null`**: `resource`, `contentType` (scopes a Content find;
   Media is space-flat), `where` (filter `fields.<name> → { op: value }` — Weegloo list-filter operators,
-  `:self` supported; see the key-format note below), `order` (decides which match is "first"), `from`. Branch on existence with
+  `:self` supported; see the key-format note below), `order` (decides which match is "first"), `from`,
+  `advanced` (Content **Advanced Search** — set it when `where`/`order` touch `fields.*`; see the callout below). Branch on existence with
   `{ "==": [ "{ /name }", null ] }` (the find-then-upsert pattern).
 - **`ResourcePageRead`** — a **page**: `resource`, `contentType`, `where`, `order`, `limit`
-  (**≤ 100**), `cursor` (continuation = the previous result's `next`), `from`. Binds **`{ items, next }`**.
+  (**≤ 100**), `cursor` (continuation = the previous result's `next`), `from`, `advanced` (Content
+  **Advanced Search** — set it when `where`/`order` touch `fields.*`; see the callout below). Binds **`{ items, next }`**.
 
 > **`where` / `order` field keys — a content field MUST be `fields.<apiName>`, never the bare name (the
 > #1 mistake).** Write **`fields.postId`**, not `postId` — a bare content-field name is not recognized and
@@ -233,6 +239,36 @@ All three take **`from`**: **`Current`** (live draft — what CMA/ACMA read; **d
 > "where": { "fields.postId": { "eq": "…" } }    "where": { "postId":          { "eq": "…" } }
 >                                                 "where": { "postId.ko-KR":    { "eq": "…" } }
 > ```
+
+> **Advanced Search — set `advanced: true` whenever `where` / `order` touch `fields.*`.** A plain
+> (non-advanced) `ResourceFind` / `ResourcePageRead` matches **`fields.*`** by **exact equality only**.
+> **Strongly prefer `advanced: true` for any search or sort over a user-defined content field**
+> (`fields.<name>`) — that is the mode that supports partial / "contains" text matching, fuzzy search,
+> and dependable ordering on content fields. Rule of thumb, by the keys in `where` / `order`:
+> - references **any `fields.*`** key → **set `advanced: true`** (Content only).
+> - uses **only `sys.*`** (`sys.createdAt`, `sys.status`, …) and/or the `createdBy` convenience → leave
+>   `advanced` off (default) — those are served directly, no advanced needed.
+>
+> **Content only** — `advanced` is ignored on a Media read. (The targeted `fields.*` must also be a
+> search-enabled field type — see `weegloo-create-content-type`.)
+>
+> ```jsonc
+> // fields.* in where/order → advanced: true
+> { "type": "ResourcePageRead", "resource": "Content",
+>   "contentType": { "sys": { "id": "ct_post" } },
+>   "where": { "fields.title": { "eq": "weegloo" } },   // user field → Advanced Search
+>   "order": "-fields.score", "advanced": true }
+> // only sys.* / createdBy → advanced not needed:
+> // "where": { "createdBy": ":self" }, "order": "-sys.createdAt"
+> ```
+>
+> **A just-created row may not be found via `advanced` immediately.** Advanced Search is served from a
+> search index that catches up a short moment **after** a write — typically about a second. So a row you
+> just created (or updated) may **not** yet appear in an `advanced` `ResourceFind` / `ResourcePageRead`
+> run in the **same** flow, or in a client's instant re-query right after the write. When you must read a
+> just-written row straight away, fetch it **by id** with **`ResourceRead`** (which reads the primary
+> store — no indexing delay) or key the follow-up read off the write's returned `sys.id`. Do **not** rely
+> on Advanced Search to surface brand-new rows in the same breath.
 
 ### Resource writes (`requiredAction` per action)
 
