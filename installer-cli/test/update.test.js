@@ -217,7 +217,8 @@ test('runUpdate: keeps selection, refreshes content, auto-adds new, prunes upstr
     // rules: kept ones refreshed and templated with the stamp's ref
     const versionRule = fs.readFileSync('.claude/rules/weegloo-version.md', 'utf-8');
     assert.ok(versionRule.includes('?branch=develop'), 'check URL branch-scoped to develop');
-    assert.ok(versionRule.includes('--branch develop --location project --update'), 'baked command');
+    assert.ok(versionRule.includes('--agent claude --location project --update'), 'baked command is branch-free');
+    assert.ok(!versionRule.includes('--branch'), 'branch comes from the stamp ref, not the command');
     assert.ok(versionRule.includes('.weegloo/claude/version-check.json'), 'per-agent stamp path');
     // global-rules was offered before and not installed → stays out (not core)
     assert.equal(fs.existsSync('.claude/rules/weegloo-global-rules.md'), false);

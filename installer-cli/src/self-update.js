@@ -69,17 +69,19 @@ export function partitionCoreRules(rules) {
 export const VERSION_CHECK_INTERVAL_HOURS = 4;
 
 /**
- * The exact command the rule tells the user to run to update. `weegloo@latest` pins the
- * INSTALLER to its newest release; `--update` runs the update flow, which — unlike an install —
- * preserves the user's skill/rule selection (restored from disk), auto-adds genuinely new
- * items, prunes upstream-deleted ones, and never touches MCP config (so no token). The baked
- * `--branch ${ref}` keeps a pinned install on its own branch. No `--yes`: update mode has
- * nothing to prompt for, and suppressing prompts would also mute the rare shared-AGENTS.md
- * conflict question a human at a TTY should get to answer.
- * @param {{ agent: string, ref: string, scope: string }} ctx
+ * The exact command the rule tells the user to run to update. Deliberately MINIMAL:
+ * `weegloo@latest` pins the INSTALLER to its newest release; `--update` runs the update flow,
+ * which — unlike an install — preserves the user's skill/rule selection (from the per-agent
+ * record), auto-adds genuinely new items, prunes upstream-deleted ones, and never touches MCP
+ * config (so no token). No `--branch`: the update reads the branch from the agent's own stamp
+ * `ref` (falling back to latest), so the command needs no per-branch variant — `--branch` stays
+ * available as an explicit override / branch switch. No `--yes`: update mode has nothing to
+ * prompt for, and suppressing prompts would also mute the rare shared-store conflict question
+ * a human at a TTY should get to answer.
+ * @param {{ agent: string, scope: string }} ctx
  */
-export function buildUpdateCommand({ agent, ref, scope }) {
-  return `npx weegloo@latest --agent ${agent} --branch ${ref} --location ${scope} --update`;
+export function buildUpdateCommand({ agent, scope }) {
+  return `npx weegloo@latest --agent ${agent} --location ${scope} --update`;
 }
 
 /** The `.weegloo` state directory for a scope (global → home, project → project root). */
@@ -351,7 +353,7 @@ export function applySelfUpdateTemplate(rules, { agent, ref, scope }) {
     if (rule.id !== SELF_UPDATE_RULE_ID) return rule;
     const content = rule.content
       .replaceAll('{{WEEGLOO_VERSION_URL}}', `${VERSION_URL}?branch=${encodeURIComponent(ref)}`)
-      .replaceAll('{{WEEGLOO_UPDATE_COMMAND}}', buildUpdateCommand({ agent, ref, scope }))
+      .replaceAll('{{WEEGLOO_UPDATE_COMMAND}}', buildUpdateCommand({ agent, scope }))
       .replaceAll('{{WEEGLOO_STAMP_PATH}}', ruleStampPath(scope, agent))
       .replaceAll('{{WEEGLOO_CHECK_INTERVAL_HOURS}}', String(VERSION_CHECK_INTERVAL_HOURS));
     return { ...rule, content };

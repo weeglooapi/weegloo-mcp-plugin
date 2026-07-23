@@ -25,7 +25,7 @@
 노출 커맨드 (룰에 구움 — **`--yes` 없음**, TTY 감지가 사람/기계 구분):
 
 ```
-npx weegloo@latest --agent <agent> --branch <ref> --location <scope> --update
+npx weegloo@latest --agent <agent> --location <scope> --update
 ```
 
 ## 3. 핵심 결정과 근거
@@ -101,8 +101,11 @@ remove   = (디스크 ∩ prevAvailable) \ upstream # 카탈로그로 검증된 
 
 ## 6. 업데이트 플로우
 
-1. **agent/scope/ref 확정** — ref 우선순위: `--branch` 플래그(커맨드에 구워짐) > per-agent 스탬프의
-   `ref` > `latest` (fallback).
+1. **agent/scope/ref 확정** — ref 우선순위: `--branch` 플래그(수동 오버라이드/브랜치 전환용 —
+   안내 커맨드에는 **넣지 않음**) > per-agent 스탬프의 `ref` > `latest` (fallback).
+   커맨드를 최소형으로 유지하는 결정: 스탬프 `ref`가 브랜치의 단일 소스이고, 커맨드에 중복으로
+   굽는 이중화는 개발자 스스로 헷갈릴 만큼 커맨드를 복잡하게 만들어 기각(스탬프 ref 유실 시
+   latest fallback은 감수 — 룰이 ref 보존을 명시).
 2. **`loadResources(ref)`** → 카탈로그 + 목표 버전(`resources.version`). fetch 실패 →
    **아무것도 안 건드리고 중단** (반쪽 업데이트 금지).
 3. **설치 여부 감지** — 에이전트 skills 디렉터리의 `weegloo-*` 존재. 없으면 **no-op + 설치 안내**
@@ -213,7 +216,7 @@ per-agent 분리는 **추적(메타데이터)** 이지 **본체가 아님** — 
 - **io.js**: 디스크 복원 헬퍼 — 카탈로그 id 대비 디스크 존재분 반환(skills=디렉터리,
   rules=파일/마커, SAFE_ID 가드).
 - **self-update.js**: `buildUpdateCommand` →
-  `npx weegloo@latest --agent ${agent} --branch ${ref} --location ${scope} --update`.
+  `npx weegloo@latest --agent ${agent} --location ${scope} --update` (브랜치는 스탬프 `ref`).
 
 ### 테스트
 

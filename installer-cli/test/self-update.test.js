@@ -66,15 +66,16 @@ test('partitionCoreRules on an all-core manifest leaves the picker list empty (c
   assert.deepEqual(optional, []);
 });
 
-test('buildUpdateCommand pins the installer to @latest and runs the selection-preserving update flow', () => {
+test('buildUpdateCommand is minimal: installer @latest + agent/scope + --update, nothing else', () => {
   assert.equal(
-    buildUpdateCommand({ agent: 'claude', ref: 'latest', scope: 'global' }),
-    'npx weegloo@latest --agent claude --branch latest --location global --update'
+    buildUpdateCommand({ agent: 'claude', scope: 'global' }),
+    'npx weegloo@latest --agent claude --location global --update'
   );
-  // The baked --branch keeps a pinned install on its own branch; no --yes (update mode has
-  // nothing to prompt for, and it would mute the shared-file conflict question).
-  const cmd = buildUpdateCommand({ agent: 'cursor', ref: 'develop', scope: 'project' });
-  assert.equal(cmd, 'npx weegloo@latest --agent cursor --branch develop --location project --update');
+  const cmd = buildUpdateCommand({ agent: 'cursor', scope: 'project' });
+  assert.equal(cmd, 'npx weegloo@latest --agent cursor --location project --update');
+  // No --branch: the update reads the branch from the agent's stamp ref (→ latest fallback);
+  // no --yes: update mode has nothing to prompt for, and it would mute the conflict question.
+  assert.ok(!cmd.includes('--branch'));
   assert.ok(!cmd.includes('--yes'));
 });
 
@@ -99,7 +100,7 @@ test('applySelfUpdateTemplate fills every placeholder in the version rule', () =
   });
   assert.ok(!/{{.*}}/.test(su.content), 'no placeholders remain');
   assert.equal(su.content.split(`${VERSION_URL}?branch=latest`).length - 1, 2, 'all version-URL slots filled, branch-scoped');
-  assert.ok(su.content.includes('npx weegloo@latest --agent cursor --branch latest --location project'));
+  assert.ok(su.content.includes('npx weegloo@latest --agent cursor --location project --update'));
   assert.ok(su.content.includes(`window ${VERSION_CHECK_INTERVAL_HOURS} hours`), 'interval baked in');
 });
 
