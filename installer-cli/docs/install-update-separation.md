@@ -37,7 +37,7 @@ npx weegloo@latest --agent <agent> --branch <ref> --location <scope> --update
 | 추적 단위 | **per-agent** (stamp/record/catalog 모두) | B3의 유일한 해법. ground truth(설치 파일)가 per-agent인데 버전 신호가 공유 스칼라 하나면 **어떤 업데이트 모델로도** 정합 불가 |
 | 브랜치 | **설치한 브랜치 유지** (latest 강제 기각) | 버전 엔드포인트가 `?branch=` 지원 → 브랜치별 정확한 비교 가능. latest 강제는 사용자의 의도적 pin을 조용히 깨뜨림 |
 | 버전 소스 | 스탬프 = **브랜치 매니페스트 `resources.version`** · 체크 = **`VERSION_URL?branch=<ref>`** | B2 픽스. 비교가 같은 소스(그 브랜치의 버전) 간 apples-to-apples가 됨 |
-| 선택 보존 | `selected` = **디스크에서 복원** (기록이 아니라) | 디스크가 "무엇이 설치돼 있는가"의 사실 그 자체. 기록 유실/pre-record 설치에도 동작 |
+| 선택 보존 | `selected` = **per-agent 기록이 권위**, 디스크는 기록 부재 시 fallback | 기록은 정확히 이 용도로 만든 메타데이터. 손삭제는 내용 손상과 같은 **드리프트 → 복구**(선택 해제의 공식 채널은 설치 체크박스). 초기 설계는 "디스크가 진실"이었으나 검증 중 사용자 지적으로 전환 — 내용은 수리하면서 존재는 의도로 보는 비일관 + 실수 삭제의 조용한 영구화가 문제. 레거시 flat 기록은 타 에이전트 선택이 섞여 **선택 소스로 절대 불가**(정리-diff 전용) → 마이그레이션 케이스만 디스크 fallback |
 | 신규 판별 | 기록에 **카탈로그(`available*`) 스냅샷** 추가 | "선택한 것"만으로는 (a) 진짜 신규 vs (b) 사용자가 뺀 것을 **구분 불가** — 매니페스트에 항목별 추가시점 메타데이터 없음(항목=id+content뿐), 버전은 불투명 해시라 순서 비교 불가. "그때 제공됐던 목록"이 유일한 판별 키 |
 | 설치 동작 | **불변** (비대화=전체, 대화형=체크박스) | 신규 설치 UX 유지. 단 기록만 확장(`available*`, `ref`) |
 | MCP | **안 건드림** (`--update`는 skills/rules만) | 원격 `weegloo` MCP는 항상 최신(재설치 무의미), `weegloo-upload`는 npx라 실행 시 최신 → 토큰 불필요, 완전 무인 가능 |
@@ -84,7 +84,8 @@ project:  <project>/.weegloo/<agent>/version-check.json , …/installed.json
 ## 5. 업데이트의 집합 연산
 
 ```
-selected = 디스크 ∩ upstream카탈로그          # 선택 복원 — 디스크가 진실 (기록 아님)
+selected = per-agent 기록의 선택 (권위)        # 기록 부재(pre-migration) 시에만: 디스크 스캔
+           → planUpdate에서 카탈로그와 교집합   # 손삭제 = 드리프트 → 복구 ("N restored" 보고)
 new      = upstream \ prevAvailable           # 진짜 신규만 (제안된 적 없던 것)
 add      = (selected ∩ upstream) ∪ new ∪ CORE # 이번에 설치
 remove   = (디스크 ∩ prevAvailable) \ upstream # 카탈로그로 검증된 것만 삭제
@@ -121,15 +122,20 @@ remove   = (디스크 ∩ prevAvailable) \ upstream # 카탈로그로 검증된 
 | 사용자가 복붙 (TTY) | 질문 없이 완주. 충돌(§7) 때만 질문 1개 |
 | 에이전트/CI (비-TTY, `cli.js:123`의 `!isTTY` 감지) | 완전 무인. 충돌 시 경고 + 기본값 진행 |
 
-update 모드는 물어볼 게 원래 없음(브랜치·에이전트·스코프=플래그, 선택=디스크, 토큰=불필요) →
+update 모드는 물어볼 게 원래 없음(브랜치·에이전트·스코프=플래그, 선택=기록, 토큰=불필요) →
 `--yes` 불필요. 오히려 넣으면 사람이 복붙했을 때 충돌 질문까지 막아버려서 **뺌**.
 
-## 7. 공유 `AGENTS.md` 충돌 (project 스코프)
+## 7. 공유 스토어 충돌 (project 스코프)
 
 **구조**: project 스코프에서 codex / antigravity / androidstudio는 `<cwd>/AGENTS.md` **한 파일**에
 룰을 저장하고, 마커(`<!-- weegloo:<ruleId> -->`)에 **에이전트 구분이 없음** (`codex.js:227`).
-per-agent 분리는 **추적(메타데이터)** 이지 **룰 본체가 아님** — 본체 공유는 구조적으로 불가피.
-(global은 codex=`~/.codex/AGENTS.md`, antigravity=`~/.gemini/GEMINI.md`로 파일이 달라 무관.)
+**추가 발견(PR-2 구현 중)**: codex와 antigravity는 project 스코프에서 **skills 디렉터리도
+공유**한다 (둘 다 `<cwd>/.agents/skills`). 따라서 충돌 처리는 "AGENTS.md 룰"이 아니라
+**공유 스토어(룰 파일 + 스킬 디렉터리) 단위**로 동작한다 — "건너뛰기" 선택은 공유 스토어
+전체를 건너뛰고 비공유 스토어(예: androidstudio의 사설 skills 디렉터리)만 갱신한다.
+per-agent 분리는 **추적(메타데이터)** 이지 **본체가 아님** — 본체 공유는 구조적으로 불가피.
+(global은 codex=`~/.codex/AGENTS.md`+`~/.agents/skills`, antigravity=`~/.gemini/…`로 전부
+갈라져 무관.)
 
 - 쓰기는 룰 id별 마커 upsert(합집합)라 파일 전체를 갈아엎지 않음. 겹치는 룰의 **내용**은
   last-writer-wins.

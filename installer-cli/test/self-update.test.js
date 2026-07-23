@@ -66,11 +66,16 @@ test('partitionCoreRules on an all-core manifest leaves the picker list empty (c
   assert.deepEqual(optional, []);
 });
 
-test('buildUpdateCommand pins the installer to @latest and refreshes skills/rules unattended (--no-mcp --yes)', () => {
+test('buildUpdateCommand pins the installer to @latest and runs the selection-preserving update flow', () => {
   assert.equal(
     buildUpdateCommand({ agent: 'claude', ref: 'latest', scope: 'global' }),
-    'npx weegloo@latest --agent claude --branch latest --location global --no-mcp --yes'
+    'npx weegloo@latest --agent claude --branch latest --location global --update'
   );
+  // The baked --branch keeps a pinned install on its own branch; no --yes (update mode has
+  // nothing to prompt for, and it would mute the shared-file conflict question).
+  const cmd = buildUpdateCommand({ agent: 'cursor', ref: 'develop', scope: 'project' });
+  assert.equal(cmd, 'npx weegloo@latest --agent cursor --branch develop --location project --update');
+  assert.ok(!cmd.includes('--yes'));
 });
 
 test('getVersionStampPath is per-agent and follows the install scope', () => {

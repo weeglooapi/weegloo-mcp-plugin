@@ -5,6 +5,7 @@ import { PKG_PLUGIN_REF, listBranches, loadResources } from './github.js';
 import { orderBranchesForPicker } from './versions.js';
 import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
 import { partitionCoreRules } from './self-update.js';
+import { runUpdate } from './update.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -194,6 +195,15 @@ async function main() {
       chalk.dim(`  Non-interactive mode${isTTY ? '' : ' (no TTY)'} — using flags + defaults.`)
     );
     console.log();
+  }
+
+  // --update is its own flow: refresh an existing install's skills/rules (selection preserved,
+  // branch from the agent's stamp) and never touch MCP. It shares nothing with the install
+  // prompts below — no token, no version picker, no selection checkboxes.
+  if (config.update) {
+    const result = await runUpdate(config);
+    if (!result.ok) process.exit(1);
+    return;
   }
 
   // 1. Plugin version (branch). Pinned by flag/env → skip the picker; otherwise

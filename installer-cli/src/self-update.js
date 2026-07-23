@@ -69,14 +69,17 @@ export function partitionCoreRules(rules) {
 export const VERSION_CHECK_INTERVAL_HOURS = 4;
 
 /**
- * The exact command the rule tells the user to run to update. `weegloo@latest` pins the installer
- * itself to the newest release; `--no-mcp --yes` refreshes ONLY skills + rules, fully unattended
- * (no token prompt) — the weegloo MCP is a remote server that is always current, so it needs no
- * reinstall. Reuses the same ref/scope the user installed from so a pinned version stays pinned.
+ * The exact command the rule tells the user to run to update. `weegloo@latest` pins the
+ * INSTALLER to its newest release; `--update` runs the update flow, which — unlike an install —
+ * preserves the user's skill/rule selection (restored from disk), auto-adds genuinely new
+ * items, prunes upstream-deleted ones, and never touches MCP config (so no token). The baked
+ * `--branch ${ref}` keeps a pinned install on its own branch. No `--yes`: update mode has
+ * nothing to prompt for, and suppressing prompts would also mute the rare shared-AGENTS.md
+ * conflict question a human at a TTY should get to answer.
  * @param {{ agent: string, ref: string, scope: string }} ctx
  */
 export function buildUpdateCommand({ agent, ref, scope }) {
-  return `npx weegloo@latest --agent ${agent} --branch ${ref} --location ${scope} --no-mcp --yes`;
+  return `npx weegloo@latest --agent ${agent} --branch ${ref} --location ${scope} --update`;
 }
 
 /** The `.weegloo` state directory for a scope (global → home, project → project root). */
