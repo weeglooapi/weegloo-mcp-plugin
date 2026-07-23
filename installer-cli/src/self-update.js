@@ -25,6 +25,34 @@ import { VERSION_URL } from './github.js';
 export const SELF_UPDATE_RULE_ID = 'weegloo-version';
 
 /**
+ * Rules that must ALWAYS be installed — excluded from the interactive picker and merged into
+ * every install (the update flow re-adds them too). Two ids, two distinct reasons:
+ *  - weegloo-version: self-referential — this rule IS the update notifier, so deselecting it
+ *    would permanently sever the update path (nothing left to ever prompt a reinstall).
+ *  - weegloo-terms-consent: the terms gate is enforced client-side by this rule, so removing
+ *    it removes the gate itself (an operator/legal requirement, not a user preference).
+ * weegloo-global-rules is deliberately NOT here: without it the agent merely handles Weegloo
+ * less well — nothing structural breaks — so opting out stays a valid power-user choice.
+ */
+export const CORE_RULE_IDS = [SELF_UPDATE_RULE_ID, 'weegloo-terms-consent'];
+
+/**
+ * Splits a manifest rule list into forced-core vs user-selectable, preserving manifest order.
+ * A core id missing from the manifest (an old branch that predates that rule) is simply
+ * absent from `core` — nothing is invented.
+ *
+ * @param {Array<{id:string, content:string}>} rules
+ * @returns {{ core: Array<{id:string, content:string}>, optional: Array<{id:string, content:string}> }}
+ */
+export function partitionCoreRules(rules) {
+  const coreSet = new Set(CORE_RULE_IDS);
+  return {
+    core: rules.filter((r) => coreSet.has(r.id)),
+    optional: rules.filter((r) => !coreSet.has(r.id)),
+  };
+}
+
+/**
  * Hours between version checks WITHIN a single long-running session. The check otherwise runs
  * once per session (on the first Weegloo request); this is the extra re-check cadence for a
  * session that stays alive longer than this. There is intentionally NO cross-session calendar

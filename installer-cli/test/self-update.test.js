@@ -6,11 +6,13 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 
 import {
   SELF_UPDATE_RULE_ID,
+  CORE_RULE_IDS,
   VERSION_CHECK_INTERVAL_HOURS,
   isoNow,
   buildUpdateCommand,
   getVersionStampPath,
   buildStamp,
+  partitionCoreRules,
   writeVersionStamp,
   applySelfUpdateTemplate,
 } from '../src/self-update.js';
@@ -27,6 +29,42 @@ const RULE = {
   ].join('\n'),
 };
 const OTHER = { id: 'weegloo-global-rules', content: 'leave {{WEEGLOO_VERSION_URL}} alone' };
+
+test('CORE_RULE_IDS forces exactly the update notifier and the terms gate', () => {
+  assert.deepEqual(CORE_RULE_IDS, ['weegloo-version', 'weegloo-terms-consent']);
+});
+
+test('partitionCoreRules splits core vs optional, preserving manifest order', () => {
+  const manifest = [
+    { id: 'weegloo-global-rules', content: 'a' },
+    { id: 'weegloo-version', content: 'b' },
+    { id: 'weegloo-api-endpoints', content: 'c' },
+    { id: 'weegloo-terms-consent', content: 'd' },
+  ];
+  const { core, optional } = partitionCoreRules(manifest);
+  assert.deepEqual(core.map((r) => r.id), ['weegloo-version', 'weegloo-terms-consent']);
+  assert.deepEqual(optional.map((r) => r.id), ['weegloo-global-rules', 'weegloo-api-endpoints']);
+});
+
+test('partitionCoreRules invents nothing when a core rule is absent from the manifest (old branch)', () => {
+  const manifest = [
+    { id: 'weegloo-version', content: 'b' }, // terms-consent predates this branch
+    { id: 'weegloo-global-rules', content: 'a' },
+  ];
+  const { core, optional } = partitionCoreRules(manifest);
+  assert.deepEqual(core.map((r) => r.id), ['weegloo-version']);
+  assert.deepEqual(optional.map((r) => r.id), ['weegloo-global-rules']);
+});
+
+test('partitionCoreRules on an all-core manifest leaves the picker list empty (checkbox must be skipped)', () => {
+  const manifest = [
+    { id: 'weegloo-version', content: 'b' },
+    { id: 'weegloo-terms-consent', content: 'd' },
+  ];
+  const { core, optional } = partitionCoreRules(manifest);
+  assert.equal(core.length, 2);
+  assert.deepEqual(optional, []);
+});
 
 test('buildUpdateCommand pins the installer to @latest and refreshes skills/rules unattended (--no-mcp --yes)', () => {
   assert.equal(

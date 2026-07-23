@@ -4,6 +4,7 @@ import ora from 'ora';
 import { PKG_PLUGIN_REF, listBranches, loadResources, loadCurrentVersion } from './github.js';
 import { orderBranchesForPicker } from './versions.js';
 import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
+import { partitionCoreRules } from './self-update.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -458,11 +459,29 @@ async function main() {
       if (config.nonInteractive) {
         rules = resources.rules;
       } else {
-        const chosenRuleIds = await checkbox({
-          message: 'Select rules to install:',
-          choices: resources.rules.map((r) => ({ name: chalk.bold(r.id), value: r.id, checked: true })),
-        });
-        rules = resources.rules.filter((r) => chosenRuleIds.includes(r.id));
+        // Core rules (the update notifier + the terms gate, see CORE_RULE_IDS) appear in the
+        // picker but greyed-out and un-toggleable. inquirer EXCLUDES disabled choices from the
+        // returned selection regardless of `checked`, so they are unioned back in below.
+        const { core, optional } = partitionCoreRules(resources.rules);
+        const coreIdSet = new Set(core.map((r) => r.id));
+        let chosenRuleIds = [];
+        if (optional.length > 0) {
+          chosenRuleIds = await checkbox({
+            message: 'Select rules to install:',
+            choices: resources.rules.map((r) =>
+              coreIdSet.has(r.id)
+                ? { name: chalk.bold(r.id), value: r.id, disabled: '(required — always installed)' }
+                : { name: chalk.bold(r.id), value: r.id, checked: true }
+            ),
+          });
+        } else if (core.length > 0) {
+          // All rules are core → the picker would throw (no selectable choices); just note it.
+          console.log(
+            chalk.dim(`  Required rules (always installed): ${core.map((r) => r.id).join(', ')}`)
+          );
+        }
+        const keep = new Set([...core.map((r) => r.id), ...chosenRuleIds]);
+        rules = resources.rules.filter((r) => keep.has(r.id));
       }
     }
   }
