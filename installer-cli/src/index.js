@@ -1,7 +1,7 @@
 import { select, checkbox, password, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { PKG_PLUGIN_REF, listBranches, loadResources, loadCurrentVersion } from './github.js';
+import { PKG_PLUGIN_REF, listBranches, loadResources } from './github.js';
 import { orderBranchesForPicker } from './versions.js';
 import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
 import { partitionCoreRules } from './self-update.js';
@@ -499,19 +499,19 @@ async function main() {
   const installedSkillIds = skills.map((s) => s.id);
   const installedRuleIds = rules.map((r) => r.id);
 
-  // The installed version is the live value from the version endpoint at install time; the
-  // weegloo-version rule later re-fetches that endpoint and compares. Only needed when we install
-  // skills/rules (that is when the stamp is written). Best-effort: on failure we stamp no version,
-  // which the rule treats as "unknown".
-  let currentVersion = null;
-  if (installSkillsRules) {
-    currentVersion = await loadCurrentVersion();
-  }
-
+  // The installed version stamped for the weegloo-version rule is THIS BRANCH's manifest
+  // version (already fetched above) — not the global-latest endpoint value. The rule later
+  // compares it against the same branch via `?branch=<ref>`, so both sides of the comparison
+  // share one source; stamping latest here would make every non-latest install mis-compare.
+  // Old manifests may carry no version → null, which the rule treats as "unknown".
+  //
+  // available* is the FULL catalog this ref offers (independent of the user's selection) — the
+  // update flow diffs a future catalog against it to auto-add genuinely new skills/rules while
+  // still respecting deliberate deselections.
   const answers = {
     token: installMcp ? token : undefined,
     pluginRef,
-    version: currentVersion,
+    version: resources.version,
     mcpGroup,
     skills,
     rules,
@@ -524,6 +524,8 @@ async function main() {
     manageRules,
     installedSkillIds,
     installedRuleIds,
+    availableSkillIds: resources.skills.map((s) => s.id),
+    availableRuleIds: resources.rules.map((r) => r.id),
   };
 
   if (ide === 'cursor') {

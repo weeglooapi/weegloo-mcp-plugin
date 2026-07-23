@@ -305,6 +305,8 @@ export async function installCodex({
   manageRules = false,
   installedSkillIds = [],
   installedRuleIds = [],
+  availableSkillIds = [],
+  availableRuleIds = [],
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
   rules = applySelfUpdateTemplate(rules, { version, agent: 'codex', ref: pluginRef, scope });
@@ -414,12 +416,16 @@ export async function installCodex({
   if (installSkillsRules) {
     const { removedSkills, removedRules, stampPath } = syncInstalledRecord({
       scope,
+      agent: 'codex',
+      ref: pluginRef,
       version,
       manageSkills,
       installedSkillIds,
+      availableSkillIds,
       removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
       manageRules,
       installedRuleIds,
+      availableRuleIds,
       removeRules: (ids) => removeRuleMarkers(instructionsPath, ids),
     });
     if (removedSkills.length > 0) {

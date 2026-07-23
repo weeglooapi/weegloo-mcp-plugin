@@ -67,6 +67,8 @@ export async function installCursor({
   manageRules = false,
   installedSkillIds = [],
   installedRuleIds = [],
+  availableSkillIds = [],
+  availableRuleIds = [],
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
   rules = applySelfUpdateTemplate(rules, { version, agent: 'cursor', ref: pluginRef, scope });
@@ -165,12 +167,16 @@ export async function installCursor({
   if (installSkillsRules) {
     const { removedSkills, removedRules, stampPath } = syncInstalledRecord({
       scope,
+      agent: 'cursor',
+      ref: pluginRef,
       version,
       manageSkills,
       installedSkillIds,
+      availableSkillIds,
       removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
       manageRules,
       installedRuleIds,
+      availableRuleIds,
       removeRules: (ids) => removeRuleFiles(rulesDir, ids, 'mdc'),
     });
     if (removedSkills.length > 0) {

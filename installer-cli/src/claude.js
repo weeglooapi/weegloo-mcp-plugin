@@ -55,6 +55,8 @@ export async function installClaude({
   manageRules = false,
   installedSkillIds = [],
   installedRuleIds = [],
+  availableSkillIds = [],
+  availableRuleIds = [],
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
   rules = applySelfUpdateTemplate(rules, { version, agent: 'claude', ref: pluginRef, scope });
@@ -155,12 +157,16 @@ export async function installClaude({
   if (installSkillsRules) {
     const { removedSkills, removedRules, stampPath } = syncInstalledRecord({
       scope,
+      agent: 'claude',
+      ref: pluginRef,
       version,
       manageSkills,
       installedSkillIds,
+      availableSkillIds,
       removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
       manageRules,
       installedRuleIds,
+      availableRuleIds,
       removeRules: (ids) => removeRuleFiles(rulesDir, ids, 'md'),
     });
     if (removedSkills.length > 0) {

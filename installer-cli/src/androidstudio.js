@@ -96,6 +96,8 @@ export async function installAndroidStudio({
   manageRules = false,
   installedSkillIds = [],
   installedRuleIds = [],
+  availableSkillIds = [],
+  availableRuleIds = [],
 }) {
   rules = applySelfUpdateTemplate(rules, { version, agent: 'androidstudio', ref: pluginRef, scope });
 
@@ -213,12 +215,16 @@ export async function installAndroidStudio({
   if (installSkillsRules) {
     const { removedSkills, removedRules, stampPath } = syncInstalledRecord({
       scope,
+      agent: 'androidstudio',
+      ref: pluginRef,
       version,
       manageSkills,
       installedSkillIds,
+      availableSkillIds,
       removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
       manageRules,
       installedRuleIds,
+      availableRuleIds,
       removeRules: (ids) => removeRuleMarkers(agentsPath, ids),
     });
     if (removedSkills.length > 0) {
