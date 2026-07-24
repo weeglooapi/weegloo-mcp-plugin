@@ -61,6 +61,8 @@ alwaysApply: true
 
 # Rule Loading
 
+This instruction applies to the Antigravity agent only — other agents reading this file should ignore it.
+
 At the beginning of a session or when rules have not yet been loaded into the current conversation context:
 
 1. **Initial Rule Discovery**: You MUST check and load rule files from both scopes using tools (\`list_dir\` or \`view_file\`):
