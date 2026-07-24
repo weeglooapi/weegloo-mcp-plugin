@@ -6,7 +6,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
 import { writeContentFile, uploadServerCommand, removeSkillDirs, SAFE_ID } from './io.js';
-import { applySelfUpdateTemplate, syncInstalledRecord } from './self-update.js';
+import { applySelfUpdateTemplate, syncInstalledRecord, withoutSharerClaims, projectMarkerRuleSharers } from './self-update.js';
 
 /**
  * @param {'global' | 'project'} scope
@@ -422,11 +422,26 @@ export async function installCodex({
       manageSkills,
       installedSkillIds,
       availableSkillIds,
-      removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
+      // Shared-store guard (project): .agents/skills is also antigravity's skills dir, and
+      // AGENTS.md markers are also androidstudio's (and pre-switch antigravity's) rule store —
+      // never remove an id a sharer's record still claims (see withoutSharerClaims).
+      removeSkills: (ids) =>
+        removeSkillDirs(
+          skillsDir,
+          scope === 'project'
+            ? withoutSharerClaims(ids, { scope, sharers: ['antigravity'], kind: 'skills' })
+            : ids
+        ),
       manageRules,
       installedRuleIds,
       availableRuleIds,
-      removeRules: (ids) => removeRuleMarkers(instructionsPath, ids),
+      removeRules: (ids) =>
+        removeRuleMarkers(
+          instructionsPath,
+          scope === 'project'
+            ? withoutSharerClaims(ids, { scope, sharers: projectMarkerRuleSharers('codex'), kind: 'rules' })
+            : ids
+        ),
     });
     if (removedSkills.length > 0) {
       console.log(chalk.dim(`  - Removed ${removedSkills.length} stale skill(s): ${removedSkills.join(', ')}`));

@@ -682,3 +682,140 @@ test('toAntigravityRuleContent: injects trigger: always_on into existing frontma
 test('toAntigravityRuleContent: wraps frontmatter-less content in a minimal always_on block', () => {
   assert.equal(toAntigravityRuleContent('just a body'), '---\ntrigger: always_on\n---\n\njust a body');
 });
+
+// ── shared-store removal guard (reference-counted via per-agent records) ─────
+
+test('withoutSharerClaims: drops ids a sharer record claims; keeps the rest', async () => {
+  await inTmpProject(async () => {
+    fs.mkdirSync(path.join('.weegloo', 'codex'), { recursive: true });
+    fs.writeFileSync(
+      path.join('.weegloo', 'codex', 'installed.json'),
+      JSON.stringify({ skills: ['weegloo-shared'], rules: [] }),
+      'utf-8'
+    );
+    const { withoutSharerClaims } = await import('../src/self-update.js');
+    assert.deepEqual(
+      withoutSharerClaims(['weegloo-shared', 'weegloo-mine-only'], {
+        scope: 'project',
+        sharers: ['codex'],
+        kind: 'skills',
+      }),
+      ['weegloo-mine-only']
+    );
+    // no sharers / sharer without a record → passthrough
+    assert.deepEqual(
+      withoutSharerClaims(['weegloo-x'], { scope: 'project', sharers: [], kind: 'skills' }),
+      ['weegloo-x']
+    );
+    assert.deepEqual(
+      withoutSharerClaims(['weegloo-x'], { scope: 'project', sharers: ['androidstudio'], kind: 'skills' }),
+      ['weegloo-x']
+    );
+  });
+});
+
+test('projectMarkerRuleSharers: antigravity counts only pre-switch (no .agents/rules files)', async () => {
+  await inTmpProject(async () => {
+    const { projectMarkerRuleSharers } = await import('../src/self-update.js');
+    // pre-switch: no .agents/rules → antigravity's rules still live as markers
+    assert.deepEqual(projectMarkerRuleSharers('codex'), ['androidstudio', 'antigravity']);
+    // post-switch: file rules exist → its record pins files, not markers
+    fs.mkdirSync(path.join('.agents', 'rules'), { recursive: true });
+    fs.writeFileSync(path.join('.agents', 'rules', 'weegloo-version.md'), 'x', 'utf-8');
+    assert.deepEqual(projectMarkerRuleSharers('codex'), ['androidstudio']);
+    assert.deepEqual(projectMarkerRuleSharers('androidstudio'), ['codex']);
+  });
+});
+
+test('runUpdate: pruning a shared skill another agent still claims PRESERVES the file (silent-loss guard)', async () => {
+  await inTmpProject(async () => {
+    // antigravity's update wants to prune weegloo-gone (dropped from its catalog), but codex's
+    // record still claims it — the shared file must survive; only antigravity's record lets go.
+    fs.mkdirSync(path.join('.agents', 'skills', 'weegloo-a'), { recursive: true });
+    fs.writeFileSync(path.join('.agents', 'skills', 'weegloo-a', 'SKILL.md'), 'a v1', 'utf-8');
+    fs.mkdirSync(path.join('.agents', 'skills', 'weegloo-gone'), { recursive: true });
+    fs.writeFileSync(path.join('.agents', 'skills', 'weegloo-gone', 'SKILL.md'), 'gone v1', 'utf-8');
+    fs.mkdirSync(path.join('.weegloo', 'antigravity'), { recursive: true });
+    fs.writeFileSync(
+      path.join('.weegloo', 'antigravity', 'installed.json'),
+      JSON.stringify({
+        skills: ['weegloo-a', 'weegloo-gone'],
+        rules: [],
+        availableSkills: ['weegloo-a', 'weegloo-gone'],
+        availableRules: [],
+      }),
+      'utf-8'
+    );
+    fs.writeFileSync(
+      path.join('.weegloo', 'antigravity', 'version-check.json'),
+      JSON.stringify({ last_check: 'x', version: 'v1', ref: 'latest' }),
+      'utf-8'
+    );
+    fs.mkdirSync(path.join('.weegloo', 'codex'), { recursive: true });
+    fs.writeFileSync(
+      path.join('.weegloo', 'codex', 'installed.json'),
+      JSON.stringify({ skills: ['weegloo-gone'], rules: [] }),
+      'utf-8'
+    );
+    fs.writeFileSync(
+      path.join('.weegloo', 'codex', 'version-check.json'),
+      JSON.stringify({ last_check: 'x', version: 'v1', ref: 'latest' }), // same ref → no conflict prompt
+      'utf-8'
+    );
+
+    const res = await runUpdate(
+      { update: true, agent: 'antigravity', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: loadOk, ...quiet }
+    );
+
+    assert.equal(res.status, 'updated');
+    assert.ok(fs.existsSync('.agents/skills/weegloo-gone'), 'codex still claims it → file preserved');
+    assert.deepEqual(
+      readInstalledRecord('.weegloo/antigravity/installed.json').skills.includes('weegloo-gone'),
+      false,
+      "antigravity's own record lets go"
+    );
+  });
+});
+
+test('runUpdate: pruning a shared skill NO sharer claims really removes it (last claimer turns off the light)', async () => {
+  await inTmpProject(async () => {
+    fs.mkdirSync(path.join('.agents', 'skills', 'weegloo-gone'), { recursive: true });
+    fs.writeFileSync(path.join('.agents', 'skills', 'weegloo-gone', 'SKILL.md'), 'gone v1', 'utf-8');
+    fs.mkdirSync(path.join('.weegloo', 'antigravity'), { recursive: true });
+    fs.writeFileSync(
+      path.join('.weegloo', 'antigravity', 'installed.json'),
+      JSON.stringify({
+        skills: ['weegloo-a', 'weegloo-gone'],
+        rules: [],
+        availableSkills: ['weegloo-a', 'weegloo-gone'],
+        availableRules: [],
+      }),
+      'utf-8'
+    );
+    fs.writeFileSync(
+      path.join('.weegloo', 'antigravity', 'version-check.json'),
+      JSON.stringify({ last_check: 'x', version: 'v1', ref: 'latest' }),
+      'utf-8'
+    );
+    // codex present but its record does NOT claim weegloo-gone
+    fs.mkdirSync(path.join('.weegloo', 'codex'), { recursive: true });
+    fs.writeFileSync(
+      path.join('.weegloo', 'codex', 'installed.json'),
+      JSON.stringify({ skills: ['weegloo-other'], rules: [] }),
+      'utf-8'
+    );
+    fs.writeFileSync(
+      path.join('.weegloo', 'codex', 'version-check.json'),
+      JSON.stringify({ last_check: 'x', version: 'v1', ref: 'latest' }),
+      'utf-8'
+    );
+
+    await runUpdate(
+      { update: true, agent: 'antigravity', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: loadOk, ...quiet }
+    );
+
+    assert.equal(fs.existsSync('.agents/skills/weegloo-gone'), false, 'no claimer left → removed');
+  });
+});

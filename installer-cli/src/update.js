@@ -37,6 +37,8 @@ import {
   getLegacyInstalledRecordPath,
   readInstalledRecord,
   syncInstalledRecord,
+  withoutSharerClaims,
+  projectMarkerRuleSharers,
 } from './self-update.js';
 import {
   SAFE_ID,
@@ -404,14 +406,25 @@ export async function runUpdate(config, deps = {}) {
     manageSkills: effectiveManageSkills,
     installedSkillIds: plan.addSkillIds,
     availableSkillIds: catalogSkillIds,
-    removeSkills: (ids) => removeSkillDirs(store.skills.dir, ids),
+    // Shared-store guard: never remove an id a sharer's record still claims — the file is
+    // theirs too, and the loss would be silent until their next update (see withoutSharerClaims).
+    removeSkills: (ids) =>
+      removeSkillDirs(
+        store.skills.dir,
+        withoutSharerClaims(ids, { scope, sharers: store.skills.sharedWith, kind: 'skills' })
+      ),
     manageRules: effectiveManageRules,
     installedRuleIds: plan.addRuleIds,
     availableRuleIds: catalogRuleIds,
     removeRules: (ids) =>
       store.rules.kind === 'files'
         ? removeRuleFiles(store.rules.dir, ids, store.rules.ext)
-        : removeRuleMarkers(store.rules.file, ids),
+        : removeRuleMarkers(
+            store.rules.file,
+            store.rules.sharedWith.length > 0
+              ? withoutSharerClaims(ids, { scope, sharers: projectMarkerRuleSharers(agent), kind: 'rules' })
+              : ids
+          ),
   });
 
   // ── Report ──────────────────────────────────────────────────────────────────────────────────

@@ -168,7 +168,23 @@ Antigravity가 workspace 룰 위치로 `.agents/rules/*.md` 를 공식 지원함
   읽으라고 하는 건 미래 대비 — 없으면 무해.)
 - **관찰 대상**: `.agents/rules/` 는 cross-tool 표준 디렉터리 성격 — codex 등이 읽기 시작하면
   구운-값 오염이 재발할 수 있음.
-- C2(`.agents/skills` 공유)는 불변 — 두 에이전트 자체의 컨벤션이라 이동 불가.
+- C2(`.agents/skills` 공유)는 불변 — 두 에이전트 자체의 컨벤션이라 이동 불가 (codex의 공식
+  스킬 위치는 project/global 모두 `.agents/skills` 뿐 — `.codex/skills` 는 레거시/미문서라 기각).
+
+### 공유 스토어 삭제 가드 — 기록 기반 참조 카운트 (후속 결정)
+
+공유 스토어에서 한 에이전트의 정리(prune)가 남의 사본까지 지우는 **교차 삭제**의 실제 노출:
+지워진 쪽은 세션에서 항목이 **조용히 사라지고**, 복구(`restored`)를 촉발할 업데이트 노티는
+**다음 릴리스가 나와야만** 발동 → 무기한 공백 가능. "잃고 복구"가 아니라 **애초에 안 잃게**:
+
+- **`withoutSharerClaims`** (`self-update.js`): 공유 스토어에서 삭제하기 전에 **같은 스토어를
+  쓰는 다른 에이전트의 per-agent 기록**을 확인 — 클레임 중인 id는 파일을 남기고 **내 기록에서만
+  제거**. 마지막 클레이머가 버릴 때 비로소 진짜 삭제(기록이 참조 카운터).
+- 적용: `.agents/skills` (codex↔antigravity), project `AGENTS.md` 마커 (codex↔androidstudio).
+  마커의 antigravity 클레임은 **pre-switch일 때만** 유효 — `.agents/rules` 에 weegloo 룰 파일이
+  생기면 그 기록은 파일을 가리키므로 마커 보존 근거가 안 됨(`projectMarkerRuleSharers`).
+- 상대가 pre-migration(기록 없음)이면 클레임을 못 봐 기존처럼 삭제될 수 있으나, 마이그레이션
+  업데이트가 복구 — 과도기 한정 현행 유지.
 
 - 쓰기는 룰 id별 마커 upsert(합집합)라 파일 전체를 갈아엎지 않음. 겹치는 룰의 **내용**은
   last-writer-wins.

@@ -29,6 +29,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { VERSION_URL } from './github.js';
+import { listWeeglooRuleFiles } from './io.js';
 
 export const SELF_UPDATE_RULE_ID = 'weegloo-version';
 
@@ -243,6 +244,50 @@ export function writeInstalledRecord(recordPath, record = {}) {
   } catch {
     return null;
   }
+}
+
+/**
+ * SHARED-STORE REMOVAL GUARD. Some project-scope stores are physically shared between agents
+ * (codex + antigravity both keep skills in `<cwd>/.agents/skills`; codex + androidstudio keep
+ * rule markers in `<cwd>/AGENTS.md`). An agent pruning its own deselected/stale id from such a
+ * store would also destroy the OTHER agent's copy — and the loss is silent: the other agent's
+ * sessions just stop seeing the item, and nothing prompts its restoring update until the next
+ * release ships. So before removing from a shared store, drop every id a sharer's per-agent
+ * record still claims: the file stays, only this agent's record lets go. When the LAST claimer
+ * deselects, no record claims it anymore and the removal really happens — a reference count,
+ * with the per-agent records as the counters. A sharer without a per-agent record yet (pre-
+ * migration) claims nothing here; that transitional loss still heals via its migrating update.
+ *
+ * @param {string[]} ids  removal candidates (this agent's prune diff)
+ * @param {{ scope: 'global'|'project', sharers: string[], kind: 'skills'|'rules', cwd?: string }} args
+ * @returns {string[]} ids no sharer claims (safe to remove)
+ */
+export function withoutSharerClaims(ids, { scope, sharers, kind, cwd = process.cwd() }) {
+  if (!Array.isArray(ids) || ids.length === 0 || sharers.length === 0) return ids;
+  const claimed = new Set();
+  for (const sharer of sharers) {
+    const record = readInstalledRecord(getInstalledRecordPath(scope, sharer, cwd));
+    for (const id of record[kind]) claimed.add(id);
+  }
+  return ids.filter((id) => !claimed.has(id));
+}
+
+/**
+ * The agents (other than `agent`) whose rule claims still pin markers in the project
+ * `<cwd>/AGENTS.md`. codex and androidstudio always store rules there; antigravity only
+ * PRE-switch — once it keeps rules as files in `.agents/rules/` (weegloo rule files present),
+ * its record claims pin those files, not markers, and counting them would just preserve stale
+ * markers everyone reads.
+ *
+ * @param {string} agent  the agent doing the removal (excluded from the result)
+ * @param {string} [cwd]
+ */
+export function projectMarkerRuleSharers(agent, cwd = process.cwd()) {
+  return ['codex', 'androidstudio', 'antigravity'].filter((a) => {
+    if (a === agent) return false;
+    if (a !== 'antigravity') return true;
+    return listWeeglooRuleFiles(path.join(cwd, '.agents', 'rules'), 'md').length === 0;
+  });
 }
 
 /**

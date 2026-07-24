@@ -12,7 +12,7 @@ import {
   listWeeglooRuleMarkers,
 } from './io.js';
 import { upsertRuleInAgentsMd, removeRuleMarkers } from './codex.js';
-import { applySelfUpdateTemplate, syncInstalledRecord } from './self-update.js';
+import { applySelfUpdateTemplate, syncInstalledRecord, withoutSharerClaims } from './self-update.js';
 
 /**
  * Antigravity (Google's agentic IDE, Gemini-based) target.
@@ -309,7 +309,15 @@ export async function installAntigravity({
       manageSkills,
       installedSkillIds,
       availableSkillIds,
-      removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
+      // Shared-store guard (project): .agents/skills is also codex's skills dir — never
+      // remove an id codex's record still claims.
+      removeSkills: (ids) =>
+        removeSkillDirs(
+          skillsDir,
+          scope === 'project'
+            ? withoutSharerClaims(ids, { scope, sharers: ['codex'], kind: 'skills' })
+            : ids
+        ),
       manageRules,
       installedRuleIds,
       availableRuleIds,
