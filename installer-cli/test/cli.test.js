@@ -167,3 +167,54 @@ test('resolveConfig: --all-branches with a pinned branch warns (no-op)', () => {
 
 // The Antigravity location no-op warning lives in index.js (it depends on values
 // that may be chosen interactively), so resolveConfig must NOT emit it here.
+
+// ── --update mode ───────────────────────────────────────────────────────────
+
+test('resolveConfig: --update needs only --agent — no token, MCP forced off', () => {
+  const { config, errors } = resolve(['--update', '-a', 'claude']);
+  assert.deepEqual(errors, []);
+  assert.equal(config.update, true);
+  assert.equal(config.installMcp, false);
+  assert.equal(config.installSkillsRules, true);
+});
+
+test('resolveConfig: --update without --agent errors (even in a TTY)', () => {
+  assert.ok(resolve(['--update']).errors.some((e) => /--agent is required with --update/.test(e)));
+});
+
+test('resolveConfig: --update rejects --mcp (updates never touch MCP config)', () => {
+  assert.ok(
+    resolve(['--update', '-a', 'claude', '--mcp', 'core']).errors.some((e) =>
+      /--mcp cannot be combined with --update/.test(e)
+    )
+  );
+});
+
+test('resolveConfig: --update with a token warns (ignored), not an error', () => {
+  const { errors, warnings } = resolve(['--update', '-a', 'claude', '-t', 'pat']);
+  assert.deepEqual(errors, []);
+  assert.ok(warnings.some((w) => /--update never needs one/.test(w)));
+});
+
+test('resolveConfig: --update leaves an unpinned ref null so the agent stamp can supply the branch', () => {
+  // Even non-interactive: defaulting to latest here would silently migrate a pinned install.
+  const { config } = resolve(['--update', '-a', 'claude', '-y']);
+  assert.equal(config.pluginRef, null);
+  // An explicit --branch still pins.
+  assert.equal(resolve(['--update', '-a', 'claude', '-b', 'develop']).config.pluginRef, 'develop');
+});
+
+test('resolveConfig: --update with both kinds ignored errors (nothing to update)', () => {
+  assert.ok(
+    resolve(['--update', '-a', 'claude', '--ignore-skill', '--ignore-rule']).errors.some((e) =>
+      /Nothing to update/.test(e)
+    )
+  );
+});
+
+test('resolveConfig: --update with one kind ignored is a valid single-kind update', () => {
+  const { config, errors } = resolve(['--update', '-a', 'cursor', '--ignore-rule']);
+  assert.deepEqual(errors, []);
+  assert.equal(config.ignoreRule, true);
+  assert.equal(config.installSkillsRules, true);
+});

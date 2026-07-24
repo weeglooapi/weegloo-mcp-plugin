@@ -12,9 +12,10 @@ export const REPO = process.env.WEEGLOO_REPO || 'weeglooapi/weegloo-mcp-plugin';
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
 
 /**
- * Version endpoint the installer reads at install time (and the weegloo-version rule re-reads
- * periodically) to learn the current published version. Public, unauthenticated, plain JSON:
- * `{ "version": "<string>" }`. Overridable via WEEGLOO_VERSION_URL for staging / tests.
+ * Version endpoint the weegloo-version rule polls at runtime (baked into the rule text as
+ * `?branch=<ref>` — see applySelfUpdateTemplate) to learn a branch's current published version.
+ * Public, unauthenticated, plain JSON: `{ "version": "<string>" }`. A missing branch returns an
+ * HTTP 500 (NotFound detail), not a 404. Overridable via WEEGLOO_VERSION_URL for staging / tests.
  */
 export const VERSION_URL = process.env.WEEGLOO_VERSION_URL || 'https://ai.weegloo.com/v1/version';
 
@@ -213,22 +214,7 @@ export async function loadResources(ref) {
   }
 }
 
-/**
- * Fetches the current published version string from VERSION_URL (`{ "version": "12" }`). Returns
- * the version as a string, or null on ANY failure (offline, non-200, bad JSON, missing field) so
- * the installer can proceed and simply omit the version stamp rather than failing the install.
- * @returns {Promise<string|null>}
- */
-export async function loadCurrentVersion() {
-  try {
-    const res = await httpGet(VERSION_URL, { retry: 1 });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const v = data?.version;
-    if (typeof v === 'string') return v;
-    if (typeof v === 'number') return String(v);
-    return null;
-  } catch {
-    return null;
-  }
-}
+// NOTE: the installer no longer fetches VERSION_URL itself — the installed version stamped for
+// the weegloo-version rule is the branch manifest's `version` (loadResources().version), so both
+// sides of the rule's later comparison share one source. VERSION_URL stays exported because the
+// rule template bakes `${VERSION_URL}?branch=<ref>` into the rule text (see applySelfUpdateTemplate).

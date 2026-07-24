@@ -50,13 +50,20 @@ export const HELP_TEXT = `
     -t, --token <pat>    Weegloo Personal Access Token (also reads WEEGLOO_TOKEN)
         --ignore-skill   Do not install Skills
         --ignore-rule    Do not install Rules
+        --update         Update an existing install: refresh this agent's installed
+                         skills/rules to the branch's newest version, KEEPING the
+                         user's selection (auto-adds genuinely new items, prunes
+                         upstream-deleted ones). Skills/Rules only — never touches
+                         MCP config, so no token is needed. Requires --agent; the
+                         branch defaults to the one the agent was installed from.
     -y, --yes            Non-interactive: use defaults for anything not given
     -d, --all-branches   Show all branches in the version picker (interactive only)
     -h, --help           Show this help
 
   Non-interactive defaults: branch=latest, MCP+Skills+Rules on, group=default,
   location=global, all Skills and Rules selected. --agent is always required,
-  and a token (--token / WEEGLOO_TOKEN) is required whenever MCP is installed.
+  and a token (--token / WEEGLOO_TOKEN) is required whenever MCP is installed
+  (never for --update).
 `;
 
 const OPTIONS = {
@@ -74,6 +81,7 @@ const OPTIONS = {
   token: { type: 'string', short: 't' },
   'ignore-skill': { type: 'boolean' },
   'ignore-rule': { type: 'boolean' },
+  update: { type: 'boolean' },
   yes: { type: 'boolean', short: 'y' },
   'all-branches': { type: 'boolean', short: 'd' },
   help: { type: 'boolean', short: 'h' },
@@ -135,7 +143,11 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
   // Pinned ⇒ the version picker is skipped (matches the prior --ref/WEEGLOO_REF behavior).
   const refPinned = !!flagRef || !!envRef;
   let pluginRef = flagRef || envRef || null;
-  if (pluginRef == null && nonInteractive) {
+  // In update mode an unpinned ref must stay null: the update flow resolves it from the
+  // agent's own stamp (the branch it was installed from), falling back to latest only when
+  // the stamp predates ref tracking. Defaulting to latest here would silently migrate a
+  // pinned install's branch.
+  if (pluginRef == null && nonInteractive && !values.update) {
     pluginRef = pkgPluginRef || 'latest';
   }
 
@@ -216,15 +228,41 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
 
   const showAllBranches = !!values['all-branches'];
 
+  // ── update mode (--update): refresh an existing install's skills/rules ──────
+  // Skills/Rules only by design: the remote weegloo MCP is always current and the local
+  // upload server is npx-resolved, so there is nothing to reinstall — which is also what
+  // makes the command token-free and safe to run unattended.
+  const update = !!values.update;
+  if (update) {
+    if (values.mcp != null) {
+      errors.push('--mcp cannot be combined with --update (updates never touch MCP config).');
+    }
+    installMcp = false;
+    if (agent == null && values.agent == null) {
+      errors.push(`--agent is required with --update (${AGENTS.join(' | ')}).`);
+    }
+    if (ignoreSkill && ignoreRule) {
+      errors.push('Nothing to update: both Skills and Rules are ignored.');
+    } else {
+      installSkillsRules = true;
+    }
+    if (token != null) {
+      warnings.push('A token was provided but --update never needs one; the token is ignored.');
+    }
+    if (host != null) {
+      warnings.push(`--host ${host} only affects MCP config, so it has no effect with --update.`);
+    }
+  }
+
   // Effective MCP toggle for the token-required check: in non-interactive mode an
   // unspecified toggle takes its default (on); in interactive mode it stays "ask" (null).
   const effInstallMcp = installMcp != null ? installMcp : nonInteractive ? true : null;
 
   // ── hard errors that depend on resolved state ───────────────────────────────
-  if (installMcp === false && installSkillsRules === false) {
+  if (!update && installMcp === false && installSkillsRules === false) {
     errors.push('Nothing to install: MCP is disabled and both Skills and Rules are ignored.');
   }
-  if (nonInteractive) {
+  if (nonInteractive && !update) {
     if (agent == null && values.agent == null) {
       errors.push(`--agent is required in non-interactive mode (${AGENTS.join(' | ')}).`);
     }
@@ -236,10 +274,10 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
   }
 
   // ── soft warnings (proceed anyway) ──────────────────────────────────────────
-  if (token != null && installMcp === false) {
+  if (!update && token != null && installMcp === false) {
     warnings.push('A token was provided but --no-mcp is set; the token is ignored.');
   }
-  if (host != null && installMcp === false) {
+  if (!update && host != null && installMcp === false) {
     warnings.push(`--host ${host} only affects the npx upload server, so it has no effect with --no-mcp.`);
   }
   if (showAllBranches && (refPinned || nonInteractive)) {
@@ -264,6 +302,7 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
       ignoreSkill,
       ignoreRule,
       installSkillsRules,
+      update,
       token,
       showAllBranches,
     },

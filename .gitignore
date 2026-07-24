@@ -23,3 +23,6 @@ evals/
 
 # CI-generated release announcement (built fresh each run; never committed)
 announcement.json
+
+# Weegloo per-agent state (created by project-scope installs/updates run inside this repo)
+.weegloo/

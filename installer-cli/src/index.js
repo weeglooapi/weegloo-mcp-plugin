@@ -1,9 +1,11 @@
 import { select, checkbox, password, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { PKG_PLUGIN_REF, listBranches, loadResources, loadCurrentVersion } from './github.js';
+import { PKG_PLUGIN_REF, listBranches, loadResources } from './github.js';
 import { orderBranchesForPicker } from './versions.js';
 import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
+import { partitionCoreRules } from './self-update.js';
+import { runUpdate } from './update.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -193,6 +195,15 @@ async function main() {
       chalk.dim(`  Non-interactive mode${isTTY ? '' : ' (no TTY)'} — using flags + defaults.`)
     );
     console.log();
+  }
+
+  // --update is its own flow: refresh an existing install's skills/rules (selection preserved,
+  // branch from the agent's stamp) and never touch MCP. It shares nothing with the install
+  // prompts below — no token, no version picker, no selection checkboxes.
+  if (config.update) {
+    const result = await runUpdate(config);
+    if (!result.ok) process.exit(1);
+    return;
   }
 
   // 1. Plugin version (branch). Pinned by flag/env → skip the picker; otherwise
@@ -458,11 +469,29 @@ async function main() {
       if (config.nonInteractive) {
         rules = resources.rules;
       } else {
-        const chosenRuleIds = await checkbox({
-          message: 'Select rules to install:',
-          choices: resources.rules.map((r) => ({ name: chalk.bold(r.id), value: r.id, checked: true })),
-        });
-        rules = resources.rules.filter((r) => chosenRuleIds.includes(r.id));
+        // Core rules (the update notifier + the terms gate, see CORE_RULE_IDS) appear in the
+        // picker but greyed-out and un-toggleable. inquirer EXCLUDES disabled choices from the
+        // returned selection regardless of `checked`, so they are unioned back in below.
+        const { core, optional } = partitionCoreRules(resources.rules);
+        const coreIdSet = new Set(core.map((r) => r.id));
+        let chosenRuleIds = [];
+        if (optional.length > 0) {
+          chosenRuleIds = await checkbox({
+            message: 'Select rules to install:',
+            choices: resources.rules.map((r) =>
+              coreIdSet.has(r.id)
+                ? { name: chalk.bold(r.id), value: r.id, disabled: '(required — always installed)' }
+                : { name: chalk.bold(r.id), value: r.id, checked: true }
+            ),
+          });
+        } else if (core.length > 0) {
+          // All rules are core → the picker would throw (no selectable choices); just note it.
+          console.log(
+            chalk.dim(`  Required rules (always installed): ${core.map((r) => r.id).join(', ')}`)
+          );
+        }
+        const keep = new Set([...core.map((r) => r.id), ...chosenRuleIds]);
+        rules = resources.rules.filter((r) => keep.has(r.id));
       }
     }
   }
@@ -480,19 +509,19 @@ async function main() {
   const installedSkillIds = skills.map((s) => s.id);
   const installedRuleIds = rules.map((r) => r.id);
 
-  // The installed version is the live value from the version endpoint at install time; the
-  // weegloo-version rule later re-fetches that endpoint and compares. Only needed when we install
-  // skills/rules (that is when the stamp is written). Best-effort: on failure we stamp no version,
-  // which the rule treats as "unknown".
-  let currentVersion = null;
-  if (installSkillsRules) {
-    currentVersion = await loadCurrentVersion();
-  }
-
+  // The installed version stamped for the weegloo-version rule is THIS BRANCH's manifest
+  // version (already fetched above) — not the global-latest endpoint value. The rule later
+  // compares it against the same branch via `?branch=<ref>`, so both sides of the comparison
+  // share one source; stamping latest here would make every non-latest install mis-compare.
+  // Old manifests may carry no version → null, which the rule treats as "unknown".
+  //
+  // available* is the FULL catalog this ref offers (independent of the user's selection) — the
+  // update flow diffs a future catalog against it to auto-add genuinely new skills/rules while
+  // still respecting deliberate deselections.
   const answers = {
     token: installMcp ? token : undefined,
     pluginRef,
-    version: currentVersion,
+    version: resources.version,
     mcpGroup,
     skills,
     rules,
@@ -505,6 +534,8 @@ async function main() {
     manageRules,
     installedSkillIds,
     installedRuleIds,
+    availableSkillIds: resources.skills.map((s) => s.id),
+    availableRuleIds: resources.rules.map((r) => r.id),
   };
 
   if (ide === 'cursor') {

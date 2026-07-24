@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync, rmSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -65,6 +65,60 @@ export function removeRuleFiles(rulesDir, ids, ext) {
     removed.push(id);
   }
   return removed;
+}
+
+/**
+ * Disk-detection helpers for the update flow. Detection is a cheap `weegloo-` prefix scan —
+ * deliberately NOT catalog-limited, because the catalog needs the branch ref, the ref needs the
+ * stamp, and a pre-migration install has no stamp (a circular dependency the prefix scan breaks).
+ * DESTRUCTIVE operations must then intersect these ids with a real catalog before acting, so a
+ * user-authored `weegloo-foo` that happens to share the prefix is never touched.
+ */
+
+/** Directory names under `skillsDir` that look like weegloo skills (prefix scan). */
+export function listWeeglooSkillDirs(skillsDir) {
+  if (!existsSync(skillsDir)) return [];
+  try {
+    return readdirSync(skillsDir).filter((name) => {
+      if (!name.startsWith('weegloo-') || !SAFE_ID.test(name)) return false;
+      try {
+        return statSync(path.join(skillsDir, name)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Rule ids present as `<id>.<ext>` files under `rulesDir` (Claude `.md`, Cursor `.mdc`). */
+export function listWeeglooRuleFiles(rulesDir, ext) {
+  if (!existsSync(rulesDir)) return [];
+  const suffix = ext.startsWith('.') ? ext : `.${ext}`;
+  try {
+    return readdirSync(rulesDir)
+      .filter((name) => name.startsWith('weegloo-') && name.endsWith(suffix))
+      .map((name) => name.slice(0, -suffix.length))
+      .filter((id) => SAFE_ID.test(id));
+  } catch {
+    return [];
+  }
+}
+
+/** Rule ids present as `<!-- weegloo:<id> -->` marker sections inside a context file. */
+export function listWeeglooRuleMarkers(contextFilePath) {
+  if (!existsSync(contextFilePath)) return [];
+  try {
+    const body = readFileSync(contextFilePath, 'utf-8');
+    const ids = [];
+    for (const match of body.matchAll(/<!-- weegloo:([A-Za-z0-9_-]+) -->/g)) {
+      if (!ids.includes(match[1])) ids.push(match[1]);
+    }
+    return ids;
+  } catch {
+    return [];
+  }
 }
 
 /**

@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import { REPO } from './github.js';
 import { writeContentFile, uploadServerCommand, removeSkillDirs } from './io.js';
 import { upsertRuleInAgentsMd, removeRuleMarkers } from './codex.js';
-import { applySelfUpdateTemplate, syncInstalledRecord } from './self-update.js';
+import { applySelfUpdateTemplate, syncInstalledRecord, withoutSharerClaims, projectMarkerRuleSharers } from './self-update.js';
 
 /**
  * Android Studio (Gemini) target.
@@ -96,6 +96,8 @@ export async function installAndroidStudio({
   manageRules = false,
   installedSkillIds = [],
   installedRuleIds = [],
+  availableSkillIds = [],
+  availableRuleIds = [],
 }) {
   rules = applySelfUpdateTemplate(rules, { version, agent: 'androidstudio', ref: pluginRef, scope });
 
@@ -213,13 +215,23 @@ export async function installAndroidStudio({
   if (installSkillsRules) {
     const { removedSkills, removedRules, stampPath } = syncInstalledRecord({
       scope,
+      agent: 'androidstudio',
+      ref: pluginRef,
       version,
       manageSkills,
       installedSkillIds,
+      availableSkillIds,
       removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
       manageRules,
       installedRuleIds,
-      removeRules: (ids) => removeRuleMarkers(agentsPath, ids),
+      availableRuleIds,
+      // Shared-store guard: AGENTS.md markers are also codex's (and pre-switch antigravity's)
+      // rule store — never remove an id a sharer's record still claims.
+      removeRules: (ids) =>
+        removeRuleMarkers(
+          agentsPath,
+          withoutSharerClaims(ids, { scope, sharers: projectMarkerRuleSharers('androidstudio'), kind: 'rules' })
+        ),
     });
     if (removedSkills.length > 0) {
       console.log(chalk.dim(`  - Removed ${removedSkills.length} stale skill(s): ${removedSkills.join(', ')}`));

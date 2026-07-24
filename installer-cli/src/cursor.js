@@ -31,6 +31,18 @@ export function getCursorMcpPath(scope = 'project') {
   return path.join(process.cwd(), '.cursor', 'mcp.json');
 }
 
+/** Skills directory by scope (also used by the update flow's disk detection). */
+export function getCursorSkillsDir(scope = 'global') {
+  const baseDir = scope === 'global' ? CURSOR_HOME : path.join(process.cwd(), '.cursor');
+  return path.join(baseDir, 'skills');
+}
+
+/** Rules directory by scope — one `<id>.mdc` file per rule. */
+export function getCursorRulesDir(scope = 'global') {
+  const baseDir = scope === 'global' ? CURSOR_HOME : path.join(process.cwd(), '.cursor');
+  return path.join(baseDir, 'rules');
+}
+
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -67,12 +79,13 @@ export async function installCursor({
   manageRules = false,
   installedSkillIds = [],
   installedRuleIds = [],
+  availableSkillIds = [],
+  availableRuleIds = [],
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
   rules = applySelfUpdateTemplate(rules, { version, agent: 'cursor', ref: pluginRef, scope });
-  const baseDir = scope === 'global' ? CURSOR_HOME : path.join(process.cwd(), '.cursor');
-  const skillsDir = path.join(baseDir, 'skills');
-  const rulesDir = path.join(baseDir, 'rules');
+  const skillsDir = getCursorSkillsDir(scope);
+  const rulesDir = getCursorRulesDir(scope);
   const mcpPath = getCursorMcpPath(scope);
 
   console.log(chalk.bold('  ▶  Installing for Cursor...'));
@@ -165,12 +178,16 @@ export async function installCursor({
   if (installSkillsRules) {
     const { removedSkills, removedRules, stampPath } = syncInstalledRecord({
       scope,
+      agent: 'cursor',
+      ref: pluginRef,
       version,
       manageSkills,
       installedSkillIds,
+      availableSkillIds,
       removeSkills: (ids) => removeSkillDirs(skillsDir, ids),
       manageRules,
       installedRuleIds,
+      availableRuleIds,
       removeRules: (ids) => removeRuleFiles(rulesDir, ids, 'mdc'),
     });
     if (removedSkills.length > 0) {
