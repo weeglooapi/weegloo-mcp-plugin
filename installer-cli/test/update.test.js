@@ -8,6 +8,12 @@ import { planUpdate, runUpdate } from '../src/update.js';
 import { listWeeglooSkillDirs, listWeeglooRuleFiles, listWeeglooRuleMarkers } from '../src/io.js';
 import { upsertRuleInAgentsMd } from '../src/codex.js';
 import { readInstalledRecord } from '../src/self-update.js';
+import {
+  maintainAntigravityProjectRulesFile,
+  toAntigravityRuleContent,
+  RULE_LOADING_ID,
+  RULE_LOADING_CONTENT,
+} from '../src/antigravity.js';
 
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf-8'));
 
@@ -542,4 +548,137 @@ test('runUpdate: full skills wipe with an intact record → everything restored'
     assert.equal(fs.readFileSync('.claude/skills/weegloo-a/SKILL.md', 'utf-8'), 'a v2');
     assert.equal(fs.readFileSync('.claude/skills/weegloo-b/SKILL.md', 'utf-8'), 'b v2');
   });
+});
+
+// ── antigravity project rules: .agents/rules files + AGENTS.md bootstrap loader ──
+
+test('maintainAntigravityProjectRulesFile: upserts the loader and migrates legacy markers when alone', async () => {
+  await inTmpProject(async () => {
+    // Legacy antigravity install: full-rule markers in AGENTS.md, no other marker agent around.
+    upsertRuleInAgentsMd(path.join(process.cwd(), 'AGENTS.md'), 'weegloo-version', 'old full rule');
+    upsertRuleInAgentsMd(path.join(process.cwd(), 'AGENTS.md'), 'weegloo-global-rules', 'old full rule 2');
+
+    const cleaned = maintainAntigravityProjectRulesFile();
+
+    const agents = fs.readFileSync('AGENTS.md', 'utf-8');
+    assert.ok(agents.includes(`<!-- weegloo:${RULE_LOADING_ID} -->`), 'loader marker present');
+    assert.ok(agents.includes('Rule Loading'), 'loader content present');
+    assert.deepEqual(cleaned.sort(), ['weegloo-global-rules', 'weegloo-version']);
+    assert.ok(!agents.includes('old full rule'), 'legacy full-rule markers migrated out');
+    // Idempotent: run again → loader still single, nothing else to clean.
+    assert.deepEqual(maintainAntigravityProjectRulesFile(), []);
+    const again = fs.readFileSync('AGENTS.md', 'utf-8');
+    assert.equal(again.split(`<!-- weegloo:${RULE_LOADING_ID} -->`).length - 1, 1, 'loader not duplicated');
+  });
+});
+
+test('maintainAntigravityProjectRulesFile: legacy markers are PRESERVED when another marker agent is hinted', async () => {
+  await inTmpProject(async () => {
+    upsertRuleInAgentsMd(path.join(process.cwd(), 'AGENTS.md'), 'weegloo-version', 'codex-owned full rule');
+    fs.mkdirSync(path.join('.weegloo', 'codex'), { recursive: true }); // codex tracking present
+
+    const cleaned = maintainAntigravityProjectRulesFile();
+
+    assert.deepEqual(cleaned, [], 'nothing removed — the markers may be codex/androidstudio property');
+    const agents = fs.readFileSync('AGENTS.md', 'utf-8');
+    assert.ok(agents.includes('codex-owned full rule'), 'foreign-owned marker intact');
+    assert.ok(agents.includes(`<!-- weegloo:${RULE_LOADING_ID} -->`), 'loader still added alongside');
+  });
+});
+
+test('RULE_LOADING_CONTENT is agent-agnostic (no baked per-agent values)', () => {
+  assert.ok(!RULE_LOADING_CONTENT.includes('--agent'), 'no update command');
+  assert.ok(!RULE_LOADING_CONTENT.includes('.weegloo/'), 'no stamp path');
+  assert.ok(RULE_LOADING_CONTENT.includes('./.agents/rules/'), 'points at the project rules dir');
+});
+
+test('runUpdate: antigravity project — pre-migration markers are detected, rules land as files, loader installed', async () => {
+  await inTmpProject(async () => {
+    // Pre-migration antigravity project install: skills + rules-as-markers + per-agent record.
+    fs.mkdirSync(path.join('.agents', 'skills', 'weegloo-a'), { recursive: true });
+    fs.writeFileSync(path.join('.agents', 'skills', 'weegloo-a', 'SKILL.md'), 'a v1', 'utf-8');
+    upsertRuleInAgentsMd(path.join(process.cwd(), 'AGENTS.md'), 'weegloo-version', 'old marker rule');
+    fs.mkdirSync(path.join('.weegloo', 'antigravity'), { recursive: true });
+    fs.writeFileSync(
+      path.join('.weegloo', 'antigravity', 'installed.json'),
+      JSON.stringify({
+        skills: ['weegloo-a'],
+        rules: ['weegloo-version'],
+        availableSkills: ['weegloo-a', 'weegloo-b', 'weegloo-brandnew'],
+        availableRules: ['weegloo-version', 'weegloo-terms-consent', 'weegloo-global-rules'],
+      }),
+      'utf-8'
+    );
+    fs.writeFileSync(
+      path.join('.weegloo', 'antigravity', 'version-check.json'),
+      JSON.stringify({ last_check: 'x', version: 'v1', ref: 'latest' }),
+      'utf-8'
+    );
+
+    const res = await runUpdate(
+      { update: true, agent: 'antigravity', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: loadOk, ...quiet }
+    );
+
+    assert.equal(res.status, 'updated');
+    // Rules now live as files, templated for antigravity.
+    const versionRule = fs.readFileSync('.agents/rules/weegloo-version.md', 'utf-8');
+    assert.ok(versionRule.includes('.weegloo/antigravity/version-check.json'), 'antigravity-baked');
+    assert.ok(versionRule.includes('--agent antigravity'), 'antigravity update command');
+    assert.ok(versionRule.startsWith('---\ntrigger: always_on\n'), 'Antigravity activation frontmatter injected');
+    // AGENTS.md: loader in, legacy full marker migrated out (no other marker agent seeded).
+    const agents = fs.readFileSync('AGENTS.md', 'utf-8');
+    assert.ok(agents.includes(`<!-- weegloo:${RULE_LOADING_ID} -->`));
+    assert.ok(!agents.includes('old marker rule'));
+    // Skills untouched by the rules move.
+    assert.equal(fs.readFileSync('.agents/skills/weegloo-a/SKILL.md', 'utf-8'), 'a v2');
+  });
+});
+
+test('runUpdate: antigravity project rules are no longer a shared store — no conflict prompt from rules alone', async () => {
+  await inTmpProject(async () => {
+    // antigravity installed with rules only (no skills → the .agents/skills share is not in play).
+    fs.mkdirSync(path.join('.agents', 'rules'), { recursive: true });
+    fs.writeFileSync(path.join('.agents', 'rules', 'weegloo-version.md'), 'v1', 'utf-8');
+    fs.mkdirSync(path.join('.weegloo', 'antigravity'), { recursive: true });
+    fs.writeFileSync(
+      path.join('.weegloo', 'antigravity', 'installed.json'),
+      JSON.stringify({
+        skills: [],
+        rules: ['weegloo-version'],
+        availableSkills: [],
+        availableRules: ['weegloo-version', 'weegloo-terms-consent', 'weegloo-global-rules'],
+      }),
+      'utf-8'
+    );
+    fs.writeFileSync(
+      path.join('.weegloo', 'antigravity', 'version-check.json'),
+      JSON.stringify({ last_check: 'x', version: 'v1', ref: 'latest' }),
+      'utf-8'
+    );
+    seedCodexStampOn('develop'); // diverging codex — would conflict IF a store were shared
+
+    let prompted = false;
+    const res = await runUpdate(
+      { update: true, agent: 'antigravity', scope: 'project', nonInteractive: false },
+      { loadResourcesFn: loadOk, promptSelect: async () => ((prompted = true), 'abort'), ...quiet }
+    );
+
+    assert.equal(res.status, 'updated');
+    assert.equal(prompted, false, 'rules store is private now — nothing shared to warn about');
+  });
+});
+
+test('toAntigravityRuleContent: injects trigger: always_on into existing frontmatter, preserving fields', () => {
+  const src = '---\nid: weegloo-x\ntype: rule\ndescription: >\n  multi\n  line\n---\n\nbody';
+  const out = toAntigravityRuleContent(src);
+  assert.ok(out.startsWith('---\ntrigger: always_on\nid: weegloo-x\n'), 'trigger first, fields kept');
+  assert.ok(out.endsWith('body'));
+  // idempotent / passthrough when a trigger already exists
+  assert.equal(toAntigravityRuleContent(out), out);
+  assert.equal(toAntigravityRuleContent('---\ntrigger: manual\n---\nbody'), '---\ntrigger: manual\n---\nbody');
+});
+
+test('toAntigravityRuleContent: wraps frontmatter-less content in a minimal always_on block', () => {
+  assert.equal(toAntigravityRuleContent('just a body'), '---\ntrigger: always_on\n---\n\njust a body');
 });

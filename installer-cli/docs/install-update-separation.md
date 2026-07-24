@@ -134,11 +134,41 @@ update 모드는 물어볼 게 원래 없음(브랜치·에이전트·스코프=
 룰을 저장하고, 마커(`<!-- weegloo:<ruleId> -->`)에 **에이전트 구분이 없음** (`codex.js:227`).
 **추가 발견(PR-2 구현 중)**: codex와 antigravity는 project 스코프에서 **skills 디렉터리도
 공유**한다 (둘 다 `<cwd>/.agents/skills`). 따라서 충돌 처리는 "AGENTS.md 룰"이 아니라
-**공유 스토어(룰 파일 + 스킬 디렉터리) 단위**로 동작한다 — "건너뛰기" 선택은 공유 스토어
-전체를 건너뛰고 비공유 스토어(예: androidstudio의 사설 skills 디렉터리)만 갱신한다.
-per-agent 분리는 **추적(메타데이터)** 이지 **본체가 아님** — 본체 공유는 구조적으로 불가피.
+**공유 스토어(룰 파일 + 스킬 디렉터리) 단위**로 동작한다 — 단, **이번 실행이 실제로 쓰는
+스토어만** 충돌 검사 대상(미관리 kind의 공유는 무관). "건너뛰기" 선택은 공유 스토어 전체를
+건너뛰고 비공유 스토어만 갱신한다. per-agent 분리는 **추적(메타데이터)** 이지 **본체가 아님**.
 (global은 codex=`~/.codex/AGENTS.md`+`~/.agents/skills`, antigravity=`~/.gemini/…`로 전부
 갈라져 무관.)
+
+### antigravity project 룰의 탈출: `.agents/rules/*.md` + 부트스트랩 로더 (후속 결정)
+
+Antigravity가 workspace 룰 위치로 `.agents/rules/*.md` 를 공식 지원함이 확인되어(docs), project
+스코프의 antigravity 룰을 **마커에서 파일-per-룰로 전환**. `AGENTS.md` 에는 본문 대신
+**에이전트-무관 부트스트랩 로더 마커 1개**(`weegloo-rule-loading` — "세션 시작 시
+`./.agents/rules/` 와 `~/.agents/rules/` 를 읽어라")만 남긴다. 핵심 통찰: **codex가 AGENTS.md를
+통째로 덮어써도 antigravity의 실제 룰은 `.agents/rules/` 가 보장**하므로 동작이 흔들리지 않고,
+로더 자체는 구운 값(스탬프 경로·커맨드)이 없어 어느 에이전트가 파일을 재작성하든 무해하다.
+
+- **C1이 3자 → 2자**(codex + androidstudio)로 축소, antigravity 룰은 파일 단위 귀속 획득.
+- **frontmatter 변환**: Antigravity는 룰 파일의 frontmatter에서 활성화 `trigger`
+  (always_on|glob|manual|model_decision)를 파싱하는데 우리 manifest frontmatter
+  (id/type/title/description)엔 없음 — trigger 부재 시 기본 동작이 미문서라 네이티브 자동
+  로드가 보장 안 됨. 설치/업데이트가 파일 쓰기 시 **`trigger: always_on` 한 줄을 frontmatter
+  최상단에 주입**(기존 필드 보존, 이미 trigger 있으면 통과). always_on인 이유: weegloo 룰은
+  모든 에이전트에서 매 세션 무조건 로드되는 안전 게이트 — model_decision은 게이트를 건너뛸
+  수 있음. 마커(global GEMINI.md)는 컨텍스트 파일 속 텍스트라 변환 불필요.
+  (같은 부류 미해결: Cursor `.mdc`의 `alwaysApply` 부재 — 별도 확인 과제.)
+- **마이그레이션 함정**: Antigravity 우선순위에서 `AGENTS.md` > `.agents/rules/` — 옛 전문 마커를
+  남기면 stale이 fresh를 덮는다. 설치/업데이트가 로더 upsert + **타 마커 에이전트
+  (codex/androidstudio) 미감지 시에만** 레거시 마커 제거(감지 시 그들 소유로 보존 — 보수적:
+  오판 비용 비대칭). 감지 힌트: `.weegloo/{codex,androidstudio}` · `.codex` · `.android-studio`.
+- **global은 GEMINI.md 마커 유지**: 글로벌 rules 디렉터리는 문서에 없고(`~/.gemini/GEMINI.md`
+  파일만), GEMINI.md는 antigravity 사설이라 탈출할 공유가 없으며, `~/.agents/` 는 codex의 global
+  skills 영역이라 이동 시 오히려 새 공유면을 만들 수 있어 기각. (로더가 `~/.agents/rules/` 도
+  읽으라고 하는 건 미래 대비 — 없으면 무해.)
+- **관찰 대상**: `.agents/rules/` 는 cross-tool 표준 디렉터리 성격 — codex 등이 읽기 시작하면
+  구운-값 오염이 재발할 수 있음.
+- C2(`.agents/skills` 공유)는 불변 — 두 에이전트 자체의 컨벤션이라 이동 불가.
 
 - 쓰기는 룰 id별 마커 upsert(합집합)라 파일 전체를 갈아엎지 않음. 겹치는 룰의 **내용**은
   last-writer-wins.

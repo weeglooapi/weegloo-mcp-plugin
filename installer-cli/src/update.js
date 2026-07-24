@@ -55,7 +55,14 @@ import {
   upsertRuleInAgentsMd,
   removeRuleMarkers,
 } from './codex.js';
-import { getAntigravitySkillsDir, getAntigravityRulesFile } from './antigravity.js';
+import {
+  getAntigravitySkillsDir,
+  getAntigravityRulesFile,
+  getAntigravityRulesDir,
+  maintainAntigravityProjectRulesFile,
+  toAntigravityRuleContent,
+  RULE_LOADING_ID,
+} from './antigravity.js';
 
 /**
  * Where each agent keeps its weegloo artifacts, plus which stores are SHARED with other agents
@@ -88,14 +95,28 @@ function getAgentStore(agent, scope) {
         },
       };
     case 'antigravity':
-      return {
-        skills: { dir: getAntigravitySkillsDir(scope), sharedWith: scope === 'project' ? ['codex'] : [] },
-        rules: {
-          kind: 'markers',
-          file: getAntigravityRulesFile(scope),
-          sharedWith: scope === 'project' ? ['codex', 'androidstudio'] : [],
-        },
-      };
+      // Project rules are file-per-rule in .agents/rules (out of the shared AGENTS.md marker
+      // store) — AGENTS.md keeps only the agent-agnostic bootstrap loader, which the other
+      // marker agents never touch, so rules carry no sharedWith anymore. `legacyMarkersFile`
+      // lets detection still see a pre-migration install whose rules exist only as markers.
+      // Global stays markers in the antigravity-private GEMINI.md.
+      return scope === 'project'
+        ? {
+            skills: { dir: getAntigravitySkillsDir(scope), sharedWith: ['codex'] },
+            rules: {
+              kind: 'files',
+              dir: getAntigravityRulesDir(),
+              ext: 'md',
+              sharedWith: [],
+              legacyMarkersFile: getAntigravityRulesFile('project'),
+              // Antigravity parses rule-file frontmatter for a `trigger` — inject always_on.
+              transform: toAntigravityRuleContent,
+            },
+          }
+        : {
+            skills: { dir: getAntigravitySkillsDir(scope), sharedWith: [] },
+            rules: { kind: 'markers', file: getAntigravityRulesFile(scope), sharedWith: [] },
+          };
     case 'androidstudio':
       // Project-only agent; its skills dir is private but its rules share <cwd>/AGENTS.md.
       return {
@@ -217,10 +238,19 @@ export async function runUpdate(config, deps = {}) {
   // Disk is the selection FALLBACK for pre-migration installs, and the drift signal for the
   // "restored" report; the selection authority is the per-agent record below.
   const diskSkillIds = listWeeglooSkillDirs(store.skills.dir);
-  const diskRuleIds =
+  let diskRuleIds =
     store.rules.kind === 'files'
       ? listWeeglooRuleFiles(store.rules.dir, store.rules.ext)
       : listWeeglooRuleMarkers(store.rules.file);
+  if (store.rules.legacyMarkersFile) {
+    // A pre-migration install's rules exist only as markers in the old shared context file —
+    // union them in (minus the bootstrap loader) so detection and the no-record selection
+    // fallback still see that install. Catalog intersection keeps foreign markers inert.
+    const legacy = listWeeglooRuleMarkers(store.rules.legacyMarkersFile).filter(
+      (id) => id !== RULE_LOADING_ID
+    );
+    diskRuleIds = [...new Set([...diskRuleIds, ...legacy])];
+  }
 
   // ── Selection: the per-agent record is the authority; disk only when it doesn't exist ──────
   // The record is exactly the metadata we keep for this purpose — a hand-deleted skill is drift
@@ -287,7 +317,13 @@ export async function runUpdate(config, deps = {}) {
   // ── Shared-store branch conflict (project-scope marker/dir sharing) ─────────────────────────
   // The stores are physically shared, so whoever writes last wins — the only real question is
   // whether the user meant to stamp THIS branch's content over a sharer on a different branch.
-  const sharedWith = [...new Set([...store.skills.sharedWith, ...store.rules.sharedWith])];
+  // Only stores this run actually WRITES count: an unmanaged kind's sharing is irrelevant.
+  const sharedWith = [
+    ...new Set([
+      ...(manageSkills ? store.skills.sharedWith : []),
+      ...(manageRules ? store.rules.sharedWith : []),
+    ]),
+  ];
   let skipSharedStores = false;
   if (sharedWith.length > 0) {
     const sharers = detectSharerRefs(agent, scope, sharedWith);
@@ -338,10 +374,20 @@ export async function runUpdate(config, deps = {}) {
     const byId = new Map(templated.map((r) => [r.id, r]));
     for (const id of plan.addRuleIds) {
       const rule = byId.get(id);
+      const content = store.rules.transform ? store.rules.transform(rule.content) : rule.content;
       if (store.rules.kind === 'files') {
-        writeContentFile(path.join(store.rules.dir, `${rule.id}.${store.rules.ext}`), rule.content);
+        writeContentFile(path.join(store.rules.dir, `${rule.id}.${store.rules.ext}`), content);
       } else {
-        upsertRuleInAgentsMd(store.rules.file, rule.id, rule.content);
+        upsertRuleInAgentsMd(store.rules.file, rule.id, content);
+      }
+    }
+    if (agent === 'antigravity' && scope === 'project') {
+      // Keep the AGENTS.md bootstrap loader in place and (when no other marker agent is
+      // around) migrate legacy full-rule markers out — stale markers would outrank the fresh
+      // .agents/rules files in Antigravity's precedence.
+      const cleaned = maintainAntigravityProjectRulesFile();
+      if (cleaned.length > 0) {
+        log(chalk.dim(`  - Migrated ${cleaned.length} legacy rule marker(s) out of AGENTS.md`));
       }
     }
   }
