@@ -50,6 +50,10 @@ export const HELP_TEXT = `
     -t, --token <pat>    Weegloo Personal Access Token (also reads WEEGLOO_TOKEN)
         --ignore-skill   Do not install Skills
         --ignore-rule    Do not install Rules
+        --origins <file> Origins mapping (JSON file or inline JSON): rewrite the
+                         weegloo origins baked into skills/rules/MCP config for a
+                         staging or enterprise stack. Install only — updates
+                         reuse the mapping recorded at install time.
         --update         Update an existing install: refresh this agent's installed
                          skills/rules to the branch's newest version, KEEPING the
                          user's selection (auto-adds genuinely new items, prunes
@@ -81,6 +85,7 @@ const OPTIONS = {
   token: { type: 'string', short: 't' },
   'ignore-skill': { type: 'boolean' },
   'ignore-rule': { type: 'boolean' },
+  origins: { type: 'string' },
   update: { type: 'boolean' },
   yes: { type: 'boolean', short: 'y' },
   'all-branches': { type: 'boolean', short: 'd' },
@@ -232,8 +237,22 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
   // Skills/Rules only by design: the remote weegloo MCP is always current and the local
   // upload server is npx-resolved, so there is nothing to reinstall — which is also what
   // makes the command token-free and safe to run unattended.
+  // origins mapping input (flag > env). Kept as the RAW string here — file IO/JSON parsing
+  // happens in index.js (resolveConfig stays pure); only combination rules are checked here.
+  const flagOrigins = (values.origins != null ? String(values.origins) : '').trim();
+  const envOrigins = (env.WEEGLOO_ORIGINS || '').trim();
+  const origins = flagOrigins || envOrigins || null;
+
   const update = !!values.update;
   if (update) {
+    if (origins != null) {
+      // Ignoring would be a FALSE SUCCESS: the user asked for an environment change, and an
+      // update cannot deliver it (it never touches MCP config) — unlike a superfluous --token,
+      // which is warn-and-ignore because ignoring it still yields exactly what was asked.
+      errors.push(
+        '--origins cannot be combined with --update (updates reuse the mapping recorded at install; to change environments, reinstall with --origins).'
+      );
+    }
     if (values.mcp != null) {
       errors.push('--mcp cannot be combined with --update (updates never touch MCP config).');
     }
@@ -303,6 +322,7 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
       ignoreRule,
       installSkillsRules,
       update,
+      origins,
       token,
       showAllBranches,
     },

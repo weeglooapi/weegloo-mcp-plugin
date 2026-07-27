@@ -6,6 +6,7 @@ import { orderBranchesForPicker } from './versions.js';
 import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
 import { partitionCoreRules } from './self-update.js';
 import { runUpdate } from './update.js';
+import { loadOrigins, applyOriginsToResources, applyTermsExclusion, applyOriginMapping } from './origins.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
 import { installAntigravity } from './antigravity.js';
@@ -68,7 +69,7 @@ function printBanner() {
  * @param {{ providedToken: string|null, meUrl: string, nonInteractive: boolean }} args
  * @returns {Promise<string>}
  */
-async function resolveValidToken({ providedToken, meUrl, nonInteractive }) {
+async function resolveValidToken({ providedToken, meUrl, nonInteractive, patUrl = PAT_GENERATION_URL }) {
   const verify = async (tok) => {
     const spinner = ora({ text: '  Verifying token...', indent: 0 }).start();
     const result = await validateToken(tok, { meUrl });
@@ -97,7 +98,7 @@ async function resolveValidToken({ providedToken, meUrl, nonInteractive }) {
       console.log();
       console.log(chalk.red('  ✖  The provided Personal Access Token is invalid.'));
       console.log(
-        chalk.dim('     Generate one from the Weegloo console: ') + chalk.cyan(PAT_GENERATION_URL)
+        chalk.dim('     Generate one from the Weegloo console: ') + chalk.cyan(patUrl)
       );
       console.log();
       process.exit(1);
@@ -107,7 +108,7 @@ async function resolveValidToken({ providedToken, meUrl, nonInteractive }) {
   }
 
   // 2) Interactive prompt — repeat until a token verifies (200) or the user cancels (Ctrl+C).
-  console.log(chalk.dim('  Generate one at: ') + chalk.cyan(PAT_GENERATION_URL));
+  console.log(chalk.dim('  Generate one at: ') + chalk.cyan(patUrl));
   for (;;) {
     const entered = await password({
       message: 'Enter your Weegloo Personal Access Token:',
@@ -195,6 +196,24 @@ async function main() {
       chalk.dim(`  Non-interactive mode${isTTY ? '' : ' (no TTY)'} — using flags + defaults.`)
     );
     console.log();
+  }
+
+  // Origins mapping (staging / enterprise domains — docs/origins-mapping.md). Parsed and
+  // validated BEFORE any prompt or network call so a typo'd file fails fast. `--update`
+  // never reaches here with origins (cli.js rejects the combination).
+  let origins = null;
+  if (config.origins) {
+    try {
+      origins = loadOrigins(config.origins);
+    } catch (err) {
+      console.log(chalk.red('  ✖  ') + err.message);
+      console.log();
+      process.exit(1);
+    }
+    if (origins) {
+      console.log(chalk.dim(`  Origins mapping: ${Object.keys(origins).length} origin(s) will be rewritten.`));
+      console.log();
+    }
   }
 
   // --update is its own flow: refresh an existing install's skills/rules (selection preserved,
@@ -334,7 +353,7 @@ async function main() {
   // At least one of MCP / skills+rules is selected (guarded above), so the manifest is
   // always needed: one fetch covers skill/rule lists + content + MCP URLs (no api.github.com).
   const resourceSpinner = ora({ text: '  Fetching plugin manifest...', indent: 0 }).start();
-  const resources = await loadResources(pluginRef);
+  let resources = await loadResources(pluginRef);
 
   // Fail fast: the manifest is the required source for this version's skills/rules/MCP.
   if (!resources) {
@@ -345,6 +364,13 @@ async function main() {
     process.exit(1);
   }
   resourceSpinner.stop();
+
+  // Origins mapping: rewrite weegloo origins across ALL fetched content (skill files, rule text,
+  // MCP URLs) before anything downstream reads it — selection lists, catalogs, installers all
+  // see the mapped view. cma mapped ⇒ the terms-consent rule leaves the CATALOG here, which
+  // cascades everywhere (picker, core forcing, record, future update pruning) with no further
+  // conditionals. No mapping ⇒ byte-identical passthrough.
+  resources = applyTermsExclusion(applyOriginsToResources(resources, origins), origins);
   const mcp = resources.mcp;
 
   if (installMcp) {
@@ -354,8 +380,11 @@ async function main() {
     // before we use it; the prompt re-asks until a token verifies.
     token = await resolveValidToken({
       providedToken: config.token,
-      meUrl: cmaMeUrl(mcp),
+      // origins가 있으면 검증 대상은 명시적으로 origins.cma (미매핑이면 프로덕션) — 매핑된
+      // uploadApiUrl에 문자열 휴리스틱을 돌리면 프로덕션 폴백으로 새는 버그가 있었음.
+      meUrl: cmaMeUrl(mcp, origins),
       nonInteractive: config.nonInteractive,
+      patUrl: applyOriginMapping(PAT_GENERATION_URL, origins),
     });
 
     // MCP group: --mcp <group> pins it (default ⇒ ''); otherwise prompt or default ''.
@@ -536,6 +565,7 @@ async function main() {
     installedRuleIds,
     availableSkillIds: resources.skills.map((s) => s.id),
     availableRuleIds: resources.rules.map((r) => r.id),
+    origins,
   };
 
   if (ide === 'cursor') {

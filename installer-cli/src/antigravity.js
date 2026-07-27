@@ -190,9 +190,10 @@ export async function installAntigravity({
   installedRuleIds = [],
   availableSkillIds = [],
   availableRuleIds = [],
+  origins = null,
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
-  rules = applySelfUpdateTemplate(rules, { version, agent: 'antigravity', ref: pluginRef, scope });
+  rules = applySelfUpdateTemplate(rules, { version, agent: 'antigravity', ref: pluginRef, scope, origins });
 
   const skillsDir = getAntigravitySkillsDir(scope);
   const rulesFile = getAntigravityRulesFile(scope);
@@ -306,6 +307,7 @@ export async function installAntigravity({
       agent: 'antigravity',
       ref: pluginRef,
       version,
+      origins,
       manageSkills,
       installedSkillIds,
       availableSkillIds,

@@ -17,6 +17,8 @@
  *  - upstream-deleted items are pruned via the record diff in syncInstalledRecord;
  *  - core rules are always (re)added — the update notifier and the terms gate must survive;
  *  - MCP config is never touched (remote server is always current), so no token is needed;
+ *  - the origins mapping recorded at install time is reapplied verbatim (docs/origins-mapping.md §5)
+ *    — never taken from a flag (cli.js rejects --update --origins: environment changes reinstall);
  *  - it is idempotent: re-running against an unchanged branch just repairs drift.
  *
  * Never falls back to installing: a scope/agent with no weegloo artifacts is a no-op with a
@@ -65,6 +67,7 @@ import {
   toAntigravityRuleContent,
   RULE_LOADING_ID,
 } from './antigravity.js';
+import { normalizeOrigins, applyOriginsToResources, applyTermsExclusion, originsEqual } from './origins.js';
 
 /**
  * Where each agent keeps its weegloo artifacts, plus which stores are SHARED with other agents
@@ -199,9 +202,16 @@ function detectSharerRefs(agent, scope, sharedWith) {
   const sharers = [];
   for (const other of sharedWith) {
     const stamp = readJsonSafe(getVersionStampPath(scope, other));
-    const record = getInstalledRecordPath(scope, other);
-    if (Object.keys(stamp).length > 0 || fs.existsSync(record)) {
-      sharers.push({ agent: other, ref: typeof stamp.ref === 'string' ? stamp.ref : null });
+    const recordPath = getInstalledRecordPath(scope, other);
+    const hasRecord = fs.existsSync(recordPath);
+    if (Object.keys(stamp).length > 0 || hasRecord) {
+      sharers.push({
+        agent: other,
+        ref: typeof stamp.ref === 'string' ? stamp.ref : null,
+        // origins too: a sharer on the same branch but a DIFFERENT environment mapping would
+        // still get this run's domains stamped into the shared store — same conflict class.
+        origins: hasRecord ? readInstalledRecord(recordPath).origins : null,
+      });
     }
   }
   return sharers;
@@ -266,6 +276,16 @@ export async function runUpdate(config, deps = {}) {
   const selectedSkillIds = hasOwnRecord ? prev.skills : diskSkillIds;
   const selectedRuleIds = hasOwnRecord ? prev.rules : diskRuleIds;
 
+  // Environment: the origins mapping recorded at install is REAPPLIED verbatim — without this an
+  // update would rewrite the content back to production origins. Tolerant normalize: a
+  // hand-corrupted record collapses to "no mapping" with a warning rather than crashing.
+  let origins = null;
+  try {
+    origins = normalizeOrigins(prev.origins);
+  } catch {
+    log(chalk.yellow('  ⚠  ') + 'Recorded origins mapping is invalid — updating WITHOUT mapping; reinstall with --origins to fix.');
+  }
+
   // Which kinds this run manages: the flag opt-outs, and "was this kind ever selected here" —
   // a rules-less install (--ignore-rule) must stay rules-less, core rules included.
   const manageSkills = !config.ignoreSkill && selectedSkillIds.length > 0;
@@ -286,7 +306,7 @@ export async function runUpdate(config, deps = {}) {
   const ref = config.pluginRef || (typeof stamp.ref === 'string' ? stamp.ref : null) || 'latest';
 
   const spinner = ora({ text: `  Fetching manifest  ${chalk.dim(`${REPO} @ ${ref}`)}`, indent: 0 }).start();
-  const resources = await loadResourcesFn(ref);
+  let resources = await loadResourcesFn(ref);
   if (!resources) {
     spinner.fail(`  Could not load the manifest for branch '${ref}'.`);
     log(chalk.dim('     Nothing was changed. Check your network connection (or the branch name) and retry.'));
@@ -294,6 +314,10 @@ export async function runUpdate(config, deps = {}) {
     return { ok: false, status: 'manifest-unavailable' };
   }
   spinner.succeed(`  Manifest loaded  ${chalk.dim(`${REPO} @ ${ref}${resources.version ? ` (version ${resources.version})` : ''}`)}`);
+
+  // Same mapped view as an install: content rewritten in memory, terms-consent dropped from
+  // the catalog when cma is mapped (its prune then falls out of the set arithmetic below).
+  resources = applyTermsExclusion(applyOriginsToResources(resources, origins), origins);
 
   const catalogSkillIds = resources.skills.map((s) => s.id);
   const catalogRuleIds = resources.rules.map((r) => r.id);
@@ -329,9 +353,17 @@ export async function runUpdate(config, deps = {}) {
   let skipSharedStores = false;
   if (sharedWith.length > 0) {
     const sharers = detectSharerRefs(agent, scope, sharedWith);
-    const conflicting = sharers.filter((s) => s.ref == null || s.ref !== ref);
+    const conflicting = sharers.filter(
+      (s) => s.ref == null || s.ref !== ref || !originsEqual(s.origins, origins)
+    );
     if (conflicting.length > 0) {
-      const names = conflicting.map((s) => `${s.agent}(${s.ref ?? 'unknown branch'})`).join(', ');
+      const names = conflicting
+        .map((s) => {
+          const why = [s.ref ?? 'unknown branch'];
+          if (!originsEqual(s.origins, origins)) why.push('different origins');
+          return `${s.agent}(${why.join(', ')})`;
+        })
+        .join(', ');
       if (config.nonInteractive) {
         log(chalk.yellow('  ⚠  ') + `Shared files are also used by ${names}; overwriting with '${ref}' content (last write wins).`);
         log(chalk.dim('     Consider keeping all agents in this project on the same branch.'));
@@ -372,7 +404,7 @@ export async function runUpdate(config, deps = {}) {
     for (const id of plan.addSkillIds) writeSkill(store.skills.dir, byId.get(id));
   }
   if (effectiveManageRules) {
-    const templated = applySelfUpdateTemplate(resources.rules, { agent, ref, scope });
+    const templated = applySelfUpdateTemplate(resources.rules, { agent, ref, scope, origins });
     const byId = new Map(templated.map((r) => [r.id, r]));
     for (const id of plan.addRuleIds) {
       const rule = byId.get(id);
@@ -403,6 +435,7 @@ export async function runUpdate(config, deps = {}) {
     legacyRecordPath,
     version: resources.version,
     ref,
+    origins,
     manageSkills: effectiveManageSkills,
     installedSkillIds: plan.addSkillIds,
     availableSkillIds: catalogSkillIds,
