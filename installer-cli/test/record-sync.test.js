@@ -25,11 +25,12 @@ function withTmp(prefix, fn) {
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf-8'));
 
 /** Full record shape with the catalog keys defaulted — keeps expectations readable. */
-const record = ({ skills = [], rules = [], availableSkills = [], availableRules = [] } = {}) => ({
+const record = ({ skills = [], rules = [], availableSkills = [], availableRules = [], origins = null } = {}) => ({
   skills,
   rules,
   availableSkills,
   availableRules,
+  origins,
 });
 
 // ── record paths (per-agent, plus the read-only legacy flat path) ─────────────

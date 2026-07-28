@@ -81,9 +81,10 @@ export async function installCursor({
   installedRuleIds = [],
   availableSkillIds = [],
   availableRuleIds = [],
+  origins = null,
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
-  rules = applySelfUpdateTemplate(rules, { version, agent: 'cursor', ref: pluginRef, scope });
+  rules = applySelfUpdateTemplate(rules, { version, agent: 'cursor', ref: pluginRef, scope, origins });
   const skillsDir = getCursorSkillsDir(scope);
   const rulesDir = getCursorRulesDir(scope);
   const mcpPath = getCursorMcpPath(scope);
@@ -181,6 +182,7 @@ export async function installCursor({
       agent: 'cursor',
       ref: pluginRef,
       version,
+      origins,
       manageSkills,
       installedSkillIds,
       availableSkillIds,

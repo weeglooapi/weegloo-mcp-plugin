@@ -15,16 +15,27 @@
 const REQUEST_TIMEOUT_MS = 15000;
 
 /**
- * Derives the CMA `GET /v1/me` URL from the manifest's upload API URL so a dev install
+ * The CMA `GET /v1/me` URL the token is verified against.
+ *
+ * With an origins mapping the answer is EXPLICIT: `origins.cma` when mapped (a customer-stack
+ * PAT must be verified against the customer CMA), production CMA when cma is unmapped. The
+ * upload-URL heuristic below must not run on mapped values — a customer host like
+ * `upload-weegloo.acme.ai` doesn't contain `'upload.'`, so the heuristic would silently fall
+ * back to PRODUCTION and reject a perfectly valid customer PAT.
+ *
+ * Without a mapping, the URL is derived from the manifest's upload API URL so a dev manifest
  * (e.g. `https://dev-upload.weegloo.com/v1`) verifies against the matching environment
- * (`https://dev-cma.weegloo.com/v1/me`) rather than production. Both share the `/v1`
- * suffix already present on the upload URL. Falls back to production CMA when the upload
- * URL is missing or has an unexpected shape.
+ * (`https://dev-cma.weegloo.com/v1/me`). Falls back to production CMA when the upload URL is
+ * missing or has an unexpected shape.
  *
  * @param {{ uploadApiUrl?: string } | undefined} mcp
+ * @param {Record<string,string>|null} [origins]  normalized origins mapping (keys = service names)
  * @returns {string}
  */
-export function cmaMeUrl(mcp) {
+export function cmaMeUrl(mcp, origins = null) {
+  if (origins) {
+    return origins.cma ? `${origins.cma}/v1/me` : 'https://cma.weegloo.com/v1/me';
+  }
   const uploadApiUrl = mcp?.uploadApiUrl;
   if (typeof uploadApiUrl === 'string' && uploadApiUrl.includes('upload.')) {
     return `${uploadApiUrl.replace('upload.', 'cma.')}/me`;

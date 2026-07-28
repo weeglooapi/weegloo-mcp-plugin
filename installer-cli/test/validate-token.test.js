@@ -73,3 +73,27 @@ test('validateToken: a thrown fetch (connection failure/timeout abort) → netwo
   });
   assert.deepEqual(result, { ok: false, networkError: true });
 });
+
+// ── origins 매핑과 토큰 검증 URL ────────────────────────────────────────────
+
+test('cmaMeUrl: origins가 있으면 명시적 — cma 매핑이면 고객 CMA, 아니면 프로덕션 (휴리스틱 미사용)', () => {
+  // cma 매핑 → 고객 스택 PAT는 고객 CMA에 검증
+  assert.equal(
+    cmaMeUrl({ uploadApiUrl: 'https://upload-weegloo.neld.ai/v1' }, { cma: 'https://cma-weegloo.neld.ai' }),
+    'https://cma-weegloo.neld.ai/v1/me'
+  );
+  // origins는 있지만 cma 미매핑 → CMA는 프로덕션이 맞음. 매핑된 upload 값에 휴리스틱을
+  // 돌리면 안 됨('upload.acme.com' → 'cma.acme.com' 같은 존재하지 않는 호스트가 나옴).
+  assert.equal(
+    cmaMeUrl({ uploadApiUrl: 'https://upload.acme.com/v1' }, { upload: 'https://upload.acme.com' }),
+    'https://cma.weegloo.com/v1/me'
+  );
+});
+
+test('cmaMeUrl: origins 없음 → 기존 dev-manifest 휴리스틱 유지 (회귀)', () => {
+  assert.equal(
+    cmaMeUrl({ uploadApiUrl: 'https://dev-upload.weegloo.com/v1' }),
+    'https://dev-cma.weegloo.com/v1/me'
+  );
+  assert.equal(cmaMeUrl(undefined), 'https://cma.weegloo.com/v1/me');
+});

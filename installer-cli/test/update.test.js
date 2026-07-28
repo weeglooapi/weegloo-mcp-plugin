@@ -819,3 +819,109 @@ test('runUpdate: pruning a shared skill NO sharer claims really removes it (last
     assert.equal(fs.existsSync('.agents/skills/weegloo-gone'), false, 'no claimer left → removed');
   });
 });
+
+// ── origins 매핑 (기록 재적용 · terms 제외 · 공유 스토어 origins 충돌) ──────
+
+const ACME_ORIGINS = { cma: 'https://cma.acme.com', ai: 'https://ai.acme.com' };
+
+const ORIGINS_MANIFEST = {
+  version: 'v2',
+  skills: [
+    { id: 'weegloo-a', files: { 'SKILL.md': 'call https://cma.weegloo.com/v1/x and bare cma.weegloo.com' } },
+  ],
+  rules: [
+    { id: 'weegloo-version', content: 'GET {{WEEGLOO_VERSION_URL}} stamp {{WEEGLOO_STAMP_PATH}} run {{WEEGLOO_UPDATE_COMMAND}} every {{WEEGLOO_CHECK_INTERVAL_HOURS}}h' },
+    { id: 'weegloo-terms-consent', content: 'terms at https://cma.weegloo.com/v1/policy/terms' },
+    { id: 'weegloo-global-rules', content: 'use cma.weegloo.com for management' },
+  ],
+};
+
+test('runUpdate: recorded origins mapping is reapplied — content, baked version URL, record persistence', async () => {
+  await inTmpProject(async () => {
+    seedClaude({
+      skills: ['weegloo-a'],
+      rules: ['weegloo-version', 'weegloo-global-rules'],
+      record: {
+        skills: ['weegloo-a'],
+        rules: ['weegloo-version', 'weegloo-global-rules'],
+        availableSkills: ['weegloo-a'],
+        availableRules: ['weegloo-version', 'weegloo-global-rules'],
+        origins: ACME_ORIGINS,
+      },
+      stamp: { last_check: 'x', version: 'v1', ref: 'latest' },
+    });
+
+    const res = await runUpdate(
+      { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: async () => ORIGINS_MANIFEST, ...quiet }
+    );
+
+    assert.equal(res.status, 'updated');
+    const skill = fs.readFileSync('.claude/skills/weegloo-a/SKILL.md', 'utf-8');
+    assert.equal(skill, 'call https://cma.acme.com/v1/x and bare cma.acme.com', 'scheme URL + bare mention 모두 매핑');
+    const globalRule = fs.readFileSync('.claude/rules/weegloo-global-rules.md', 'utf-8');
+    assert.equal(globalRule, 'use cma.acme.com for management');
+    const versionRule = fs.readFileSync('.claude/rules/weegloo-version.md', 'utf-8');
+    assert.ok(versionRule.includes('https://ai.acme.com/v1/version?branch=latest'), '템플릿이 굽는 체크 URL도 매핑');
+    // 기록에 origins 그대로 영속 → 다음 업데이트도 같은 환경
+    assert.deepEqual(readInstalledRecord('.weegloo/claude/installed.json').origins, ACME_ORIGINS);
+  });
+});
+
+test('runUpdate: origins-mapped record → terms-consent leaves the catalog, existing rule file pruned, core forcing skips it', async () => {
+  await inTmpProject(async () => {
+    seedClaude({
+      skills: ['weegloo-a'],
+      rules: ['weegloo-version', 'weegloo-terms-consent'], // terms가 디스크에 깔려 있는 상태
+      record: {
+        skills: ['weegloo-a'],
+        rules: ['weegloo-version', 'weegloo-terms-consent'],
+        availableSkills: ['weegloo-a'],
+        availableRules: ['weegloo-version', 'weegloo-terms-consent', 'weegloo-global-rules'],
+        origins: ACME_ORIGINS, // 매핑 존재 → terms 제외 발동
+      },
+      stamp: { last_check: 'x', version: 'v1', ref: 'latest' },
+    });
+
+    await runUpdate(
+      { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: async () => ORIGINS_MANIFEST, ...quiet }
+    );
+
+    assert.equal(fs.existsSync('.claude/rules/weegloo-terms-consent.md'), false, '카탈로그 이탈 → prune');
+    assert.ok(fs.existsSync('.claude/rules/weegloo-version.md'), '다른 코어 룰은 정상 유지');
+    const rec = readInstalledRecord('.weegloo/claude/installed.json');
+    assert.ok(!rec.rules.includes('weegloo-terms-consent'));
+    assert.ok(!rec.availableRules.includes('weegloo-terms-consent'), '카탈로그 스냅샷에서도 제외');
+  });
+});
+
+test('runUpdate: sharer on the SAME branch but DIFFERENT origins is a conflict', async () => {
+  await inTmpProject(async () => {
+    seedAndroidStudio(); // latest, origins 없음
+    // codex: 같은 latest 브랜치지만 acme 매핑 — 공유 AGENTS.md에 서로 다른 도메인 콘텐츠 경쟁
+    fs.mkdirSync(path.join('.weegloo', 'codex'), { recursive: true });
+    fs.writeFileSync(
+      path.join('.weegloo', 'codex', 'version-check.json'),
+      JSON.stringify({ last_check: 'x', version: 'v1', ref: 'latest' }),
+      'utf-8'
+    );
+    fs.writeFileSync(
+      path.join('.weegloo', 'codex', 'installed.json'),
+      JSON.stringify({ skills: [], rules: ['weegloo-version'], origins: ACME_ORIGINS }),
+      'utf-8'
+    );
+
+    const lines = [];
+    const res = await runUpdate(
+      { update: true, agent: 'androidstudio', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: loadOk, log: (s) => lines.push(String(s)) }
+    );
+
+    assert.equal(res.status, 'updated');
+    assert.ok(
+      lines.some((l) => l.includes('codex') && l.includes('different origins')),
+      'origins 상이가 충돌로 감지·표기됨'
+    );
+  });
+});

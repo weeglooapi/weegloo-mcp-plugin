@@ -30,6 +30,8 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 | `-t, --token <pat>` | Weegloo Personal Access Token. Also reads `WEEGLOO_TOKEN` (the flag wins). |
 | `--ignore-skill` | Do not install Skills. |
 | `--ignore-rule` | Do not install Rules. |
+| `--origins <file>` | Origins mapping (JSON file or inline JSON) for a staging or enterprise stack (see [Origins mapping](#origins-mapping-staging--enterprise)). Also reads `WEEGLOO_ORIGINS`. Install only. |
+| `--update` | Update an existing install's skills/rules, keeping your selection (see [Updating](#updating)). Requires `--agent`; never touches MCP config, so no token. |
 | `-y, --yes` | Non-interactive: use defaults for anything not given. |
 | `--all-branches` | Show all branches in the version picker (interactive only). |
 | `-h, --help` | Show this help. |
@@ -39,7 +41,7 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 Triggered by `-y` **or** a non-TTY environment (piped, CI, or an agent). In this mode:
 
 - **Defaults:** branch `latest`, MCP + Skills + Rules installed, group `default`, location `global`, all Skills and Rules selected.
-- **Required:** `--agent` is always required, and a token (`--token` or `WEEGLOO_TOKEN`) is required whenever MCP is installed. Missing required values exit immediately with an error instead of hanging on a prompt.
+- **Required:** `--agent` is always required, and a token (`--token` or `WEEGLOO_TOKEN`) is required whenever MCP is installed (never for `--update`). Missing required values exit immediately with an error instead of hanging on a prompt.
 - Conflicting or invalid flags (e.g. `--mcp` together with `--no-mcp`, nothing left to install, or an unknown enum value) also exit with a clear error.
 
 ```bash
@@ -51,6 +53,9 @@ npx weegloo@latest -y --agent claude --no-mcp
 
 # Codex running inside Xcode Intelligence (injects PATH so Xcode can spawn npx)
 WEEGLOO_TOKEN=… npx weegloo@latest -y --agent codex --host xcode
+
+# Update an existing install (selection preserved; no token needed)
+npx weegloo@latest --agent claude --location global --update
 
 # Pre-fill a couple of choices, get prompted for the rest (interactive)
 npx weegloo@latest --agent cursor --location global
@@ -90,6 +95,47 @@ npx weegloo@latest --branch some-branch
 # Environment variable
 WEEGLOO_REF=some-branch npx weegloo@latest
 ```
+
+## Updating
+
+```bash
+npx weegloo@latest --agent claude --location global --update
+```
+
+This is the command the installed `weegloo-version` rule shows when a newer version is available. Unlike an install, `--update`:
+
+- **keeps your skill/rule selection** — a partial install stays partial. A hand-deleted skill/rule is treated as drift and restored; deselecting happens by re-running the install picker.
+- **auto-adds genuinely new items** — things that did not exist in the catalog when you last installed. Items you deliberately deselected stay out.
+- **prunes upstream-deleted items**, and always restores the core rules (`weegloo-version`, `weegloo-terms-consent`).
+- **stays on your branch** — read from the install's stamp (`ref`), not defaulted to `latest`. Pass `--branch` only to deliberately switch branches.
+- **never touches MCP config**, so no token is needed and it runs unattended (no `--yes`). The one interactive question is the rare shared-file conflict when multiple agents in one project sit on different branches/origins.
+- reapplies the [origins mapping](#origins-mapping-staging--enterprise) recorded at install time. `--update --origins` is rejected — changing environments is a reinstall.
+
+If nothing is installed for that agent/scope, `--update` is a no-op with a pointer to the install command (it never silently installs everything).
+
+## Origins mapping (staging / enterprise)
+
+For a staging stack or an enterprise deployment on customer domains, pass a JSON mapping of weegloo origins at install time. All fetched content (skill files, rule text, MCP config URLs, the version-check URL baked into the `weegloo-version` rule) is rewritten before it is written to disk — repo sources are never modified.
+
+```bash
+npx weegloo@latest --agent claude --origins ./origins.acme.json --token <PAT>
+```
+
+```jsonc
+// origins.acme.json — partial mappings are fine (e.g. staging may replace only cda)
+{
+  "cma":     "https://cma.acme.com",
+  "cda":     "https://cda.acme.com",
+  "acma":    "https://acma.acme.com",
+  "acda":    "https://acda.acme.com",
+  "upload":  "https://upload.acme.com",
+  "auth":    "https://auth.acme.com",
+  "console": "https://console.acme.com",
+  "ai":      "https://ai.acme.com"
+}
+```
+
+The mapping sticks to the install — `--update` reapplies it automatically. To change environments (or go back to production), reinstall.
 
 ## Installation Flow
 
@@ -151,15 +197,9 @@ Antigravity writes `mcpServers.weegloo` (HTTP URL via `serverUrl`) and `mcpServe
 
 Android Studio writes **both** MCP servers into `mcp.json` ([docs](https://developer.android.com/studio/gemini/add-mcp-server)): the remote `mcpServers.weegloo` (with `httpUrl`, `headers`, `timeout`, `enabled`, `trust`, `includeTools`, `excludeTools`) and the local stdio `mcpServers.weegloo-upload` (npx + env with your Personal Access Token). The remote `weegloo` server authenticates with the Personal Access Token sent directly as an `Authorization: Bearer` header (no Connect/OAuth step); `weegloo-upload` authenticates with the same PAT in its env. Skills install to `.android-studio/skills/` and behavioral rules are merged into the project's `AGENTS.md` (single file, per-rule markers).
 
-## Available Skills
+## Available Skills and Rules
 
-- **weegloo-create-content-type** - Guide for creating ContentType resources
-- **weegloo-web-hosting** - Guide for deploying and hosting web projects
-
-## Available Rules
-
-- **weegloo-global-rules** - Global MCP rules (applied to all MCP operations)
-- **weegloo-web-hosting-rules** - Web hosting specific rules
+The full, current catalog (20+ skills, 7 rules) is shown in the interactive picker and lives in [`plugins/weegloo/`](https://github.com/weeglooapi/weegloo-mcp-plugin/tree/latest/plugins/weegloo) — it changes with every release, so it is not duplicated here. Two rules are core and always installed: `weegloo-version` (the update notifier) and `weegloo-terms-consent` (the terms gate).
 
 ## Requirements
 

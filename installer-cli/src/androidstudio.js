@@ -98,8 +98,9 @@ export async function installAndroidStudio({
   installedRuleIds = [],
   availableSkillIds = [],
   availableRuleIds = [],
+  origins = null,
 }) {
-  rules = applySelfUpdateTemplate(rules, { version, agent: 'androidstudio', ref: pluginRef, scope });
+  rules = applySelfUpdateTemplate(rules, { version, agent: 'androidstudio', ref: pluginRef, scope, origins });
 
   // Project-scoped skills/rules.
   const skillsDir = path.join(process.cwd(), '.android-studio', 'skills');
@@ -218,6 +219,7 @@ export async function installAndroidStudio({
       agent: 'androidstudio',
       ref: pluginRef,
       version,
+      origins,
       manageSkills,
       installedSkillIds,
       availableSkillIds,

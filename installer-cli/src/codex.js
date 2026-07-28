@@ -307,9 +307,10 @@ export async function installCodex({
   installedRuleIds = [],
   availableSkillIds = [],
   availableRuleIds = [],
+  origins = null,
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
-  rules = applySelfUpdateTemplate(rules, { version, agent: 'codex', ref: pluginRef, scope });
+  rules = applySelfUpdateTemplate(rules, { version, agent: 'codex', ref: pluginRef, scope, origins });
   const configPath = getCodexConfigPath(scope);
   const skillsDir = getCodexSkillsDir(scope);
   const instructionsPath = getCodexInstructionsPath(scope);
@@ -419,6 +420,7 @@ export async function installCodex({
       agent: 'codex',
       ref: pluginRef,
       version,
+      origins,
       manageSkills,
       installedSkillIds,
       availableSkillIds,

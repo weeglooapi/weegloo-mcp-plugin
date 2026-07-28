@@ -218,3 +218,28 @@ test('resolveConfig: --update with one kind ignored is a valid single-kind updat
   assert.equal(config.ignoreRule, true);
   assert.equal(config.installSkillsRules, true);
 });
+
+// ── --origins (환경/엔터프라이즈 매핑) ──────────────────────────────────────
+
+test('resolveConfig: --origins is carried raw (flag > env), install mode', () => {
+  assert.equal(resolve(['-a', 'claude', '--no-mcp', '--origins', './origins.json']).config.origins, './origins.json');
+  assert.equal(
+    resolve(['-a', 'claude', '--no-mcp'], { env: { WEEGLOO_ORIGINS: '{"cma":"https://cma.acme.com"}' } }).config.origins,
+    '{"cma":"https://cma.acme.com"}'
+  );
+  assert.equal(resolve(['-a', 'claude', '--no-mcp']).config.origins, null);
+});
+
+test('resolveConfig: --update rejects --origins — ignoring would be a false success (env switch cannot happen in update)', () => {
+  assert.ok(
+    resolve(['--update', '-a', 'claude', '--origins', './origins.json']).errors.some((e) =>
+      /--origins cannot be combined with --update/.test(e)
+    )
+  );
+  // env로 흘러들어와도 동일하게 거부 (CI 환경변수 잔존 사고 방지)
+  assert.ok(
+    resolve(['--update', '-a', 'claude'], { env: { WEEGLOO_ORIGINS: './origins.json' } }).errors.some((e) =>
+      /--origins cannot be combined with --update/.test(e)
+    )
+  );
+});

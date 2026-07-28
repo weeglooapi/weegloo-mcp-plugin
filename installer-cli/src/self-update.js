@@ -29,6 +29,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { VERSION_URL } from './github.js';
+import { applyOriginMapping, TERMS_CONSENT_RULE_ID } from './origins.js';
 import { listWeeglooRuleFiles } from './io.js';
 
 export const SELF_UPDATE_RULE_ID = 'weegloo-version';
@@ -42,8 +43,12 @@ export const SELF_UPDATE_RULE_ID = 'weegloo-version';
  *    it removes the gate itself (an operator/legal requirement, not a user preference).
  * weegloo-global-rules is deliberately NOT here: without it the agent merely handles Weegloo
  * less well — nothing structural breaks — so opting out stays a valid power-user choice.
+ *
+ * NOTE: with ANY origins mapping, the terms rule is removed from the CATALOG
+ * upstream of every consumer (origins.js applyTermsExclusion), so this list needs no condition —
+ * core forcing is always "∩ manifest", and a rule absent from the manifest is never forced.
  */
-export const CORE_RULE_IDS = [SELF_UPDATE_RULE_ID, 'weegloo-terms-consent'];
+export const CORE_RULE_IDS = [SELF_UPDATE_RULE_ID, TERMS_CONSENT_RULE_ID];
 
 /**
  * Splits a manifest rule list into forced-core vs user-selectable, preserving manifest order.
@@ -216,11 +221,20 @@ export function getLegacyInstalledRecordPath(scope = 'global', cwd = process.cwd
 export function readInstalledRecord(recordPath) {
   const s = readJsonFile(recordPath);
   const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
+  // origins: the environment mapping this install was made with (docs/origins-mapping.md §5).
+  // Tolerant read — anything but a plain string→string object collapses to null (no mapping).
+  const origins =
+    s.origins && typeof s.origins === 'object' && !Array.isArray(s.origins) &&
+    Object.entries(s.origins).every(([k, v]) => typeof k === 'string' && typeof v === 'string') &&
+    Object.keys(s.origins).length > 0
+      ? s.origins
+      : null;
   return {
     skills: list(s.skills),
     rules: list(s.rules),
     availableSkills: list(s.availableSkills),
     availableRules: list(s.availableRules),
+    origins,
   };
 }
 
@@ -237,6 +251,12 @@ export function writeInstalledRecord(recordPath, record = {}) {
     const next = { ...readJsonFile(recordPath) };
     for (const key of ['skills', 'rules', 'availableSkills', 'availableRules']) {
       if (Array.isArray(record[key])) next[key] = record[key];
+    }
+    // origins is set/removed EXPLICITLY (not merge-preserved): a reinstall without --origins is
+    // the sanctioned way back to production, so a stale mapping must not survive it.
+    if ('origins' in record) {
+      if (record.origins && Object.keys(record.origins).length > 0) next.origins = record.origins;
+      else delete next.origins;
     }
     fs.mkdirSync(path.dirname(recordPath), { recursive: true });
     fs.writeFileSync(recordPath, `${JSON.stringify(next, null, 2)}\n`, 'utf-8');
@@ -341,6 +361,7 @@ export function syncInstalledRecord({
   legacyRecordPath = getLegacyInstalledRecordPath(scope),
   version = null,
   ref = null,
+  origins = null,
   manageSkills,
   installedSkillIds = [],
   availableSkillIds = [],
@@ -368,6 +389,7 @@ export function syncInstalledRecord({
     rules: manageRules ? installedRuleIds : prev.rules,
     availableSkills: manageSkills ? availableSkillIds : prev.availableSkills,
     availableRules: manageRules ? availableRuleIds : prev.availableRules,
+    origins, // 설치의 속성 — 매 실행 명시적으로 set/remove (writeInstalledRecord 참조)
   });
   const stampWritten = writeVersionStamp(stampPath, { now, version, ref });
 
@@ -393,11 +415,18 @@ export function syncInstalledRecord({
  * @param {{ agent: string, ref: string, scope: string }} ctx
  * @returns {Array<{id:string, content:string}>}
  */
-export function applySelfUpdateTemplate(rules, { agent, ref, scope }) {
+export function applySelfUpdateTemplate(rules, { agent, ref, scope, origins = null }) {
+  // The baked check URL goes through the origins mapping too: static content is mapped upstream
+  // (origins.js applyHostsToResources), but this URL is INSERTED here from the VERSION_URL
+  // constant — skipping the mapping would leave the rule polling the production endpoint.
+  const versionCheckUrl = applyOriginMapping(
+    `${VERSION_URL}?branch=${encodeURIComponent(ref)}`,
+    origins
+  );
   return rules.map((rule) => {
     if (rule.id !== SELF_UPDATE_RULE_ID) return rule;
     const content = rule.content
-      .replaceAll('{{WEEGLOO_VERSION_URL}}', `${VERSION_URL}?branch=${encodeURIComponent(ref)}`)
+      .replaceAll('{{WEEGLOO_VERSION_URL}}', versionCheckUrl)
       .replaceAll('{{WEEGLOO_UPDATE_COMMAND}}', buildUpdateCommand({ agent, scope }))
       .replaceAll('{{WEEGLOO_STAMP_PATH}}', ruleStampPath(scope, agent))
       .replaceAll('{{WEEGLOO_CHECK_INTERVAL_HOURS}}', String(VERSION_CHECK_INTERVAL_HOURS));
