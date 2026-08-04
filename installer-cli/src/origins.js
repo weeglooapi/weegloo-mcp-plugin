@@ -83,7 +83,11 @@ export function normalizeOrigins(raw) {
       );
     }
     const valueHost = hostOf(value);
-    const collides = SOURCE_HOSTS.find((h) => valueHost.includes(h));
+    // 치환과 **같은 경계 기준**으로 판정한다. 단순 includes 였을 때 `dev-cma.weegloo.com`
+    // 처럼 접두만 붙은 동일 도메인 스택(= 이 기능의 첫 용도인 환경 분리)이 전부 거부됐다.
+    // 재치환 위험도 실제로 없다 — hostPattern 의 경계 검사가 `-cma.weegloo.com` 을
+    // 매칭하지 않으므로 치환 결과가 다시 치환되지 않는다.
+    const collides = SOURCE_HOSTS.find((h) => hostPattern(h).test(valueHost));
     if (collides) {
       throw new Error(
         `origins['${key}'] value '${value}' contains the weegloo source host '${collides}' — circular/overlapping mappings are not allowed.`
