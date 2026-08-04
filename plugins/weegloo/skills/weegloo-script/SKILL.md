@@ -1,6 +1,6 @@
 ---
 name: weegloo-script
-description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/PageRead, ResourceCreate/Update/Patch/Delete/Publish, Http, SetVar, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions, sync (10s) or async (60s, poll by requestId). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
+description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/ForEach, ResourceCreate/Update/Patch/Delete/Publish/Unpublish/Archive/Unarchive, Http, EmailSend, SetVar, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions, sync (10s, fixed) or async (30s base, capped at 180s, poll by requestId). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
 ---
 
 # Weegloo — Script (declarative backend endpoints)
@@ -131,7 +131,7 @@ whenever one of these fits. These are the situations an AI agent should map to S
 | Create | `POST /v1/spaces/{spaceId}/scripts` | CMA |
 | Read | `GET /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
 | Update (full PUT, `X-Weegloo-Version`) | `PUT /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
-| Delete (immediate; no unpublish) | `DELETE /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
+| Delete (no unpublish; **blocked while a Webhook references it**) | `DELETE /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
 | **Execute** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute` | CMA **or** ACMA |
 | **Poll (async)** | `GET /v1/spaces/{spaceId}/scripts/{scriptId}/executions/{requestId}` | CMA **or** ACMA |
 
@@ -166,13 +166,16 @@ at `Return`.
 ### Control flow
 
 - **`If`** — `condition` (JsonLogic → boolean), `then` (statements[]), **`else`** (statements[], optional).
-- **`Loop`** — one of **three modes** plus a required cap:
-  - `over`: a value expression resolving to an **array** (foreach);
-  - `while`: JsonLogic — loops **while true**;
-  - `for`: a counted range **`{ "from": int, "to": int, "step"?: int }`**;
-  - `maxIterations` (**required** — engine-enforced hard cap), `as` (binding name, read as `{ /<as> }`:
-    `over` binds the current **element** (no index), `while` the **0-based iteration counter**, `for` the
-    **current counter value**), `body` (statements[]). **No `Http` / Media-ingest inside a loop body.**
+- **`Loop`** — one of **three modes** — `over` (array, foreach) / `while` (JsonLogic) / `for`
+  (`{ from, to, step? }`, inclusive) — plus **`name`** (binds the element, the 0-based counter, or the
+  counter value, read as `{ /<name> }`), `body`, and `maxIterations` (**optional**; omitted ⇒ platform
+  cap **10,000**, declaring above it is rejected at save).
+  **External calls ARE allowed in `body`** (`Http`, Media ingest). **Always `Async`** — the budget is
+  priced `body × maxIterations`, so a big loop gets cut off mid-run, not rejected.
+  **Declare a realistic `maxIterations`.** Omitting it prices the loop at the 10,000-iteration default,
+  which truncates immediately; and because the run dies on budget rather than a statement failure, the
+  writes already done stay done — **make the body idempotent / resumable** rather than relying on
+  `Try`/`catch` compensation.
 - **`Parallel`** — `branches: [[…],[…]]`; branches run **concurrently** and **cannot reference each
   other's** results.
 - **`Try`** — `body` (statements[]); **`catch`** (optional, runs on failure — `/error` exposes
@@ -181,7 +184,7 @@ at `Return`.
   the value is delivered as the response **`error`** instead of `return`), `statusCode` (default
   `200`). **Terminates** the Script.
 
-### Variables & HTTP
+### Variables, HTTP & email
 
 - **`SetVar`** — `var` (variable name; read as `{ /vars/<var> }`), `value` (value expression; may
   reference the variable itself to **accumulate**).
@@ -202,13 +205,29 @@ at `Return`.
   `{ /<name>/status }` yourself. **Forces Async.** Script `Http` draws on the Organization's **webhook
   outbound-network quota** — if that feature is quota-suspended the call fails with a catchable
   **`WGL403012`** (Forbidden), and request bytes are metered against it.
+- **`EmailSend`** — one email through a registered **`EmailAccount`**. `account`
+  (`{ "sys": { "id": … } }`), **`to` XOR `toServiceUser`** (exactly one — neither or both is rejected):
+  **`to` is a single address** (value expression), **`toServiceUser` is `{ "sys": { "id": … } }`**;
+  `cc?`/`bcc?` are **arrays of addresses**; `subject`, `body`, `replyTo?`, `timeoutMs?` (cap **30s**).
+  Recipients (`to` 1 + `cc` + `bcc`) cap at **50** — SMTP puts them all in `RCPT TO`, so that sum is
+  what the provider counts. **Forces Async**, so it never runs on the Sync `/execute` path.
+  - **The sender comes from the `EmailAccount`** (`fromAddress`/`fromName`), not the statement. The
+    account must exist first, and **creating one sends a real test email** — see
+    **`weegloo-email-account`**.
+  - **`body` is always `text/html`** — use `<br>`/`<p>`, not bare newlines. Interpolated values are
+    **HTML-escaped** (only the author's markup survives), `SetVar` values included.
+  - `subject`/`replyTo`/addresses **reject CR·LF** (header injection). `body` may contain newlines.
+  - **Binds nothing, takes no `name`.** Failure **throws with no retry** (email is not idempotent) —
+    catch with `Try`.
+  - ⚠️ **Never `Return` the SMTP error verbatim** — a rejection quotes the refused address, so on a
+    `toServiceUser` send that **leaks a member's email**.
 
 ### Resource reads (`requiredAction: Read`; no writes)
 
 All three take **`from`**: **`Current`** (live draft — what CMA/ACMA read; **default**) or
 **`Published`** (the published snapshot CDA/ACDA serve).
 
-The two **search** reads (`ResourceFind` / `ResourcePageRead`) additionally take **`advanced`** (bool,
+The two **search** reads (`ResourceFind` / `ResourceForEach`) additionally take **`advanced`** (bool,
 default `false`) — **Advanced Search** over Content (see the *Advanced Search* callout below). It does
 **not** apply to `ResourceRead` (get-one-by-id never searches) nor to Media reads.
 
@@ -220,9 +239,17 @@ default `false`) — **Advanced Search** over Content (see the *Advanced Search*
   `:self` supported; see the key-format note below), `order` (decides which match is "first"), `from`,
   `advanced` (Content **Advanced Search** — set it when `where`/`order` touch `fields.*`; see the callout below). Branch on existence with
   `{ "==": [ "{ /name }", null ] }` (the find-then-upsert pattern).
-- **`ResourcePageRead`** — a **page**: `resource`, `contentType`, `where`, `order`, `limit`
-  (**≤ 100**), `cursor` (continuation = the previous result's `next`), `from`, `advanced` (Content
-  **Advanced Search** — set it when `where`/`order` touch `fields.*`; see the callout below). Binds **`{ items, next }`**.
+- **`ResourceForEach`** — **iterate every match**: `resource`, `contentType`, `where`, `order`, `from`,
+  `advanced`, `limit` (optional; omitted ⇒ platform cap **10,000**, declaring above it is rejected at
+  save), `name` (the **current item**), **`onEach`** (statements[] per item).
+  - **Binds no result** — a foreach, not a map. Accumulate in `onEach` with `SetVar` + `merge`.
+  - **The engine pages internally** — no cursor to handle. **External calls allowed** in `onEach`.
+    **Always `Async`**, `limit` or not.
+  - **Two different ceilings.** The **item** cap: hitting it with matches left **fails the run** (no
+    silent truncation). The **time** budget is separate and *is* truncating — a long `onEach` can stop
+    partway through the items it was allowed. **Make `onEach` idempotent / resumable**; do not assume
+    all-or-nothing.
+  - **Replaces the removed `ResourcePageRead`** — there is no cursor-paging read statement any more.
 
 > **`where` / `order` field keys — a content field MUST be `fields.<apiName>`, never the bare name (the
 > #1 mistake).** Write **`fields.postId`**, not `postId` — a bare content-field name is not recognized and
@@ -241,7 +268,7 @@ default `false`) — **Advanced Search** over Content (see the *Advanced Search*
 > ```
 
 > **Advanced Search — set `advanced: true` whenever `where` / `order` touch `fields.*`.** A plain
-> (non-advanced) `ResourceFind` / `ResourcePageRead` matches **`fields.*`** by **exact equality only**.
+> (non-advanced) `ResourceFind` / `ResourceForEach` matches **`fields.*`** by **exact equality only**.
 > **Strongly prefer `advanced: true` for any search or sort over a user-defined content field**
 > (`fields.<name>`) — that is the mode that supports partial / "contains" text matching, fuzzy search,
 > and dependable ordering on content fields. Rule of thumb, by the keys in `where` / `order`:
@@ -254,17 +281,18 @@ default `false`) — **Advanced Search** over Content (see the *Advanced Search*
 >
 > ```jsonc
 > // fields.* in where/order → advanced: true
-> { "type": "ResourcePageRead", "resource": "Content",
+> { "type": "ResourceForEach", "resource": "Content",
 >   "contentType": { "sys": { "id": "ct_post" } },
 >   "where": { "fields.title": { "eq": "weegloo" } },   // user field → Advanced Search
->   "order": "-fields.score", "advanced": true }
+>   "order": "-fields.score", "advanced": true,
+>   "name": "post", "onEach": [ /* … */ ] }
 > // only sys.* / createdBy → advanced not needed:
 > // "where": { "createdBy": ":self" }, "order": "-sys.createdAt"
 > ```
 >
 > **A just-created row may not be found via `advanced` immediately.** Advanced Search is served from a
 > search index that catches up a short moment **after** a write — typically about a second. So a row you
-> just created (or updated) may **not** yet appear in an `advanced` `ResourceFind` / `ResourcePageRead`
+> just created (or updated) may **not** yet appear in an `advanced` `ResourceFind` / `ResourceForEach`
 > run in the **same** flow, or in a client's instant re-query right after the write. When you must read a
 > just-written row straight away, fetch it **by id** with **`ResourceRead`** (which reads the primary
 > store — no indexing delay) or key the follow-up read off the write's returned `sys.id`. Do **not** rely
@@ -299,8 +327,8 @@ default `false`) — **Advanced Search** over Content (see the *Advanced Search*
 Media **`ResourceCreate`**, **`ResourceUpdate`** (re-ingests the listed locales — full replace), or
 **`ResourcePatch`** (re-ingests just the named locales). **`encoding`** is **`url`** (the worker
 fetches the URL's bytes) or **`base64`** (decodes the value). *(The `Binary` encoding is **rejected**
-in Scripts with a `400` — use `url` or `base64`.)* A file ingest **forces Async** and is **banned
-inside a `Loop`**. A Media that is still **processing** cannot be updated/patched/deleted (busy), and
+in Scripts with a `400` — use `url` or `base64`.)* A file ingest **forces Async** and **may** appear
+inside a `Loop` `body` / `ResourceForEach` `onEach`. A Media that is still **processing** cannot be updated/patched/deleted (busy), and
 publish is refused until all its files are processed.
 
 **Ids are validated:** every `target.sys.id` / `contentType.sys.id` must resolve to a real id token
@@ -333,27 +361,44 @@ Any string value may embed a pointer. Roots:
   value. **≤ 10s.**
 - **Async** (`"Async"`): runs in the background, returns `202` + **`requestId`**; poll the
   executions endpoint (`202` = still running, `200` = done: `durationMs`, `statusCode`, and
-  `return` or `error`). **≤ 60s.** Async is **forced** whenever the script uses `Http` (ExternalIo),
-  Media ingest (MediaIngest), or a long-running op — a Sync script that needs these is rejected.
+  `return` or `error`).
+
+**The async budget is computed from the script, not fixed:** **min(30s base + Σ declared
+Http/EmailSend `timeoutMs`, 180s cap)**. Anything that declares no time of its own — store
+round-trips, Media ingest, work inside iterations — comes out of the base. `Http` counts `1 + retry`
+times, `EmailSend` once. Sequences add, `If` takes the wider branch, `Parallel` the slowest, `Try`
+adds `body`+`catch`+`finally`, iterations **multiply**. Over the cap the budget is **truncated, not
+rejected** — a big loop is cut off mid-run.
+
+**Async is forced** by external I/O (`Http`, `EmailSend`, Media ingest) **or** by `Loop` /
+`ResourceForEach` (always, cap or not). Sync needs **every** leaf statement to be a declared
+short-running type — an unknown statement type is Async-only by default.
 
 | Limit | Value |
 |-------|-------|
-| Sync timeout | **10s** |
-| Async timeout | **60s** |
-| Max `Http` calls (`maxExternalIo`) | **3** |
+| Sync timeout | **10s**, fixed |
+| Async timeout | **computed**: `min(30s + Σ declared, 180s)` |
+| Max statements / max external I/O ops | **per-plan** (see below) |
 | Max `SetVar` | **5** |
-| Max statements (nested included) | **15** |
 | `Http` retry cap | **2** |
-| Per-`Http` `timeoutMs` cap | **60s** |
+| Per-`Http` `timeoutMs` cap | **60s** (omitted ⇒ 30s) |
+| Per-`EmailSend` `timeoutMs` cap | **30s** |
+| `Loop` `maxIterations` / `ResourceForEach` `limit` cap | **10,000** |
+| `EmailSend` recipients (`to`+`cc`+`bcc`) | **50** |
 | Max `Http` **response body** size | **10 MiB** (larger ⇒ statement throws) |
 | Async result TTL (poll before it expires) | **~30s** |
 | Max async result size (whole response JSON) | **10 KB** (larger ⇒ replaced by a 500 error) |
-| `Http` inside a `Loop` body | **forbidden** |
+| External calls inside `Loop` / `ResourceForEach` | **allowed** (forces Async) |
 
-**Save-time validation** also enforces: `executionMode` must be `Async` if any statement is
-`ExternalIo`/MediaIngest/long-running; statement binding **`name`**s must be non-blank, unique, must
-not contain `/` or `~`, and must not be a reserved root (`payload`/`headers`/`vars`/`error`). A
-definition that violates a limit or rule is rejected at create/update (`WGL400021`–`WGL400027`, `WGL400032`–`WGL400034`).
+> **Statement count and external-I/O count are per-plan, not constants — never hard-code them.** When a
+> save is rejected for exceeding one, the caller simplifies the Script or upgrades the plan.
+
+**Save-time validation** also enforces: `executionMode` must be `Async` if any statement does external
+I/O or iterates; a statement **block may not be empty**; binding **`name`**s must be non-blank, unique,
+free of `/` and `~`, and not a reserved root (`payload`/`headers`/`vars`/`error`).
+
+**Deleting a Script is blocked while a Webhook still runs it.** Delete that Webhook first, or point it
+at another Script (`weegloo-webhook`).
 
 ## Secrets & auth
 

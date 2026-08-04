@@ -69,10 +69,13 @@ index, then `ResourcePatch`es an `indexedAt` value back onto it. (Full patterns:
   to (`HookOwner` = the webhook's creator; `EventUser` = the user who caused the change). Under
   `EventUser`, triggers with no user — `ContentType` and `Comment` events — fall back to the creator.
 - **Permissions.** Creating/editing the Webhook requires the caller's role to hold the Space's
-  **webhook-settings** permission (`SETTING_WEBHOOK`) — there is no Script-`Execute` check performed at
+  **webhook-settings** permission (`SETTING_WEBHOOK`, on the role's flat `settings` list — not a Content
+  permission; see `weegloo-space-role`) — there is no Script-`Execute` check performed at
   webhook-save time. When the Webhook fires, the linked Script runs **fire-and-forget with its
   author's delegated authority** (its inner ops are not re-checked per statement), so the **Script's
   author** must hold the unconditional Content/Media permissions the Script needs — see `weegloo-script`.
+- **The link blocks deleting the Script.** While a Webhook still references it, deleting that Script
+  fails. Delete the Webhook first, or repoint its `script` at another one.
 
 ## Topics & filters
 
