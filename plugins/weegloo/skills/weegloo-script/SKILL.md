@@ -249,7 +249,8 @@ default `false`) — **Advanced Search** over Content (see the *Advanced Search*
     silent truncation). The **time** budget is separate and *is* truncating — a long `onEach` can stop
     partway through the items it was allowed. **Make `onEach` idempotent / resumable**; do not assume
     all-or-nothing.
-  - **Replaces the removed `ResourcePageRead`** — there is no cursor-paging read statement any more.
+  - **There is no cursor-paging read statement** — iterate with `ResourceForEach`, or fetch a single row
+    with `ResourceFind` / `ResourceRead`.
 
 > **`where` / `order` field keys — a content field MUST be `fields.<apiName>`, never the bare name (the
 > #1 mistake).** Write **`fields.postId`**, not `postId` — a bare content-field name is not recognized and
