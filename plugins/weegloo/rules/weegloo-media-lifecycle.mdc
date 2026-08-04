@@ -8,41 +8,25 @@ description: >
 ---
 
 rules:
-  - section: Media `sys.status` (exactly one of)
+  - section: Status — what is deliverable, and how to move between states
     items:
-      - **`Draft`**: Not published - **unpublished** editorial state.
-      - **`Changed`**: Was published; the asset has **local modifications** not yet reflected in the published view (republish workflow may apply per product/API).
-      - **`Published`**: Published and **no pending unpublished edits** relative to that published snapshot.
-      - **`Archived`**: Archived (treated as archived in the product lifecycle).
+      - **`sys.status`** is exactly one of **`Draft`** | **`Changed`** | **`Published`** | **`Archived`**. **Only `Published` is served by CDA**; everything else is CMA-only.
+      - **`Draft`**: never published. **`Published`**: live, with no pending edits.
+      - **`Changed`**: was published, and now carries **local edits the published copy does not show**. The published view stays stale until you **publish it again** (**`cma_PublishOneMedia`**) — do not leave a `Changed` asset assuming delivery picked the edits up.
+      - **`Archived`**: withdrawn from the active set and **not in delivery** (like `Draft` in that respect). It is **reversible** — unarchive to bring it back.
 
-  - section: Media `fields.file.{locale}.state` (per locale file)
+  - section: `fields.file.{locale}.state` — per-locale processing
     items:
-      - **`null`** or the **`file` / locale bucket absent** for that aspect: **processing finished successfully** for that file representation (ready from the processor’s perspective).
-      - **`PENDING`**: Queued; the system has **not** started processing yet.
-      - **`PROCESSING`**: The system is **actively processing** the file.
-      - **`FAILED`**: Processing **errored**; do not treat the asset as deliverable until the failure is addressed.
+      - **`PENDING`** = queued, not started · **`PROCESSING`** = in progress · **`FAILED`** = errored, **not deliverable** until addressed.
+      - **`null`** = processing finished for that locale's file.
+      - ⚠️ **An absent `file` / locale bucket is NOT the same as "ready".** It means nothing is pending for that locale — which is also true when **no file was ever uploaded** for it. So absence alone does not prove a deliverable asset: check the state **of each locale you actually need**, and confirm a file exists there.
 
-  - section: Create → automatic processing → `Published` (no mandatory manual Publish for the happy path)
+  - section: After create the platform publishes it — wait, don't publish manually
     items:
-      - After **Media** is **created**, the platform **automatically** runs the **processing pipeline** for **all** relevant **`file`** locale entries.
-      - When **processing completes successfully**, Weegloo **automatically** moves **`sys.status`** to **`Published`**-you **do not** rely on the author **calling a separate Publish API** just to reach **`Published`** after a normal create+process flow.
-      - **Before** attaching a **Refer → Media** from **Content** (or assuming CDA-safe delivery), **wait** until **`sys.status === Published`** (and confirm **`file.{locale}.state`** is not **`PENDING`**, **`PROCESSING`**, or **`FAILED`** for the locales you care about). Polling GET Media or equivalent is the usual pattern in app code (e.g. **`lib/weegloo/cma-media-upload.ts`**).
-      - **Do not** equate “safe to use” with “user clicked Publish”: for new uploads, **“wait until Published”** means **wait for the system** to finish processing and set status-**not** “always invoke **`cma_PublishOneMedia`** manually.” Manual publish may still exist for other transitions (e.g. **`Draft`** / **`Changed`** workflows); follow OpenAPI for those cases.
-
-  - section: Using Media from Content (summary)
-    items:
-      - **Requirement:** reference only when the Media is **deliverable** - typically **`sys.status`** is **`Published`** and file **`state`** indicates **completion** (see above).
-      - This is **not** a separate human step after every upload in the default pipeline; it is **readiness gating** (poll/wait).
+      - Creating a **Media** automatically runs processing for every **`file`** locale entry, and on success Weegloo **moves `sys.status` to `Published` itself**. **Do not** treat **`cma_PublishOneMedia`** as the normal post-upload step — **poll until `Published`**. (Manual publish is for the other transitions, e.g. republishing a **`Changed`** asset.)
+      - **Before referencing a Media from Content** (**`Refer → Media`**) or assuming CDA-safe delivery, **wait until `sys.status === Published`** and until **`file.{locale}.state`** for every locale you need is not **`PENDING`** / **`PROCESSING`** / **`FAILED`**. This is **readiness gating**, not a human approval step.
 
   - section: Delete order
     items:
-      - **Unpublish** (or move out of a published state per API rules) **before** **delete** when the API requires it-do not assume delete replaces unpublish.
-      - **`Archived`** is a distinct lifecycle state; follow CMA/OpenAPI for whether delete is allowed from **`Archived`** vs requires another transition.
-
-  - section: LLM summary
-    items:
-      - **Statuses:** `Draft` | `Changed` | `Published` | `Archived` on **`sys.status`**.
-      - **File states:** `null`/missing = done; **`PENDING`** / **`PROCESSING`** / **`FAILED`** = not done or error.
-      - **After create:** system processes files → on success **`sys.status`** becomes **`Published`** automatically - **wait/poll**, don’t teach “always call Publish” as the default post-upload step.
-      - **Before Content references:** wait until **`Published`** + acceptable **`file.*.state`**.
-      - **Delete:** **Unpublish** (or required precursor) → **Delete** when the API demands it.
+      - **Delete requires the target to be `Draft` or `Archived`** — a `Published` or `Changed` Media must be **unpublished (or archived) first**. Delete does **not** unpublish for you.
+      - A Media whose file is **still processing** cannot be updated, patched, or deleted (busy) — wait for the state to settle.
