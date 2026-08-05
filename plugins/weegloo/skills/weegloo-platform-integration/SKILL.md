@@ -221,6 +221,7 @@ Each leaf maps to the concrete skill that actually does the work.
 | Access Control               | `weegloo-space-role` + `weegloo-delivery-access-token`; scoped write → `weegloo-space-access-token` |
 | API Connection / server-side automation | `weegloo-script` (Script; call external APIs + write results back to Content/Media) |
 | Webhook (event → URL or Script) | `weegloo-webhook`                                                     |
+| Send email (notify, receipt, verify) | `weegloo-email-account` (register the SMTP sender first — creating one sends a real test message) + `weegloo-script` (`EmailSend`) |
 
 If a request spans multiple rows, route through all matching skills — start with
 `weegloo-service-architecture` so the pieces fit one coherent architecture.

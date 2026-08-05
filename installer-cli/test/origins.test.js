@@ -61,6 +61,31 @@ test('normalizeOrigins: a value containing any weegloo source host is rejected (
   );
 });
 
+test('normalizeOrigins: a host-boundary prefix on the same domain is allowed (dev-* environment split)', () => {
+  // The collision check uses the same boundary rule as the substitution, so `dev-cma…` is not
+  // "containing" `cma.weegloo.com` — a plain includes() rejected the whole dev stack.
+  const dev = Object.fromEntries(
+    ['cma', 'cda', 'acma', 'acda', 'upload', 'auth', 'console', 'ai']
+      .map((s) => [s, `https://dev-${s}.weegloo.com`])
+  );
+  assert.deepEqual(normalizeOrigins(dev), dev);
+  // …while an exact source host (a true no-op/circular mapping) stays rejected.
+  assert.throws(() => normalizeOrigins({ cma: 'https://cma.weegloo.com' }), /circular\/overlapping/);
+});
+
+test('applyOriginMapping: dev-* same-domain mapping substitutes once, order-independently', () => {
+  const dev = { cma: 'https://dev-cma.weegloo.com', acma: 'https://dev-acma.weegloo.com' };
+  const out = applyOriginMapping(
+    'https://cma.weegloo.com/v1 https://acma.weegloo.com/v1 bare cma.weegloo.com https://cda-weegloo.com',
+    dev
+  );
+  assert.ok(out.includes('https://dev-cma.weegloo.com/v1'));
+  assert.ok(out.includes('https://dev-acma.weegloo.com/v1'), 'acma not clobbered by the cma pattern');
+  assert.ok(out.includes('bare dev-cma.weegloo.com'), 'bare mention rewritten too');
+  assert.ok(!out.includes('dev-dev-'), 'no double substitution');
+  assert.ok(out.includes('https://cda-weegloo.com'), 'wrong-example untouched');
+});
+
 test('loadOrigins: inline JSON and file path both work; bad file/JSON produce friendly errors', () => {
   assert.deepEqual(loadOrigins(JSON.stringify(ACME)), ACME);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'weegloo-origins-'));

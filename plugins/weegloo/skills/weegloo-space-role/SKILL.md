@@ -1,6 +1,6 @@
 ---
 name: weegloo-space-role
-description: SpaceRole and ServiceUserRole permission rules — scope ContentType, Content, Media, and Script with optional filters (contentType, createdBy, tag, self). Script adds an Execute action (call /execute); on Script only createdBy and self apply. Use createdBy.sys.id ':self' for the authenticated caller's own resources, or the `self` filter (a Refer to one entity) to pin a rule to exactly one resource — e.g. Execute a single specific Script. Use when designing least-privilege roles, per-user private Content, granting Script Execute (all / own / one specific), or member-scoped ACMA/ACDA access. English only.
+description: SpaceRole and ServiceUserRole permission rules — scope ContentType, Content, Media, and Script with optional filters (contentType, createdBy, tag, self), plus the SpaceRole `settings` axis (a flat SETTING_* list, no filters) that gates Space configuration — Webhook, Locale, ServiceLogin, SpaceRole, WebHosting, tokens, SpaceMembership, EmailAccount. Script adds an Execute action (call /execute); on Script only createdBy and self apply. Use createdBy.sys.id ':self' for the authenticated caller's own resources, or the `self` filter (a Refer to one entity) to pin a rule to exactly one resource — e.g. Execute a single specific Script. Use when designing least-privilege roles, per-user private Content, granting Script Execute (all / own / one specific), or member-scoped ACMA/ACDA access. English only.
 ---
 
 # Weegloo — SpaceRole & ServiceUserRole (`createdBy` filters)
@@ -53,6 +53,48 @@ An **empty `Allow` list `[]`** means the action applies to **all** resources of 
 > `Execute` **exactly this** Script and no other."
 
 Combine filters in one rule object when needed — e.g. restrict **Read** on **Content** of a given **ContentType** **and** only when **created by** the caller.
+
+---
+
+## `settings` — the Space-configuration axis (a flat list, not a map)
+
+A **`SpaceRole`** carries one more field beside those maps: **`settings`**. It is a **plain array of
+action names** — **no `Allow`/`Deny`, no filter rules.** `contentType` / `createdBy` / `tag` / `self`
+do **not** apply. Listing an action grants it; omitting it withholds it.
+
+```jsonc
+{ "name": "editor",
+  "content":  { "…": { "Allow": [ … ] } },     // maps, with filters
+  "settings": [ "SETTING_WEBHOOK", "SETTING_EMAIL_ACCOUNT" ] }   // flat list
+```
+
+**This is what gates every "configure the Space" resource** — the things a role with full Content
+permissions still cannot touch:
+
+| Action | Gates |
+|---|---|
+| `SETTING_GENERAL` | the **Space object** itself |
+| `SETTING_LOCALE` | **Locale** |
+| `SETTING_WEBHOOK` | **Webhook** (+ its calls / status) |
+| `SETTING_APP` | **ServiceLogin**, **ServiceUser**, **ServiceUserRole**, market app / bundle install |
+| `SETTING_TAG` | **Tag** |
+| `SETTING_API_KEY` | **DeliveryAccessToken**, **SpaceAccessToken** |
+| `SETTING_USER` | **SpaceMembership** |
+| `SETTING_ROLE` | **SpaceRole** |
+| `SETTING_WEB_HOSTING` | **WebHosting**, **CustomDomain** |
+| `SETTING_EMAIL_ACCOUNT` | **EmailAccount** (the SMTP sender — `weegloo-email-account`) |
+| `SETTING_ALL` | all of the above — **avoid**; grant only the specific actions the caller needs |
+
+**Two traps:**
+
+- **A settings action is not a Content permission.** A `403` on creating a Webhook or an EmailAccount is
+  fixed by adding the settings action, **not** by widening `content` / `media`.
+- **The `SETTING_` prefix does not mean "admin token only."** Most of these sit in the Space-**data**
+  scope, so a **`SpaceAccessToken`** reaches them when its bound role lists them. The exceptions are
+  token-type walls, not role settings: a `SpaceAccessToken` can never edit the **Space object**
+  (`SETTING_GENERAL`), manage **`SpaceMembership`** (`SETTING_USER`), or mint **another
+  `SpaceAccessToken`** — though under `SETTING_API_KEY` it **can** still issue a read-only
+  `DeliveryAccessToken`. See **`weegloo-space-access-token`**.
 
 ---
 

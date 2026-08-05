@@ -10,12 +10,18 @@ description: Creates or designs a ContentType in Weegloo — content modeling, s
 - When creating a new `ContentType` in Weegloo (via MCP `cma_CreateContentType` — auto-publishes on create).
 - When deciding **`localized: true` vs `false`** per field (and how that affects **Content** payloads).
 
-## Why validations were often missing before
+## Validations are not optional by default
 
-- This skill used to **only** describe field types. Nothing told the model to **infer** constraints from names (`start`, `url`, `sku`, …), so the default was `validations: []` everywhere.
-- MCP tool schemas for `validations` often surface **only part** of the API (`message`, `dateRange`, …). The full list is in **CMA OpenAPI** - get the canonical **API docs** URL **only** from **`weegloo-api-endpoints`**; look up **`CreateContentType`** and **`FieldValidation`** there (**do not** paste doc links in this skill).
+**Do not default every field to `validations: []`.** **Infer** constraints from the field's meaning and
+name (`start`, `url`, `sku`, …), then check **`FieldValidation`** and the soft guidance below. Add
+constraints when the product meaning is clear; omit or keep them loose when formats are locale- or
+product-dependent. For **Refer → Media**, consider **file size / mime / dimensions** when the product
+requires it.
 
-**From now on:** avoid defaulting every field to **`validations: []`** without thought-check **`FieldValidation`** and the soft guidance below. Add constraints when the product meaning is clear; omit or keep them loose when formats are locale- or product-dependent. For **Refer → Media**, consider **media file size / mime / dimensions** when the product requires it.
+**MCP tool schemas for `validations` surface only part of the API** (`message`, `dateRange`, …). The
+full list is in **CMA OpenAPI** - get the canonical **API docs** URL **only** from
+**`weegloo-api-endpoints`**, then look up **`CreateContentType`** and **`FieldValidation`** there
+(**do not** paste doc links in this skill).
 
 ---
 

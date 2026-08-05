@@ -150,7 +150,7 @@ If you put `/code/` in the user-facing entry URL, the provider rejects the reque
 
 ### B. The token-exchange endpoint must be called via POST, not GET
 
-Older docs call this `[GET] /oauth/token` with a JSON body. **Browsers cannot send a body on GET or HEAD requests** - the Fetch spec throws `TypeError` synchronously, and the XHR spec mandates that `send(body)` set `body` to `null` for `GET`/`HEAD`. Use `POST` with `Content-Type: application/json` and the JSON body as shown in step 2.
+**Browsers cannot send a body on GET or HEAD requests** - the Fetch spec throws `TypeError` synchronously, and the XHR spec mandates that `send(body)` set `body` to `null` for `GET`/`HEAD`. A `GET /oauth/token` carrying a JSON body therefore cannot work in a browser: use `POST` with `Content-Type: application/json` and the JSON body as shown in step 2.
 
 If a non-browser client (server, CLI, native app) really must use GET, it can - but the canonical browser-safe call is POST.
 
