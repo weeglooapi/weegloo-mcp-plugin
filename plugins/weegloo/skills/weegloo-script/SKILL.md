@@ -1,6 +1,6 @@
 ---
 name: weegloo-script
-description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/ForEach, ResourceCreate/Update/Patch/Delete/Publish/Unpublish/Archive/Unarchive, Http, EmailSend, SetVar, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions, sync (10s, fixed) or async (30s base, capped at 180s, poll by requestId). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
+description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/ForEach, ResourceCreate/Update/Patch/Delete/Publish/Unpublish/Archive/Unarchive, Http, EmailSend, SetVar, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions and JsonLogic operations (operators take a `$` prefix in data slots such as `fields` / `Http.body`, where a bare key is a field name), sync (10s, fixed) or async (30s base, capped at 180s, poll by requestId). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
 ---
 
 # Weegloo — Script (declarative backend endpoints)
@@ -65,7 +65,7 @@ whenever one of these fits. These are the situations an AI agent should map to S
      "body": [ { "type": "ResourcePatch", "resource": "Content",
        "target": { "sys": { "id": "{ /row/sys/id }" } },
        "version": "{ /row/sys/version }",
-       "fields": { "count": { "en-US": { "+": [ "{ /row/fields/count/en-US }", 1 ] } } } } ],
+       "fields": { "count": { "en-US": { "$+": [ "{ /row/fields/count/en-US }", 1 ] } } } } ],
      "catch": [ { "type": "Return", "value": { "ok": false, "retry": true }, "isError": true, "statusCode": 409 } ] }
    ```
 4. **Controlled privilege delegation (act with the author's authority).** A Script runs its inner
@@ -350,11 +350,37 @@ Any string value may embed a pointer. Roots:
 
 - **Single pointer** preserves the source type (`{ /payload/fields/count }` stays a number).
 - **Mixed template** concatenates as string (`"page-{ /payload/fields/n }-of-10"`).
-- Missing path → **`null`** (single pointer) or **`""`** (mixed). **There is no brace-escape mechanism** — any `{ /… }`-shaped substring (brace, optional space, a `/pointer`, optional space, brace) is always resolved; other braces (e.g. a JSON literal `{"k":…}` not followed by `/`) are already left as-is.
-- **JsonLogic** operators in `condition`/`value`: `if`/`?:`, `and`/`or`/`!`/`!!`,
+- Missing path → **`null`** (single pointer) or **`""`** (mixed).
+- **Literal brace:** write **`\{`** — that position is then not read as a pointer. Only `{ /… }`-shaped
+  substrings (brace, optional space, a `/pointer`, optional space, brace) resolve at all, so other
+  braces (e.g. a JSON literal `{"k":…}`) are left as-is and need no escape.
+- **JsonLogic** operators: `if`/`?:`, `and`/`or`/`!`/`!!`,
   `==`/`!=`/`===`/`!==`/`<`/`<=`/`>`/`>=`, `+`/`-`/`*`/`/`/`%`, `min`/`max`, `cat`, `in`, `merge`.
-  Operands resolve pointers first, then apply the op: `{ "+": [ "{ /vars/n }", 1 ] }`.
+  Operands resolve pointers first, then apply the op: `{ "$+": [ "{ /vars/n }", 1 ] }`.
   **Not supported:** array iterators `map` / `filter` / `reduce` / `all` / `some` / `none`.
+
+### `$` on operators — required in data slots
+
+A key like `cat` or `in` is a legitimate **field name**, so where keys belong to your data the
+operator needs a **`$` prefix** to be read as an operator:
+
+| Slot | Fields | How keys are read |
+|---|---|---|
+| **Data** | `fields` (Create/Update/Patch) · `Http.body` · `Return.value` · `SetVar.value` | A key without `$` is **always a field name**. Operators **must** use `$`: `{ "$+": [ … ] }`. |
+| **Expression** | `If.condition` · `Loop.while` · `version` | The whole value is an expression — bare (`{ "and": [ … ] }`) and `$` both work. |
+| **Template** | everything else — `url`, `method`, `headers[].value`, `locale`, `order`, `over`, `target.sys.id`, `EmailSend.*` | Plain strings; only `{ /pointer }` applies. |
+
+- Once inside a `$` operation, **nested** operators need no `$` (adding it is still valid).
+- **When unsure, prefix every operator with `$`** — it is correct in every slot.
+- A data key that really starts with `$` is **doubled**: `"$$ref"` means the field `$ref`.
+- **Errors:** an unknown `$` key ⇒ **`WGL400055`**; a `$` operator sharing its object with sibling
+  keys ⇒ **`WGL400056`** (an operation must be its object's only key — move sibling data one level out).
+
+```jsonc
+"fields": { "cat": { "en-US": "hello" } }                      // data slot: `cat` is a FIELD
+"fields": { "n":   { "en-US": { "$+": [ "{ /row/fields/n/en-US }", 1 ] } } }   // compute ⇒ needs $
+"condition": { "and": [ { "<": [ "{ /a/body/risk }", 0.5 ] } ] }               // expression slot: bare OK
+```
 
 ## Sync vs Async, and limits
 
