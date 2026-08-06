@@ -24,6 +24,8 @@ description: Create Weegloo DeliveryAccessToken (CDA) via CMA-bind role.sys.id t
 
 3. **Preferred order:** **`cma_CreateSpaceRole`** (read-only for the **`ContentType`s** CDA needs) → copy **`sys.id`** from the response → **`cma_CreateDeliveryAccessToken`** with **`role`** referencing **only** that id. Permission rule design (`createdBy`, **`:self`**, `contentType` filters): **`weegloo-space-role`** skill. OpenAPI: **`weegloo-api-endpoints`** (do not duplicate URLs here).
 
+   **Caller permission:** issuing a DAT requires **`SETTING_DELIVERY_ACCESS_TOKEN`** on the caller's role `settings` list — a distinct action from `SETTING_SPACE_ACCESS_TOKEN`, so the right to issue a read-only delivery token can be granted **without** the right to mint write-capable `SpaceAccessToken`s. Like the whole `settings` axis, it is usable **only from a console login session or a Personal Access Token** — a `SpaceAccessToken` cannot issue a DAT whatever its bound role says.
+
 4. **Required `role` shape:**
 
 ```json

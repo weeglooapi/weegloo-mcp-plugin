@@ -1,6 +1,6 @@
 ---
 name: weegloo-space-role
-description: SpaceRole and ServiceUserRole permission rules — scope ContentType, Content, Media, and Script with optional filters (contentType, createdBy, tag, self), plus the SpaceRole `settings` axis (a flat SETTING_* list, no filters) that gates Space configuration — Webhook, Locale, ServiceLogin, SpaceRole, WebHosting, tokens, SpaceMembership, EmailAccount. Script adds an Execute action (call /execute); on Script only createdBy and self apply. Use createdBy.sys.id ':self' for the authenticated caller's own resources, or the `self` filter (a Refer to one entity) to pin a rule to exactly one resource — e.g. Execute a single specific Script. Use when designing least-privilege roles, per-user private Content, granting Script Execute (all / own / one specific), or member-scoped ACMA/ACDA access. English only.
+description: SpaceRole and ServiceUserRole permission rules — scope ContentType, Content, Media, and Script with optional filters (contentType, createdBy, tag, self), plus the SpaceRole `settings` axis (a flat SETTING_* list, no filters) that gates Space configuration — Webhook, Locale, ServiceLogin, SpaceRole, WebHosting, DeliveryAccessToken and SpaceAccessToken (separate actions), SpaceMembership, EmailAccount, Tag, app install, usage monitoring. Script adds an Execute action (call /execute); on Script only createdBy and self apply. Use createdBy.sys.id ':self' for the authenticated caller's own resources, or the `self` filter (a Refer to one entity) to pin a rule to exactly one resource — e.g. Execute a single specific Script. Use when designing least-privilege roles, per-user private Content, granting Script Execute (all / own / one specific), or member-scoped ACMA/ACDA access. English only.
 ---
 
 # Weegloo — SpaceRole & ServiceUserRole (`createdBy` filters)
@@ -76,25 +76,34 @@ permissions still cannot touch:
 | `SETTING_GENERAL` | the **Space object** itself |
 | `SETTING_LOCALE` | **Locale** |
 | `SETTING_WEBHOOK` | **Webhook** (+ its calls / status) |
-| `SETTING_APP` | **ServiceLogin**, **ServiceUser**, **ServiceUserRole**, market app / bundle install |
-| `SETTING_TAG` | **Tag** |
-| `SETTING_API_KEY` | **DeliveryAccessToken**, **SpaceAccessToken** |
+| `SETTING_APP` | **AppInstallation** — market app / bundle install |
+| `SETTING_TAG` | **Tag** (create / update / delete) |
+| `SETTING_DELIVERY_ACCESS_TOKEN` | **DeliveryAccessToken** |
+| `SETTING_SPACE_ACCESS_TOKEN` | **SpaceAccessToken** |
 | `SETTING_USER` | **SpaceMembership** |
 | `SETTING_ROLE` | **SpaceRole** |
 | `SETTING_WEB_HOSTING` | **WebHosting**, **CustomDomain** |
+| `SETTING_SERVICE_LOGIN` | **ServiceLogin**, **ServiceUser**, **ServiceUserRole** |
 | `SETTING_EMAIL_ACCOUNT` | **EmailAccount** (the SMTP sender — `weegloo-email-account`) |
+| `SETTING_MONITORING` | **usage & metrics** — Space monthly reports, network / storage usage |
 | `SETTING_ALL` | all of the above — **avoid**; grant only the specific actions the caller needs |
+
+That table is the complete set. `settings` accepts these names only — anything else is rejected at save.
 
 **Two traps:**
 
-- **A settings action is not a Content permission.** A `403` on creating a Webhook or an EmailAccount is
-  fixed by adding the settings action, **not** by widening `content` / `media`.
-- **The `SETTING_` prefix does not mean "admin token only."** Most of these sit in the Space-**data**
-  scope, so a **`SpaceAccessToken`** reaches them when its bound role lists them. The exceptions are
-  token-type walls, not role settings: a `SpaceAccessToken` can never edit the **Space object**
-  (`SETTING_GENERAL`), manage **`SpaceMembership`** (`SETTING_USER`), or mint **another
-  `SpaceAccessToken`** — though under `SETTING_API_KEY` it **can** still issue a read-only
-  `DeliveryAccessToken`. See **`weegloo-space-access-token`**.
+- **A settings action is not a Content permission.** A `403` on creating a Webhook or an EmailAccount
+  needs the **settings** action added — widening `content` / `media` will never fix it.
+- **A settings action is necessary but not sufficient — the *token type* is a second gate.** The whole
+  `settings` axis is reachable **only by a console login session or a Personal Access Token**. Every
+  other Weegloo credential is refused on **every** row above, no matter what the role says:
+  a **`SpaceAccessToken`** (confined to the Space-**data** plane), a **`DeliveryAccessToken`**
+  (read-only CDA), a **Space-scoped console token** (issued when the login popup runs on a
+  WebHosting origin), and a **`ServiceUser`** token (ACMA/ACDA — Space settings always evaluate to
+  `false` for it). So putting `SETTING_WEBHOOK` on a role bound to a `SpaceAccessToken` does **not**
+  make webhooks manageable by that token — it changes nothing. Grant `settings` on the roles held by
+  **people** (Space members) and by PATs; scope SpaceAccessToken roles with the `content` / `media` /
+  `contentType` / `script` maps instead. See **`weegloo-space-access-token`**.
 
 ---
 

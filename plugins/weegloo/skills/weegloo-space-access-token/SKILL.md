@@ -1,6 +1,6 @@
 ---
 name: weegloo-space-access-token
-description: Create a Weegloo SpaceAccessToken (CMA) — a read+write token confined to ONE Space whose exact power is set entirely by a bound SpaceRole. Unlike the read-only DeliveryAccessToken it can write (CMA data + CDA + Upload); unlike a Personal Access Token it cannot touch Space settings, the Organization, the account plane, or ACMA/ACDA. Where it runs — a trusted backend, or a public/browser client such as anonymous posting — and what it can do are the user's call, governed by how the bound SpaceRole is scoped. Bind role.sys.id to a SpaceRole matched to that use — for a publicly-exposed token, tight enough that a leak is acceptable; never Administrator or the first list item. Handle WGL422001 without escalating. Skill text in English only.
+description: Create a Weegloo SpaceAccessToken (CMA) — a read+write token confined to ONE Space whose exact power is set entirely by a bound SpaceRole. Unlike the read-only DeliveryAccessToken it can write (CMA data + CDA + Upload); unlike a Personal Access Token it cannot touch the Organization, the account plane, ACMA/ACDA, or ANY Space setting — the whole SETTING_* axis (SpaceRole, SpaceMembership, Webhook, ServiceLogin, WebHosting, Locale, Tag, EmailAccount, token issuance, self-mint) is refused whatever the bound role says, so the role only governs Content/ContentType/Media and Script Execute. Where it runs — a trusted backend, or a public/browser client such as anonymous posting — and what it can do are the user's call, governed by how the bound SpaceRole is scoped. Bind role.sys.id to a SpaceRole matched to that use — for a publicly-exposed token, tight enough that a leak is acceptable; never Administrator or the first list item. Handle WGL422001 without escalating. Skill text in English only.
 ---
 
 # Weegloo Space Access Token (Space-scoped read + write, role-governed)
@@ -17,13 +17,20 @@ description: Create a Weegloo SpaceAccessToken (CMA) — a read+write token conf
 
 A SpaceAccessToken is a **Weegloo User-plane** bearer token (prefix **`SPCAT`**). Its scope is deliberately confined:
 
-- ✅ **Read + write the Space's data** — Content / ContentType / Media / publish, **and** the Space's service configuration (Webhook, ServiceLogin / ServiceUserRole, **`DeliveryAccessToken` issuance**, Locale, WebHosting, SpaceRole, **`EmailAccount`**) — **each only to the extent the bound `SpaceRole` grants that permission**.
+- ✅ **Read + write the Space's data** — Content / ContentType / Media / Comment / Snapshot / publish / archive, and **Script `Execute`** — **each only to the extent the bound `SpaceRole` grants that permission**.
 - ✅ **CDA** — read published resources in its Space.
 - ✅ **Upload** — upload files (then a CMA Media create attaches them).
-- ❌ **Space *settings* — always 403, regardless of the bound role**: cannot modify the **Space object**, manage **`SpaceMembership`**, or **mint another `SpaceAccessToken`** (self-mint of a write token is blocked). *(Issuing a read-only `DeliveryAccessToken` is **not** blocked — see rule 5.)*
+- ❌ **The entire Space *settings* axis — always 403, regardless of the bound role.** Not one `SETTING_*` action is reachable: no **`SpaceAccessToken`** CRUD (self-mint blocked), no **Space object**, **`SpaceMembership`**, **`SpaceRole`**, **Webhook**, **ServiceLogin / ServiceUser / ServiceUserRole**, **WebHosting / CustomDomain**, **Locale** writes, **Tag** writes, **`EmailAccount`**, **`DeliveryAccessToken` issuance**, app install, or usage monitoring. Script **Create/Read/Edit/Delete** is likewise out of reach (**`Execute`** still works).
 - ❌ **Organization plane** — no Space lifecycle, org membership, market/app, usage.
 - ❌ **Account plane** — no `/me`, no Personal Access Token issuance, no org creation, no MFA/terms/withdrawal.
 - ❌ **ACMA / ACDA** — it is **not** a Service User token and never authorizes the app (Service User) plane.
+
+> **This boundary is enforced by the token's scope, not by the role — the two axes do not overlap.** A
+> SpaceAccessToken carries the Space-**data** scope only, and *every* `SETTING_*` gate sits outside it.
+> Adding `SETTING_WEBHOOK` (or `SETTING_ROLE`, `SETTING_LOCALE`, `SETTING_DELIVERY_ACCESS_TOKEN`, …) to
+> the bound role changes **nothing** — the request is refused before the role is consulted. The bound
+> role is therefore meaningful **only** on the `content` / `contentType` / `media` / `script` maps; that
+> is where all of your scoping effort belongs.
 
 Privilege ordering: **`PersonalAccessToken` ⊃ `SpaceAccessToken` ⊃ `DeliveryAccessToken`**. The SpaceAccessToken sits between them — write-capable like a PAT, but caged to one Space and one role like a DAT.
 
@@ -59,7 +66,7 @@ Scope the single SAT's role to exactly the union the client needs — e.g. `cont
 
 4. **On `WGL422001`, do NOT escalate.** Never fall back to Administrator or a broader role to make the create succeed. Explain that the caller cannot grant a role they do not hold, and offer legitimate options: pick a role the caller actually has, have a Space admin create it, or (if appropriate) grant the caller that role first. See **`weegloo-global-rules`** → *Plan/quota* discipline for the same no-workaround stance.
 
-5. **Know what is walled off vs. what the bound role controls.** Three **Space-*settings*** operations are **always 403, regardless of the bound role**: minting/managing another **`SpaceAccessToken`** (self-mint of a write token is blocked), editing the **Space object**, and managing **`SpaceMembership`**. **Everything else** in the Space — including **issuing read-only `DeliveryAccessToken`s** and managing Webhook / ServiceLogin / Locale / WebHosting / SpaceRole / **`EmailAccount`** — is permitted **only to the extent the bound `SpaceRole` grants that permission**. (Do not read a `SETTING_…`-shaped permission name as "walled off": several of those, `EmailAccount` included, sit in the Space-**data** scope a SpaceAccessToken holds. The wall is the three operations above, not the naming.) So it is the **role**, not the token type, that stops a SpaceAccessToken from minting DATs or editing service config — which is exactly why scoping the bound role to the use (rule 1) matters. In short: it **can** issue a `DeliveryAccessToken` (if the role allows), but **never** another `SpaceAccessToken`.
+5. **The whole `settings` axis is walled off; the bound role governs only the data plane.** A SpaceAccessToken cannot perform **any** `SETTING_*` action — not `SETTING_SPACE_ACCESS_TOKEN` (self-mint), `SETTING_GENERAL` (the Space object), `SETTING_USER` (`SpaceMembership`), `SETTING_ROLE`, `SETTING_WEBHOOK`, `SETTING_SERVICE_LOGIN`, `SETTING_WEB_HOSTING`, `SETTING_LOCALE`, `SETTING_TAG`, `SETTING_EMAIL_ACCOUNT`, `SETTING_DELIVERY_ACCESS_TOKEN`, `SETTING_APP`, nor `SETTING_MONITORING`. Listing them on the bound role does not help. What the role **does** govern is the data plane it can reach: **Content / ContentType / Media** and their **Comment / Snapshot / publish / archive** operations, plus **Script `Execute`** — that is where scoping (rule 1) does the real work. **Corollary for provisioning:** a SpaceAccessToken cannot bootstrap a Space — it cannot create Locales, Webhooks, ServiceLogin, WebHosting, or issue any token. Do that setup from a console session or a PAT first, then hand the SAT to the runtime. Per-action detail: **`weegloo-space-role`** → the `settings` table.
 
 6. **Never reach across the cage.** A SpaceAccessToken is not valid for **ACMA / ACDA** (Service User plane), the **Organization** plane, or the **account** plane (`/me`, PAT issuance, org creation). If a task needs any of those, this is the wrong token — use the matching identity (**`weegloo-service-architecture`** to choose).
 

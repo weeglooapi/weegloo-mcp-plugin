@@ -71,7 +71,9 @@ index, then `ResourcePatch`es an `indexedAt` value back onto it. (Full patterns:
 - **Permissions.** Creating/editing the Webhook requires the caller's role to hold the Space's
   **webhook-settings** permission (`SETTING_WEBHOOK`, on the role's flat `settings` list — not a Content
   permission; see `weegloo-space-role`) — there is no Script-`Execute` check performed at
-  webhook-save time. When the Webhook fires, the linked Script runs **fire-and-forget with its
+  webhook-save time. **A `SpaceAccessToken` cannot manage Webhooks at all**, even with `SETTING_WEBHOOK`
+  on its bound role — webhook settings are outside that token's scope, so author Webhooks from a console
+  session or a Personal Access Token (**`weegloo-space-access-token`**). When the Webhook fires, the linked Script runs **fire-and-forget with its
   author's delegated authority** (its inner ops are not re-checked per statement), so the **Script's
   author** must hold the unconditional Content/Media permissions the Script needs — see `weegloo-script`.
 - **The link blocks deleting the Script.** While a Webhook still references it, deleting that Script

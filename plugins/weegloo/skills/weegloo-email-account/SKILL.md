@@ -74,9 +74,12 @@ It lives on the role's flat **`settings`** list — a different axis from the `c
 `media` / `script` maps (**`weegloo-space-role`** → *`settings`*). On a `403` here, add the settings
 action; do **not** widen a content permission.
 
-**The `SETTING_` prefix does not mean "admin-token only".** This right sits in the Space-**data** scope,
-so a `SpaceAccessToken` reaches it when its bound role grants it — unlike editing the Space object,
-managing `SpaceMembership`, or minting another `SpaceAccessToken`, which are refused whatever the role.
+**The settings action alone is not enough — the token type is a second gate.** Like every `SETTING_*`
+action, `SETTING_EMAIL_ACCOUNT` is reachable **only from a console login session or a Personal Access
+Token**. A **`SpaceAccessToken`** cannot manage email accounts at all, even with the action on its bound
+role (**`weegloo-space-access-token`**), and neither can a `DeliveryAccessToken` or a `ServiceUser`
+token. Create the `EmailAccount` as an admin; Scripts then send through it with their author's
+delegated authority, so the Script's caller needs no email permission.
 
 ## Related
 

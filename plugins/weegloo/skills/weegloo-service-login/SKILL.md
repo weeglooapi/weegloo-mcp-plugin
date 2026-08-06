@@ -35,6 +35,11 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 | **`ServiceUserRole`** | Permission rule set applied to app-managed members. Defines what those members may read/write through **ACMA** / **ACDA**. Multiple roles may exist per Space. Optional filters on **`content`**, **`contentType`**, **`media`** include **`createdBy.sys.id`** (fixed id or **`:self`** = current member). See **`weegloo-space-role`**. |
 | **`ServiceUser`** | One record per app-managed member of the Space (i.e. one end-user account in the product). Optional **`roleOverride`** (a `Refer` to a different **`ServiceUserRole`**) overrides `ServiceLogin.sys.defaultRole` for **that** member. Optional **`isAdmin: true`** elevates the member (see below). |
 
+**Caller permission:** creating or editing any of the three requires the **`SETTING_SERVICE_LOGIN`**
+action on the caller's `SpaceRole` `settings` list (**`weegloo-space-role`**) — `SETTING_APP` gates
+market-app install and does **not** cover these. A **`SpaceAccessToken`** cannot manage them at all,
+whatever its role — use a console session or a PAT (**`weegloo-space-access-token`**).
+
 **Important:** these are **not** the same as Weegloo's built-in account model.
 
 - **Weegloo platform accounts + `SpaceRole`** → manage **the Space itself** (CMA / Upload / CDA). The Weegloo User login mechanisms (PAT and console FE login popup) are documented in **`weegloo-user-login`**. DeliveryAccessToken for **CDA** also references **`SpaceRole`** (see **`weegloo-delivery-access-token`**).
