@@ -1,6 +1,6 @@
 ---
 name: weegloo-payment
-description: Wire a PaymentGateway (PG) or Merchant-of-Record (MoR) into a product built on Weegloo — Stripe, Toss Payments, PortOne, Paddle, FastSpring, LemonSqueezy, Adyen, NCP, KCP, 나이스페이 and the like. Covers the two server-side shapes that work without hosting a backend: CONFIRM (frontend hands over a payment id, a Script pulls the truth from the PG's verify API and writes the order) and CALLBACK (the PG POSTs to a Script's /execute, whose FIRST statement verifies the signature with Signature/Hash, unpacks packed headers with Regex, and checks the replay window with /now). Also covers what authenticates an inbound PG callback — a SpaceAccessToken bound to a role granting only script.Execute on that one Script when the provider can send a custom header, or the token-free /execute/anonymous endpoint (anonymousCallEnabled) when it can only POST to a bare URL, as Stripe, Paddle and Shopify do — plus idempotency against provider retries, where the PG secret key belongs, and the amount-verification rule. Use when a product must take payments, verify a payment, receive a PG/MoR webhook, handle refunds or subscription renewals, or check a callback signature. NOT for Weegloo's own subscription/plan billing.
+description: Wire any PaymentGateway (PG), Merchant-of-Record (MoR), 결제 PG or checkout provider into a product built on Weegloo. Whatever the provider is, its own documentation is the only source for what it supports and how it signs — this skill supplies the Weegloo side and tells you what to go look up. Covers the two server-side shapes that work without hosting a backend: CONFIRM (frontend hands over a payment id, a Script pulls the truth from the PG's verify API and writes the order) and CALLBACK (the PG POSTs to a Script's /execute, whose FIRST statement verifies the signature with Signature/Hash, unpacks packed headers with Regex, and checks the replay window with /now). Also covers what authenticates an inbound PG callback — a SpaceAccessToken bound to a role granting only script.Execute on that one Script when the provider can send a custom header, or the token-free /execute/anonymous endpoint (anonymousCallEnabled) when it can only POST to a bare URL — which of the two applies is looked up in that provider's own docs, never assumed — plus idempotency against provider retries, where the PG secret key belongs, and the amount-verification rule. Use when a product must take payments, verify a payment, receive a PG/MoR webhook, handle refunds or subscription renewals, or check a callback signature. NOT for Weegloo's own subscription/plan billing.
 ---
 
 # Weegloo — payments (PG / MoR)
@@ -65,8 +65,8 @@ authentication, and no idempotency key — you are asking the authoritative sour
   "else": [ { "type": "Return", "isError": true, "statusCode": 402, "value": "payment not confirmed" } ] }
 ```
 
-- **Send the amount you recorded, not the amount the caller sent.** Most PGs make the confirm call
-  itself amount-checked — that only helps if the amount comes from your record.
+- **Send the amount you recorded, not the amount the caller sent.** A confirm call that the provider
+  itself amount-checks only protects you if the amount you send came from your own record.
 - `Http` **forces Async**, so `/execute` answers `202` + `requestId` and the frontend polls. Budget
   and poll semantics: `weegloo-script`.
 
@@ -76,14 +76,21 @@ authentication, and no idempotency key — you are asking the authoritative sour
 
 ### B-1. Which endpoint the PG posts to (read this before designing the flow)
 
-There are two, and the provider's own capabilities pick for you.
+There are two, and one question picks for you:
 
-| The provider can… | Register this URL | What authenticates the call |
+> **Can this provider send a custom HTTP header with its webhook?**
+
+**Answer it from the provider's own webhook/notification documentation, per integration.** Do not
+assume, and do not trust a list — the answer differs by provider, by product line within a provider,
+and changes over time. Some let you attach arbitrary headers (or HTTP basic auth) to a notification
+endpoint; many only POST to whatever URL you paste in. Look it up before choosing a path.
+
+| If it can… | Register this URL | What authenticates the call |
 |---|---|---|
-| set a **custom header** on its notification URL (FastSpring, Adyen, NCP, most Korean PGs) | `…/scripts/{scriptId}/execute` | a **`SpaceAccessToken`** in `Authorization: Bearer …` **and** the Script's signature check |
-| only POST to a **bare URL** (Stripe, Paddle, Shopify) | `…/scripts/{scriptId}/execute/anonymous` | the Script's **signature check alone** |
+| send a **custom header** | `…/scripts/{scriptId}/execute` | a **`SpaceAccessToken`** in `Authorization: Bearer …` **and** the Script's signature check |
+| only POST to a **bare URL** | `…/scripts/{scriptId}/execute/anonymous` | the Script's **signature check alone** |
 
-**Prefer the token path when the provider supports it** — two independent gates beat one, and an
+**Prefer the token path whenever the provider supports it** — two independent gates beat one, and an
 endpoint that answers only to a known token never runs on someone else's traffic at all.
 
 **Token path.** Bind the token to a **`SpaceRole` whose only grant is `script.Execute` scoped with the
@@ -127,7 +134,7 @@ out, verify + record in the Sync Script and let a `Webhook` on that write do the
 { "type": "Signature", "name": "verified", "algorithm": "SHA256",
   "secret": "<webhook signing secret>",
   "value": "{ /rawPayload }",
-  "expected": "{ /headers/x-fs-signature }" },
+  "expected": "{ /headers/x-provider-signature }" },
 
 { "type": "If", "condition": { "!": "{ /verified }" },
   "then": [ { "type": "Return", "isError": true, "statusCode": 401, "value": "bad signature" } ] }
@@ -135,32 +142,45 @@ out, verify + record in the Sync Script and let a `Webhook` on that write do the
 
 - **Sign `{ /rawPayload }`** — the caller's body exactly as received. A re-serialized object has
   different bytes and will never match.
-- Header names arrive **lower-cased**: `{ /headers/x-fs-signature }`.
+- Header names arrive **lower-cased**, whatever case the provider sent: `{ /headers/x-provider-signature }`.
 - **Nothing before the check.** No read, no write, no `SetVar` off the payload.
 
-### B-3. Provider scheme → statements
+### B-3. Read the provider's scheme, then map its shape to statements
 
-Verify the exact scheme in the provider's own docs; this is the *shape*, not the spec.
+**Start by extracting four things from the provider's signature documentation** — these are what the
+statements need, and guessing any of them produces a check that fails every time:
 
-| Provider scheme | Statements |
+1. **Which header** carries the signature, and whether it holds the bare code or a packed structure.
+2. **What exactly is signed** — the raw body alone, or a string built from it (a timestamp, a message
+   id, a joined field list). Byte-for-byte.
+3. **How the code is written** — hex or base64. (You do not have to act on this: `Signature` accepts
+   either. Worth knowing so you can tell a wrong scheme from a wrong encoding.)
+4. **How the secret was issued to you** — plain text, hex, or base64. This one you *must* act on
+   (`secretEncoding`); the wrong choice is a different key and never matches.
+
+Then map the shape you found. This table is the **shape → statement** vocabulary, not a claim about
+any provider:
+
+| The scheme's shape | Statements |
 |---|---|
-| HMAC-SHA256 over raw body, **hex**, bare header | `Signature` |
-| HMAC-SHA256 over raw body, **base64** | `Signature` — no encoding field needed, it accepts either |
-| Signing key issued **hex** (Adyen) or **base64** (Standard Webhooks / PortOne V2 / Svix) | `Signature` + `secretEncoding: "Hex"` / `"Base64"` |
-| Packed header, e.g. `t=…,v1=…` (Stripe) or `ts=…;h1=…` (Paddle) — timestamp is part of the signed message | `Regex` `Capture` → `Signature` over `"{ /sig/1 }.{ /rawPayload }"` |
-| `v1,<base64>` with id + timestamp in **separate** headers (Standard Webhooks) | `Signature` over `"{ /headers/webhook-id }.{ /headers/webhook-timestamp }.{ /rawPayload }"` |
-| **Keyless** salted digest — `SHA256(fields… + merchantKey)` (many Korean PGs) | `Hash` + compare with `$===` |
+| Keyed hash of the raw body, code sits alone in a header | `Signature` |
+| Signing key issued **hex**- or **base64**-encoded | `Signature` + `secretEncoding: "Hex"` / `"Base64"` |
+| Signature header packs several values, e.g. `t=…,v1=…` or `ts=…;h1=…`, and the timestamp is part of the signed message | `Regex` `Capture` → `Signature` over `"{ /sig/1 }.{ /rawPayload }"` |
+| Signed message joins values from **separate** headers | `Signature` over `"{ /headers/a }.{ /headers/b }.{ /rawPayload }"` |
+| **Keyless** salted digest — a hash of concatenated fields *including* a shared secret | `Hash` + compare with `$===` |
 | Legacy `MD5(…)` digest | `Hash` with `algorithm: "MD5"` |
+| Asymmetric signature (RSA/ECDSA), or a scheme requiring a fetched certificate | **not covered** — `Signature` is keyed-hash only; use shape A instead |
 
-**Packed header (Stripe-shaped), end to end:**
+**Packed header, end to end** — the header here holds `t=<timestamp>,v1=<hex>` and the signed message
+is `"{timestamp}.{body}"`; adapt the pattern and the assembled message to the scheme you read:
 
 ```jsonc
 { "type": "Regex", "name": "sig", "mode": "Capture",
   "pattern": "^t=(\\d+),v1=([0-9a-f]{64})$",
-  "value": "{ /headers/stripe-signature }" },
+  "value": "{ /headers/x-provider-signature }" },
 
 { "type": "Signature", "name": "verified", "algorithm": "SHA256",
-  "secret": "<whsec…>",
+  "secret": "<the provider's signing secret>",
   "value": "{ /sig/1 }.{ /rawPayload }",
   "expected": "{ /sig/2 }" },
 ```
@@ -169,11 +189,11 @@ Verify the exact scheme in the provider's own docs; this is the *shape*, not the
 (`{ /sig/1 }`). Two pointers in one string already concatenate, so building the signed message needs
 no `$cat`; reach for `$cat` only when a piece is a computed value rather than a pointer or literal.
 
-**Keyless digest (Korean-PG shaped):**
+**Keyless digest** - a hash of concatenated fields with the shared key folded in at the position that scheme puts it:
 
 ```jsonc
 { "type": "Hash", "name": "expected", "algorithm": "SHA256", "encoding": "Hex",
-  "value": "{ /payload/mid }{ /payload/ediDate }{ /payload/moid }{ /payload/amt }<merchantKey>" },
+  "value": "{ /payload/merchantId }{ /payload/timestamp }{ /payload/orderId }{ /payload/amount }<sharedKey>" },
 
 { "type": "If", "condition": { "!==": [ "{ /expected }", "{ /payload/signData }" ] },
   "then": [ { "type": "Return", "isError": true, "statusCode": 401, "value": "bad signature" } ] }

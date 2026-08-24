@@ -201,9 +201,9 @@ Each leaf maps to the concrete skill that actually does the work.
     write-back Content/Media; "create a job → poll the result") → `weegloo-script` (Weegloo **Script**)
   - **Webhook** (react to a Space event → call a URL **or** run a Script) → `weegloo-webhook`
 - **Payments**
-  - **Payment** (take money from the product's own customers through a PG or MoR — Stripe, Toss,
-    PortOne, Paddle, FastSpring, Adyen, NCP, 나이스페이 …; checkout, verification, provider
-    callbacks) → `weegloo-payment`. **Not** Weegloo's own subscription/plan billing.
+  - **Payment** (take money from the product's own customers through any PG or MoR — checkout,
+    verification, provider callbacks) → `weegloo-payment`. **Not** Weegloo's own subscription/plan
+    billing.
 
 ## Capability → skill quick table
 
