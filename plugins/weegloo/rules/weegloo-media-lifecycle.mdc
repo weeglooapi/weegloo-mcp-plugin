@@ -28,5 +28,5 @@ rules:
 
   - section: Delete order
     items:
-      - **Delete requires the target to be `Draft` or `Archived`** — a `Published` or `Changed` Media must be **unpublished (or archived) first**. Delete does **not** unpublish for you.
+      - **Delete requires the target to be `Draft` or `Archived`** — a `Published` or `Changed` Media must be **unpublished first** (which returns it to `Draft`). A `Published`/`Changed` Media **cannot be archived directly** (archive is only reachable from `Draft`), so "unpublish → then optionally archive" is the only path. Delete does **not** unpublish for you.
       - A Media whose file is **still processing** cannot be updated, patched, or deleted (busy) — wait for the state to settle.

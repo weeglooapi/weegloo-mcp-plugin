@@ -22,12 +22,12 @@ rules:
   - section: The check — is the user's consent current?
     items:
       - "**Step 1 — read the user's consent state:** call **`cma_GetCurrentUser`** (`GET /me`) and read **`sys.term`**: `{ \"accepted\": <boolean>, \"acceptedAt\": \"<ISO-8601 instant>\" }`. If another gate already fetched `/me` this session, reuse that response — don't call it twice."
-      - "**Step 2 — read the latest terms' effective date:** `GET https://cma.weegloo.com/v1/policy/terms` (public, **no auth**, not space-scoped). Response: `{ \"effectiveDate\": \"<ISO-8601 instant>\" }`."
+      - "**Step 2 — read the latest terms' effective date:** `GET https://cma.weegloo.com/v1/policy/terms` (public, **no auth**, not space-scoped). Response: `{ \"effectiveDate\": \"<ISO-8601 instant>\" }` — note `effectiveDate` MAY be `null` (no terms revision configured); treat null per the fail-open rule below."
       - "**This endpoint is a sanctioned HTTP exception.** It is NOT exposed as an MCP tool, so the agent fetches it directly over HTTP, overriding the *agents use MCP tools only* rule for THIS read-only GET. The only other such exception is the read-only `GET https://ai.weegloo.com/v1/version` (the `weegloo-version` update check); everything else stays MCP-only. Do not send `Accept: application/json` (see `weegloo-api-endpoints`)."
       - "**Step 3 — compare as instants** (both values are ISO-8601 UTC): consent is **current** iff **`sys.term.accepted === true` AND `acceptedAt >= effectiveDate`**."
       - "**The server does NOT reset `accepted` to `false` when the terms are revised.** `accepted: true` with an `acceptedAt` BEFORE `effectiveDate` means the user agreed to an OLD version and has NOT consented to the current terms — the date comparison, not the boolean, is the real test."
       - "**Consent current → total silence.** Say nothing about terms; just proceed with the request."
-      - "**Fail-open on network failure only:** if the `policy/terms` fetch fails (offline, server error), skip the comparison and proceed — never block the user's work on a fetch error. But `sys.term.accepted !== true` on `/me` is non-consent by itself, regardless of the fetch."
+      - "**Fail-open on network failure OR a null `effectiveDate`:** if the `policy/terms` fetch fails (offline, server error), OR the response's `effectiveDate` is absent/`null` (no active terms revision configured), skip the date comparison and proceed — never block the user's work in either case. But `sys.term.accepted !== true` on `/me` is non-consent by itself, regardless of the fetch."
 
   - section: While consent is missing or outdated — refuse Weegloo work
     items:

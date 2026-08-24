@@ -11,7 +11,7 @@ rules:
   - section: Critical constraints (always apply)
     items:
       - **Static hosting only.** No SSR, no server runtime. Frameworks must build to static export.
-      - **Max 100 files** in the deployed ZIP. Prefer CDN web fonts over self-hosted.
+      - **Max 300 files** in the deployed ZIP — production limit; the code default is 100, so a build kept ≤ 100 is always safe. The cap counts archive **entries** (directories included), not files only. Prefer CDN web fonts over self-hosted.
       - **`index.html` at ZIP root.** Nested structures not allowed.
       - **MCP tools only** for deployment. No deploy scripts, no direct API calls.
       - **Subdomain is auto-chosen by the LLM — never ask the user.** Pick a **distinctive** subdomain that fits the service (not a plain common noun, which collides); the user can change it anytime later. After deploy, inform the user of the chosen subdomain and that it is changeable.

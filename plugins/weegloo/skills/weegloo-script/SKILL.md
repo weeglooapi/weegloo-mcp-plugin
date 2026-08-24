@@ -187,8 +187,10 @@ whenever one of these fits. These are the situations an AI agent should map to S
 
 Every statement carries a **`type`** (the discriminator — **always include it**) and an optional
 **`name`** that binds its result into the context as `{ /<name>/… }` for later statements. On
-resource statements, **`resource`** is **`Content` | `Media`**. Statements run top-to-bottom and stop
-at `Return`.
+resource statements, **`resource`** is **`Content` | `Media`** — plus **`ServiceUser`** on the **read**
+statements only (`ResourceRead`/`ResourceFind`/`ResourceForEach`): ServiceUser is read-only (no mutation
+statement accepts it), and reading it requires the `SETTING_SERVICE_LOGIN` settings permission. Statements
+run top-to-bottom and stop at `Return`.
 
 ### Control flow
 
@@ -510,7 +512,7 @@ short-running type — an unknown statement type is Async-only by default.
 | Sync timeout | **10s**, fixed |
 | Async timeout | **computed**: `min(30s + Σ declared, 180s)` |
 | Max statements / max external I/O ops | **per-plan** (see below) |
-| Max `SetVar` | **5** |
+| Max `SetVar` | **10** |
 | `Http` retry cap | **2** |
 | Per-`Http` `timeoutMs` cap | **60s** (omitted ⇒ 30s) |
 | Per-`EmailSend` `timeoutMs` cap | **30s** |
@@ -529,10 +531,11 @@ short-running type — an unknown statement type is Async-only by default.
 > save is rejected for exceeding one, the caller simplifies the Script or upgrades the plan.
 
 **Save-time validation** also enforces: `executionMode` must be `Async` if any statement does external
-I/O or iterates; a statement **block may not be empty**; binding **`name`**s must be non-blank, unique,
-free of `/` and `~`, and not a reserved root (`payload`/`rawPayload`/`headers`/`now`/`vars`/`error`);
-and — when **`anonymousCallEnabled`** is true — no `:self` filter (**`WGL400061`**) and
-`executionMode` **`Sync`** (**`WGL400062`**).
+I/O or iterates; a **`ResourceForEach` `onEach` block may not be empty** (empty `If`/`Loop`/`Try`/`Parallel`
+bodies are allowed); binding **`name`**s must match **`^[a-zA-Z0-9_-]+$`** (letters, digits, `_`, `-` only —
+so no `/` or `~`, and also no dots, spaces, or other punctuation), be unique, and not a reserved root
+(`payload`/`rawPayload`/`headers`/`now`/`vars`/`error`); and — when **`anonymousCallEnabled`** is true —
+no `:self` filter (**`WGL400061`**) and `executionMode` **`Sync`** (**`WGL400062`**).
 
 **The resolved-length caps above are checked when the statement runs, not at save** — they bound the
 message a `Signature`/`Hash` actually authenticates and the text a `Regex` scans, and those lengths are

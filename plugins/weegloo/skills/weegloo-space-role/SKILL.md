@@ -28,8 +28,8 @@ Both **`SpaceRole`** and **`ServiceUserRole`** define these permission maps:
 | `media` | **Media** assets |
 | `script` | **Script** resources (declarative backend endpoints — `weegloo-script`) |
 
-Each map lists **actions**. Content/Media/ContentType use `Read`, `Create`, `Edit`, `Delete`,
-`Publish`, `Unpublish`, `Archive`, `Unarchive`, `All`. **`script` additionally supports `Execute`**
+Each map lists **actions**. Content/Media/ContentType use `Read`, `Create`, `Edit` (`Save` is an accepted
+alias of `Edit`), `Delete`, `Publish`, `Unpublish`, `Archive`, `Unarchive`, `All`. **`script` additionally supports `Execute`**
 (the right to call a Script's `/execute`) — an action unique to Script. Under each action,
 **`Allow`** or **`Deny`** holds an array of **filter rules**.
 
@@ -288,8 +288,11 @@ Script. Full patterns: **`weegloo-script`**.
 > **Authoring gotcha (not a filter thing):** a Script runs its inner Content/Media ops with its
 > **author's** authority, not re-checked per statement at run time. So the **author's** role must
 > hold an **unconditional `Allow`** (no `contentType`/`createdBy`/`tag` filter) for **each**
-> Content/Media action the Script performs, or the save is rejected (`WGL403015`). Author Scripts as
-> a broadly-permissioned admin; keep end users to `Execute` only. Detail: **`weegloo-script`**.
+> Content/Media action the Script performs, or the save is rejected (`WGL403015`). **One exception:**
+> Content **`Create`** may be a **`contentType`-scoped** `Allow` — an author who can create only
+> ContentType A may author a Script that creates type-A Content (a `createdBy`/`tag` filter on that
+> Create still rejects; Media `Create` has no ContentType, so it must stay unconditional). Author
+> Scripts as a broadly-permissioned admin; keep end users to `Execute` only. Detail: **`weegloo-script`**.
 
 ---
 

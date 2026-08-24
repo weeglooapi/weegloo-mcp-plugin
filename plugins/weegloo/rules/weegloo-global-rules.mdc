@@ -117,7 +117,7 @@ rules:
       - "    - prepare a `PATCH`/`PUT` → **`select=sys.id,sys.version`** (see *Resource Updates*)"
       - "    - who made it → **`select=sys.id,sys.createdBy`** with `include=1`"
       - "**Ask for the whole document only when you will use the whole document** — reading one resource you are about to render or rewrite in full. Even then prefer the single-resource GET by id over an unprojected list."
-      - "**Two mechanics that make a projection wrong rather than merely wide.** (1) Include and exclude modes **cannot be mixed** in one `select` (`sys.id,-fields.title` is invalid). (2) Every path used in **`order`** must survive the projection — projecting it away breaks the sort, so a request ordered by `fields.name` must keep `fields.name` selected."
+      - "**Two mechanics that make a projection wrong rather than merely wide.** (1) Include and exclude modes **cannot be mixed** in one `select` (`sys.id,-fields.title` is invalid). (2) Every path used in **`order`** must survive the projection — projecting it away breaks **cursor pagination** (the `next`/`prev` link builder needs the order fields and errors without them; the DB sort itself is unaffected), so a request ordered by `fields.name` must keep `fields.name` selected."
       - "Mechanics in depth — object-level paths, interaction with `include`, list-as-single via `sys.id`, batch reads with `sys.id[in]`: **`weegloo-api-query-optimization`** skill."
 
   - section: Searching `fields.*` — Advanced Search is required
@@ -153,7 +153,7 @@ rules:
       - **Applies only to Weegloo WebHosting** as the deploy target-not to apps self-hosted on other platforms.
       - **Static sites only:** no SSR or app server on the host-ship a **pre-built** static export (see `weegloo-web-hosting-rules`).
       - **Weegloo REST from a WebHosted site:** the **browser** must call Weegloo REST APIs such as **CDA** (**`fetch` / AJAX**); there is no server on Weegloo to do it per request. Elsewhere-hosted apps may use SSR or server-side clients as they choose.
-      - **At most 100 files** per deployment ZIP; prefer **web fonts** from CDNs (see `weegloo-web-hosting-rules`).
+      - **At most 300 files** per deployment ZIP (production; 100 by default — a build kept ≤ 100 is always safe), counted as archive entries; prefer **web fonts** from CDNs (see `weegloo-web-hosting-rules`).
 
   - section: Filter Parameters (API List Endpoints)
     items:

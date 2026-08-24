@@ -1,6 +1,6 @@
 ---
 name: weegloo-web-hosting
-description: Use before any deploy to Weegloo WebHosting. Static-only (max 100 files). Covers ZIP layout, MCP upload, and WebHosting resource flow.
+description: Use before any deploy to Weegloo WebHosting. Static-only (max 300 files in production, 100 by default). Covers ZIP layout, MCP upload, and WebHosting resource flow.
 ---
 
 # Weegloo Deploy Website
@@ -28,7 +28,7 @@ description: Use before any deploy to Weegloo WebHosting. Static-only (max 100 f
 
 1. **Static hosting only (on Weegloo).** Weegloo serves **pre-built** files from your ZIP (HTML, JS, CSS, images, etc.). **SSR, server runtimes, and per-request server logic are not supported on Weegloo WebHosting.** Use **static export** builds (e.g. Next `output: 'export'`) or other generators that output a flat/static site for the ZIP you upload.
 2. **Weegloo REST from the browser.** With no app server on Weegloo, **Weegloo APIs (e.g. CDA)** used by the live site must be invoked from the **client**: **`fetch`, XHR, or other browser AJAX** to the REST base URL-not from SSR or a backend running on the WebHosting origin. (CI scripts, MCP, and CMA from dev machines are unrelated.)
-3. **File count cap: 100.** After unzip, the deployment **must not contain more than 100 files** total. Heavy toolchains can emit many chunk files; if the export exceeds **100** files, consolidate or reconfigure the build before zipping.
+3. **File count cap: 300 (production).** After unzip, the deployment **must not contain more than 300 archive entries** — directories are counted too, not just files. This is the production limit; the code default is **100**, so a build kept **≤ 100** is always safe on any environment. Heavy toolchains can emit many chunk files; if the export approaches the cap, consolidate or reconfigure the build before zipping.
 4. **Fonts:** Prefer **web fonts** (e.g. Google Fonts or another link/CSS CDN). Bundling many self-hosted `.woff2` files **burns the file limit** quickly; keep self-hosted font files minimal if used at all.
 
 ---
@@ -59,7 +59,7 @@ description: Use before any deploy to Weegloo WebHosting. Static-only (max 100 f
 
 3. **Build** the web project with `index.html` at the **export root** (`out/` for Next `output: 'export'`).
 
-4. **Verify** the export tree contains **≤ 100 files** (see platform limits). Then **compress** the build output into a ZIP. **`index.html` at ZIP root.**
+4. **Verify** the export tree stays within the file-count cap (see platform limits — 300 in production, 100 by default/in dev; keeping it **≤ 100** is always safe). Then **compress** the build output into a ZIP. **`index.html` at ZIP root.**
 
 5. **CreateUpload** (MCP) with the ZIP.
 

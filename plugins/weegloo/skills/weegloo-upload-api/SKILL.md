@@ -146,7 +146,7 @@ upload (with `index.html` at root, relative asset paths) is referenced the same 
 }
 ```
 
-Build-time / packaging constraints (max 100 files, static-only): see `weegloo-web-hosting`.
+Build-time / packaging constraints (max 300 files in production / 100 default, static-only): see `weegloo-web-hosting`.
 
 ## Plane selection (which Media create to call)
 

@@ -34,8 +34,8 @@ A **Webhook** reacts to **Space events**. On a matching event it performs **exac
 |-------|-------|
 | `name` | 1–64 chars |
 | `activate` | boolean; `false` = nothing fires |
-| `topics` | array of `"{resource}.{action}"` — resource ∈ **Content / ContentType / Media / Comment**; action ∈ **Create, Save, Delete, Publish, Unpublish, Archive, Unarchive** (e.g. `"Content.Create"`). **`*` wildcards** are allowed on either side: `Content.*`, `*.Publish`, and `*.*` are all valid subscriptions |
-| `filters` | narrow which events fire — keys `sys.id` (a specific item), `sys.contentType.sys.id`, `sys.createdBy.sys.id`, `sys.updatedBy.sys.id` (last editor); operators **`EQ`, `NE`, `IN`, `NOT_IN`, `REGEX`, `NOT_REGEX`** |
+| `topics` | array of `"{resource}.{action}"` — resource ∈ **Content / ContentType / Media / Comment** (only these four are ever emitted — a topic naming any other resource validates but never fires); action ∈ **Create, Save, Delete, Publish, Unpublish, Archive, Unarchive** (e.g. `"Content.Create"`). **`*` wildcards** are allowed on either side: `Content.*`, `*.Publish`, and `*.*` are all valid subscriptions |
+| `filters` | narrow which events fire — keys `sys.id` (a specific item), `sys.contentType.sys.id` (**Content topics only** — silently ignored on ContentType/Media/Comment triggers), `sys.createdBy.sys.id`, `sys.updatedBy.sys.id` (last editor); operators **`EQ`, `NE`, `IN`, `NOT_IN`, `REGEX`, `NOT_REGEX`** |
 | `url` | external endpoint — **mutually exclusive with `script`** |
 | `script` | `Refer` → a Script to run instead of the URL — **mutually exclusive with `url`** |
 | `headers` | 0–30 `WebhookHeader`s; mark auth/keys as **`secret: true`** (encrypted at rest) |
@@ -43,7 +43,7 @@ A **Webhook** reacts to **Space events**. On a matching event it performs **exac
 | `transformation` | **required** object that shapes the outbound URL request (its members all default, so `{}` suffices): `method` (GET/POST/PUT/DELETE/PATCH, default POST), `contentType`, `body` (JSON-Pointer templating like `{ /payload/sys/id }`), `includeBody` (default `true`) |
 | `runAs` | **`HookOwner`** (default; the webhook's creator) or **`EventUser`** (the user who caused the change) |
 
-**Exactly one of `url` and `script`.** Setting both, or neither, is rejected (**`WGL422061`**).
+**Exactly one of `url` and `script`.** Setting both, or neither, is rejected — **`WGL400042`** on create/PUT, **`WGL422061`** on PATCH.
 
 ## Path A — call an external URL
 
@@ -67,7 +67,9 @@ index, then `ResourcePatch`es an `indexedAt` value back onto it. (Full patterns:
 - The **triggering resource becomes the Script's `payload`** (read it as `{ /payload/... }`).
 - **`runAs` is attribution only, not authorization.** It sets who the resource writes are attributed
   to (`HookOwner` = the webhook's creator; `EventUser` = the user who caused the change). Under
-  `EventUser`, triggers with no user — `ContentType` and `Comment` events — fall back to the creator.
+  `EventUser`, triggers that carry **no** user — **`ContentType` and `Comment` events** — do **not** fall
+  back to the creator: the Script is **not executed**, and the attempt is recorded as a skipped **422**
+  call in the webhook call history. Use **`HookOwner`** if you need those events to fire.
 - **Permissions.** Creating/editing the Webhook requires the caller's role to hold the Space's
   **webhook-settings** permission (`SETTING_WEBHOOK`, on the role's flat `settings` list — not a Content
   permission; see `weegloo-space-role`) — there is no Script-`Execute` check performed at
