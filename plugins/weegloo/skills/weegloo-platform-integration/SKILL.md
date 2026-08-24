@@ -1,6 +1,6 @@
 ---
 name: weegloo-platform-integration
-description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or requests ANY capability Weegloo could provide — especially broad, vague, or ambiguous requests that do not name a specific Weegloo feature (e.g. "integrate with Weegloo", "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, file upload/download, web hosting/deploy, public/team sharing, roles, access control, external API/webhook) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work.
+description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or requests ANY capability Weegloo could provide — especially broad, vague, or ambiguous requests that do not name a specific Weegloo feature (e.g. "integrate with Weegloo", "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, file upload/download, web hosting/deploy, public/team sharing, roles, access control, external API/webhook, payments) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work.
 ---
 
 # Weegloo Platform Integration (capability router)
@@ -200,6 +200,10 @@ Each leaf maps to the concrete skill that actually does the work.
   - **API Connection / server-side automation** (call third-party APIs without a backend; compute or
     write-back Content/Media; "create a job → poll the result") → `weegloo-script` (Weegloo **Script**)
   - **Webhook** (react to a Space event → call a URL **or** run a Script) → `weegloo-webhook`
+- **Payments**
+  - **Payment** (take money from the product's own customers through a PG or MoR — Stripe, Toss,
+    PortOne, Paddle, FastSpring, Adyen, NCP, 나이스페이 …; checkout, verification, provider
+    callbacks) → `weegloo-payment`. **Not** Weegloo's own subscription/plan billing.
 
 ## Capability → skill quick table
 
@@ -221,6 +225,7 @@ Each leaf maps to the concrete skill that actually does the work.
 | Access Control               | `weegloo-space-role` + `weegloo-delivery-access-token`; scoped write → `weegloo-space-access-token` |
 | API Connection / server-side automation | `weegloo-script` (Script; call external APIs + write results back to Content/Media) |
 | Webhook (event → URL or Script) | `weegloo-webhook`                                                     |
+| Payment (PG or MoR — checkout, verification, provider callbacks) | `weegloo-payment`. NOT Weegloo's own plan billing. |
 | Send email (notify, receipt, verify) | `weegloo-email-account` (register the SMTP sender first — creating one sends a real test message) + `weegloo-script` (`EmailSend`) |
 
 If a request spans multiple rows, route through all matching skills — start with
@@ -262,7 +267,8 @@ These are two different things; do not confuse them. Full mechanics and the crea
 - **Do not bypass existing gates.** Architecture → `weegloo-service-architecture`; ContentType
   design → `weegloo-create-content-type` (+ `weegloo-default-locale` for multi-locale); CDA tokens
   → `weegloo-delivery-access-token`; external-API / server-side automation → `weegloo-script`,
-  event triggers → `weegloo-webhook`; WebHosting deploy → `weegloo-web-hosting`.
+  event triggers → `weegloo-webhook`; payments → `weegloo-payment`; WebHosting deploy
+  → `weegloo-web-hosting`.
 - **Respect the two identity systems.** "Login/Signup" splits into Weegloo User (admin) vs Service
   User (end-user). Do not ask the user to choose — infer the right identity model from the request
   (and integrate both where both clearly apply), defaulting sensibly rather than prompting.

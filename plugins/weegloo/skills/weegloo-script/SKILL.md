@@ -1,6 +1,6 @@
 ---
 name: weegloo-script
-description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/ForEach, ResourceCreate/Update/Patch/Delete/Publish/Unpublish/Archive/Unarchive, Http, EmailSend, SetVar, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions and JsonLogic operations (operators take a `$` prefix in data slots such as `fields` / `Http.body`, where a bare key is a field name), sync (10s, fixed) or async (30s base, capped at 180s, poll by requestId). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
+description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/ForEach, ResourceCreate/Update/Patch/Delete/Publish/Unpublish/Archive/Unarchive, Http, EmailSend, SetVar, ParseJson, Signature, Hash, Regex, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions over the roots /payload, /rawPayload, /headers, /now (seconds|millis|iso), /vars and /error, plus JsonLogic operations (operators take a `$` prefix in data slots such as `fields` / `Http.body`, where a bare key is a field name), sync (10s, fixed) or async (30s base, capped at 180s, poll by requestId). Verify an inbound webhook signature without leaving Sync: Signature (HMAC, constant-time, accepts hex or base64 with no encoding field), Hash (unkeyed digest for schemes that salt the message with a shared secret), Regex (Match/Capture — the only way to cut text apart) and /now for the replay window. Also covers the two resource-level invocation flags — directCallEnabled, and anonymousCallEnabled which opens POST /execute/anonymous to a caller with NO token (runs as the Script's author, Sync only, no :self filter, and the Script itself must verify what it was sent). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
 ---
 
 # Weegloo — Script (declarative backend endpoints)
@@ -133,6 +133,7 @@ whenever one of these fits. These are the situations an AI agent should map to S
 | Update (full PUT, `X-Weegloo-Version`) | `PUT /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
 | Delete (no unpublish; **blocked while a Webhook references it**) | `DELETE /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
 | **Execute** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute` | CMA **or** ACMA |
+| **Execute unauthenticated** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute/anonymous` | CMA |
 | **Poll (async)** | `GET /v1/spaces/{spaceId}/scripts/{scriptId}/executions/{requestId}` | CMA **or** ACMA |
 
 - The **execute request's HTTP method must match** the Script's **`definition.method`** (e.g. a
@@ -147,6 +148,8 @@ whenever one of these fits. These are the situations an AI agent should map to S
 ```jsonc
 {
   "name": "charge-and-generate",          // 1–64 chars
+  "directCallEnabled": true,              // default true  — may be invoked through /execute at all
+  "anonymousCallEnabled": false,          // default false — may ALSO be invoked with no token
   "definition": {
     "method": "Post",                       // Get|Post|Put|Patch|Delete — execute must use this method
     "payloadSchema": { /* optional JSON Schema; the /execute payload is validated against it */ },
@@ -155,6 +158,30 @@ whenever one of these fits. These are the situations an AI agent should map to S
   }
 }
 ```
+
+### Who may invoke it — the two resource-level flags
+
+- **`directCallEnabled`** (default `true`) — when `false` the Script runs **only** as a Webhook's
+  linked action and both execute endpoints reject the call with **`WGL422062`**.
+- **`anonymousCallEnabled`** (default `false`) — when `true` the Script may **also** be invoked with
+  **no token at all**, through **`/execute/anonymous`**. That is the path a third party which cannot
+  present a Weegloo token (a payment provider's callback, say) can reach. Leave it off unless you need
+  exactly that; the authenticated `/execute` keeps working either way.
+  - **It runs as the Script's author.** There is no caller to attribute to, so resource writes get the
+    **author** as `sys.createdBy`/`updatedBy`. A presented Bearer token is ignored — use `/execute` to
+    run as the caller.
+  - **No role permission is consulted.** The Script `Execute` grant gates `/execute`, not this path:
+    the flag *is* the authorization decision, made once by whoever saved the Script.
+  - Two rules are enforced **when the Script is saved**: it may not use the **`:self`** filter
+    (**`WGL400061`** — under anonymity `:self` resolves to the *author*, so an ownership filter written
+    for an authenticated caller would silently widen to the author's own rows), and it must be
+    **`Sync`** (**`WGL400062`** — an anonymous caller cannot poll an async result). Sync-only means a
+    statement that forces Async — `Http`, `EmailSend`, Media ingest, `Loop`, `ResourceForEach` — cannot
+    appear in it.
+  - ⚠️ **The Script itself is the only thing authenticating the request.** Verify something before
+    doing anything: a `Signature` over `{ /rawPayload }` is the usual answer (`weegloo-payment`).
+    Anonymous calls also consume the Organization's Script-execution quota, and nothing rate-limits
+    them — so an endpoint left open with nothing to verify is both a data risk and a cost risk.
 
 ## Statements
 
@@ -221,6 +248,57 @@ at `Return`.
     catch with `Try`.
   - ⚠️ **Never `Return` the SMTP error verbatim** — a rejection quotes the refused address, so on a
     `toServiceUser` send that **leaks a member's email**.
+
+### Verification & text — `Signature`, `Hash`, `Regex`
+
+All three are **pure computation and short-running**, so a Script that only verifies and writes stays
+**`Sync`** — which is what lets an inbound webhook receiver answer a real `200` inline. They take a
+**required `name`**: the result is their only effect, so one with nothing bound does nothing.
+
+- **`Signature`** — is the code the caller sent the one a keyed hash (HMAC) of the message produces?
+  Binds a **`Boolean`**. `algorithm` (`SHA1`|`SHA256`|`SHA384`|`SHA512`), `secret` (value expression),
+  `secretEncoding` (`Utf8` **default** |`Hex`|`Base64`), `value` (the message), `expected` (the code
+  received). Compared in **constant time**.
+  - **There is no output-encoding field, on purpose.** `algorithm` fixes the byte length, and for a
+    given length hex and base64 have different string lengths — so `expected` is accepted as **hex
+    (either case), base64, or base64url, padded or not**. Do not look for an `encoding` field.
+  - **`secretEncoding` is not optional guesswork** — a key issued hex- or base64-encoded is a
+    *different key* when used as text, and the code it produces looks valid but never matches.
+    Adyen issues hex; Standard Webhooks / PortOne V2 / Svix issue base64.
+  - **Failure is split by who supplies the input.** A missing or mismatched `expected` is **`false`**,
+    not an error (so a missing header and a wrong one are one outcome); an empty message is
+    authenticated as the empty message; only a blank **`secret`** — your own authoring — is a `400`.
+  - Sign **`{ /rawPayload }`**, the body exactly as received. A re-serialized object has other bytes.
+- **`Hash`** — unkeyed digest, binds the **`String`**. `algorithm` (`MD5`|`SHA1`|`SHA256`|`SHA384`|
+  `SHA512` — `MD5` only to reproduce an older scheme), `value`, `encoding` (`Hex` **default**|
+  `HexUpper`|`Base64`|`Base64Url`). For schemes that hash a shared secret *with* the message
+  (`SHA256(fields… + merchantKey)`, common in Korean PGs) — **there is no `secret` field**: write the
+  secret into `value` in whatever position that scheme puts it, which is the only form that expresses
+  every position. Compare with `$===`.
+- **`Regex`** — how text is taken apart, since the operator vocabulary can join (`cat`) and test
+  membership (`in`) but not cut. `mode`: **`Match`** → `Boolean`, **`Capture`** → a **list** (index `0`
+  the whole match, `1..n` the capture groups, a group that did not participate `null`) or `null` when
+  nothing matched. Read an element by pointer: **`{ /<name>/1 }`**.
+  - Both modes ask whether the pattern occurs **anywhere** — anchor with `^…$` for the whole text.
+  - **`pattern` is a literal, the one authored field that is NOT a value expression.** `{ /pointer }`
+    is not resolved in it. Flags go inline: `(?i)`, `(?s)`.
+  - Patterns are compiled **once per run** (a `Regex` in a `Loop` body is not recompiled per lap), and
+    an unusable pattern fails the run **before any statement executes** — including one in a branch
+    that would never have been taken.
+
+```jsonc
+// Stripe-shaped: unpack the packed header, then verify over "{timestamp}.{body}"
+{ "type": "Regex", "name": "sig", "mode": "Capture",
+  "pattern": "^t=(\\d+),v1=([0-9a-f]{64})$", "value": "{ /headers/stripe-signature }" },
+{ "type": "Signature", "name": "verified", "algorithm": "SHA256", "secret": "{ /vars/whsec }",
+  "value": "{ /sig/1 }.{ /rawPayload }", "expected": "{ /sig/2 }" },
+{ "type": "If", "condition": { "!": "{ /verified }" },
+  "then": [ { "type": "Return", "isError": true, "statusCode": 401, "value": "bad signature" } ] }
+```
+
+Two pointers in one string already concatenate, so a signed message needs **no `$cat`** — reach for
+`$cat` only when a piece is a computed value rather than a pointer or literal. Full payment/callback
+guidance: **`weegloo-payment`**.
 
 ### Resource reads (`requiredAction: Read`; no writes)
 
@@ -343,10 +421,19 @@ Any string value may embed a pointer. Roots:
 | Root | Resolves to |
 |------|-------------|
 | `/payload` | the JSON body passed to `/execute` — e.g. `{ /payload/fields/prompt }` |
-| `/headers` | request HTTP headers — e.g. `{ /headers/authorization }` |
+| `/rawPayload` | that same body as the caller's **own text, before parsing** — the only form a signature can be checked against (`Signature.value`) |
+| `/headers` | request HTTP headers, **keys lower-cased** — e.g. `{ /headers/authorization }`, `{ /headers/stripe-signature }` |
+| `/now` | when the run started: **`/now/seconds`**, **`/now/millis`** (epoch) and **`/now/iso`** |
 | `/<name>` | the result of an earlier statement with that `name` — e.g. `{ /resp/body/... }`, `{ /post/sys/id }` |
 | `/vars/<name>` | a `SetVar` variable — e.g. `{ /vars/total }` |
 | `/error` | only inside a `Try` `catch` — e.g. `{ /error/message }` |
+
+- **`/now` is read once per run** and shared by `Parallel` branches, so two statements can never
+  disagree about "now" — which is what makes it usable in a signed message or a replay window. There
+  is **no statement that reads the clock**, and **no zone to choose**: an epoch count is the same
+  number everywhere, and `/now/iso` is the same rendering as `sys.createdAt`, so it compares against
+  one directly. A replay window is plain arithmetic (a timestamp captured as text is coerced):
+  `{ "$<": [ { "$-": [ "{ /now/seconds }", "{ /sig/1 }" ] }, 300 ] }`.
 
 - **Single pointer** preserves the source type (`{ /payload/fields/count }` stays a number).
 - **Mixed template** concatenates as string (`"page-{ /payload/fields/n }-of-10"`).
@@ -412,6 +499,10 @@ short-running type — an unknown statement type is Async-only by default.
 | Per-`EmailSend` `timeoutMs` cap | **30s** |
 | `Loop` `maxIterations` / `ResourceForEach` `limit` cap | **10,000** |
 | `EmailSend` recipients (`to`+`cc`+`bcc`) | **50** |
+| `Signature` `value` — **resolved** message | **65,536 chars** (over ⇒ statement fails, `422`) |
+| `Hash` `value` — **resolved** message | **128 chars** (over ⇒ statement fails, `422`) |
+| `Regex` `pattern` — as authored | **128 chars** (rejected at save) |
+| `Regex` `value` — **resolved** text | **10,240 chars** (over ⇒ statement fails) |
 | Max `Http` **response body** size | **10 MiB** (larger ⇒ statement throws) |
 | Async result TTL (poll before it expires) | **~30s** |
 | Max async result size (whole response JSON) | **10 KB** (larger ⇒ replaced by a 500 error) |
@@ -422,7 +513,14 @@ short-running type — an unknown statement type is Async-only by default.
 
 **Save-time validation** also enforces: `executionMode` must be `Async` if any statement does external
 I/O or iterates; a statement **block may not be empty**; binding **`name`**s must be non-blank, unique,
-free of `/` and `~`, and not a reserved root (`payload`/`headers`/`vars`/`error`).
+free of `/` and `~`, and not a reserved root (`payload`/`rawPayload`/`headers`/`now`/`vars`/`error`);
+and — when **`anonymousCallEnabled`** is true — no `:self` filter (**`WGL400061`**) and
+`executionMode` **`Sync`** (**`WGL400062`**).
+
+**The resolved-length caps above are checked when the statement runs, not at save** — they bound the
+message a `Signature`/`Hash` actually authenticates and the text a `Regex` scans, and those lengths are
+unknown until the pointers resolve. `Signature`'s cap is sized for a real webhook body: the expression
+`{ /rawPayload }` is sixteen characters standing for however many kilobytes the caller sent.
 
 **Deleting a Script is blocked while a Webhook still runs it.** Delete that Webhook first, or point it
 at another Script (`weegloo-webhook`).
@@ -431,8 +529,13 @@ at another Script (`weegloo-webhook`).
 
 - Put API keys in **`Http` `headers`** with **`"secret": true`** — secret values are encrypted at
   rest. Never place keys in `payload` or Content fields.
+- ⚠️ **`Signature.secret` has no such flag** — a webhook signing secret written into a Script is
+  stored as authored and is readable by anyone who can read that Script. Keep Script `Read` off
+  end-user roles when a Script carries one.
 - **Execute authorization:** only the **caller's Script `Execute` permission** is checked at
-  `/execute`; missing it → **`403`**. The resource operations *inside* the script then run with the
+  `/execute`; missing it → **`403`**. On **`/execute/anonymous`** no permission is checked at all —
+  `anonymousCallEnabled` is the whole decision, and the Script must authenticate its own input.
+  The resource operations *inside* the script then run with the
   **Script author's authority, delegated** — individual resource permissions are **not** re-validated
   per statement at runtime. So a low-privilege end user can execute a Script that performs writes the
   author authorized, without granting that user those writes directly.
@@ -535,6 +638,8 @@ path per `weegloo-global-rules`. Confirm current caps on the pricing page; do no
 ## Related
 
 - `weegloo-webhook` — event triggers that run a Script (or call a URL).
+- `weegloo-payment` — PG / MoR integration: the confirm and callback shapes, and what `Signature` /
+  `Hash` / `Regex` / `/now` are for in practice.
 - `weegloo-space-role` — the `script.Execute` permission and `:self` filter.
 - `weegloo-space-access-token` — the SpaceAccessToken that carries `script.Execute` for anonymous / public callers (role-scoped).
 - `weegloo-create-content-type` / `weegloo-default-locale` — result ContentType fields, locale buckets.
