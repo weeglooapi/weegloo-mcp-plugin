@@ -1,6 +1,6 @@
 ---
 name: weegloo-api-query-optimization
-description: Weegloo list APIs - projection with select (include/exclude, object paths), list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use to shrink payloads, avoid redundant reference expansion, and replace N single GETs with one list call. ALSO covers the master/detail pattern (lightweight list/sidebar + on-click single-Content detail fetch) and resolving a Refer→Media image/file field to a displayable URL — use when building a history list, gallery, inbox, or any list-then-open-item UI. ALSO covers Weegloo image processing: appending a preset style segment (`/style1`..`/style10`, max-dimension px, aspect-preserving WebP) to a Media file URL to get on-the-fly resized thumbnails/avatars without re-uploading — use when sizing images, building thumbnails/avatars, or optimizing image delivery. ALSO covers implementing a SEARCH feature: deciding in-memory vs server-side search (filtering the loaded array only works when it is the whole dataset) and full-text search over fields.* text via the Advanced Search header (X-Weegloo-Advanced-Search) — use when a UI has a search box over content/Media.
+description: Weegloo list APIs - how to READ Content and Media correctly. Projection with select is the DEFAULT on every read, including the agent's own cma_GetList* MCP calls (an unprojected list returns whole documents - every locale bucket of every field - into your context); covers include/exclude modes, object paths, keeping order keys projected, list-as-single via sys.id, batch fetch with sys.id[in], prefetch sys.version for PATCH/PUT, and CMA Media mimeGroups filtering. Use whenever fetching content or media, not only when something feels slow - also to avoid redundant reference expansion and to replace N single GETs with one list call. ALSO covers the master/detail pattern (lightweight list/sidebar + on-click single-Content detail fetch) and resolving a Refer→Media image/file field to a displayable URL — use when building a history list, gallery, inbox, or any list-then-open-item UI. ALSO covers Weegloo image processing: appending a preset style segment (`/style1`..`/style10`, max-dimension px, aspect-preserving WebP) to a Media file URL to get on-the-fly resized thumbnails/avatars without re-uploading — use when sizing images, building thumbnails/avatars, or optimizing image delivery. ALSO covers implementing a SEARCH feature: deciding in-memory vs server-side search (filtering the loaded array only works when it is the whole dataset) and full-text search over fields.* text via the Advanced Search header (X-Weegloo-Advanced-Search), which is REQUIRED for any filter or order on a fields.* path and cannot be sent through the MCP tools at all — use when a UI has a search box over content/Media, or when a fields.* filter came back empty.
 ---
 
 # Weegloo - query optimization for list APIs
@@ -18,7 +18,14 @@ Base URLs and API documentation: **`weegloo-api-endpoints`** (do not duplicate d
 
 ## 1. Projection: the `select` query parameter
 
-On **resource list** endpoints, use **`select`** to control which parts of each item appear in the JSON. Smaller responses mean **less network** and **lower parsing cost**.
+On **resource list** endpoints, **`select`** names which parts of each item appear in the JSON.
+
+> **Passing it is the default, not a tuning step.** Every read names the fields it needs; an
+> unprojected read is the exception and needs a reason. This holds for **your own MCP calls** as much
+> as for code you generate — `select` is a parameter on the `cma_GetList*` tools, and a bare list call
+> returns whole documents (every locale bucket of every field of every row) straight into your context
+> window. See the *Projection* section of `weegloo-global-rules` for the standing obligation and the
+> per-purpose recipes; this section is the mechanics.
 
 ### Include mode (whitelist)
 
@@ -242,14 +249,20 @@ common, silent bug:
 
 Content data lives in **`fields.*`**, not `sys.*` — search the right place, the right way:
 
-- **Filtering `fields.*` needs the locale segment** (`fields.title.en-US[...]`) and, on the flat
-  Content list, the **ContentType scope** `sys.contentType.sys.id=<id>` (see the Filter Parameters
-  rule). `sys.*` filters (`sys.id`, `sys.createdAt`) need neither.
-- **Plain `eq` on a text field is EXACT match.** For real text search — partial + fuzzy "contains"
-  matching, plus the `regex` and geo `near`/`within` operators — send the **Advanced Search** header
-  **`X-Weegloo-Advanced-Search: true`**; then `eq` on a full-text-enabled **LongText** field matches
-  items that *contain* the term. Without the header you get only exact equality, so a substring query
-  returns nothing — do **not** react to that by falling back to filtering in memory.
+- **Filtering `fields.*` needs the locale segment** (`fields.title.en-US[...]`) — required for **every**
+  field, including non-localized ones — and, on the flat Content list, the **ContentType scope**
+  `sys.contentType.sys.id=<id>` (see the Filter Parameters rule). `sys.*` filters (`sys.id`,
+  `sys.createdAt`) need neither.
+- **Any filter or `order` on `fields.*` needs the Advanced Search header
+  `X-Weegloo-Advanced-Search: true`.** Without it a text field is matched by **exact equality** only —
+  so a substring query returns an **empty list rather than an error**, which is why the omission
+  survives testing. With it, `eq` on a full-text-enabled **LongText** matches items that *contain* the
+  term, and the `regex` and geo `near`/`within` operators become available. Do **not** read that empty
+  result as "no matches" and fall back to filtering in memory.
+- ⚠️ **The header is HTTP-only — the MCP tools cannot send it.** `cma_GetListContents` /
+  `cma_GetListMedias` take `filter`, `select`, `order` and paging, and no header parameter, so a
+  `fields.*` filter issued **over MCP is exact-match only**. Real text search is application code
+  calling CMA/CDA over HTTP; never conclude from an empty MCP result that the rows are not there.
 - **RichText and Json fields are not searchable.** If a field must be searched, model it as
   ShortText/LongText with the right search setting **at design time** — search is decided when you
   model the data, not bolted on after (`weegloo-create-content-type`).
