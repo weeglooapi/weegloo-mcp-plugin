@@ -211,7 +211,7 @@ at `Return`.
   the value is delivered as the response **`error`** instead of `return`), `statusCode` (default
   `200`). **Terminates** the Script.
 
-### Variables, HTTP & email
+### Variables, parsing, HTTP & email
 
 - **`SetVar`** — `var` (variable name; read as `{ /vars/<var> }`), `value` (value expression; may
   reference the variable itself to **accumulate**).
@@ -219,8 +219,13 @@ at `Return`.
   (`[{ key, value, secret?: bool }]` — **`secret: true`** ⇒ stored **encrypted**, never exposed to
   ServiceUsers, CMA-only), `body` (value expression / JSON), `timeoutMs` (per-call; omitted ⇒ **30s** default, hard cap **60s**),
   `retry` (default `0`; retries only when the response **status ≥ 400**; capped at 2),
-  `ignoreStatusCode` (default `false`). Binds **`{ status, body }`**. **The response body is capped at
-  10 MiB** — a larger response **throws**, failing the statement (an enclosing `Try` catches it via
+  `ignoreStatusCode` (default `false`), `responseType` (**`json`** default | `text`).
+  Binds **`{ status, body }`**. **`responseType` decides what `body` is:** `json` parses it, so you
+  address it with pointers (`{ /resp/body/items/0/id }`), and the statement **fails when the response is
+  not JSON**; `text` binds the raw string — what a plain-text / XML / CSV endpoint needs, and what you
+  want when you intend to parse it yourself with `ParseJson`. An empty body (e.g. `204`) binds `null`,
+  and a **status ≥ 400** body always comes back as-is for diagnostics whatever you declared.
+  **The response body is capped at 10 MiB** — a larger response **throws**, failing the statement (an enclosing `Try` catches it via
   `{ /error/message }`, same as any `Http` failure; this size cap is about the body, independent of the
   status code). So never pull large binaries (e.g. raw or base64 image bytes) back through `Http` — have
   the provider return a **URL** and ingest it as Media with `encoding: "url"` (see the external-API job
@@ -232,6 +237,17 @@ at `Return`.
   `{ /<name>/status }` yourself. **Forces Async.** Script `Http` draws on the Organization's **webhook
   outbound-network quota** — if that feature is quota-suspended the call fails with a catchable
   **`WGL403012`** (Forbidden), and request bytes are metered against it.
+- **`ParseJson`** — turn a **JSON string into a value** you can address with pointers. `value` (the
+  text; a value expression), **`name` (required** — the parsed value is the only thing it produces).
+  Use it wherever JSON arrives *inside* a string instead of as the body: an LLM's structured output
+  (`{ /resp/body/choices/0/message/content }`), a JSON blob kept in a LongText field, or a body you
+  took as `responseType: "text"`. Read fields off the binding afterwards — `{ /answer/score }`.
+  - **Text that is not JSON fails** the statement — the "LLM answered in prose" case; catch it with
+    `Try`. Empty or blank text fails too; the literal `null` parses to `null`.
+  - A value that is **already** an object or array is bound unchanged, so it is safe to point at
+    something that may or may not still be a string.
+  - `value` is a **template** slot — the `$` operator rules do not apply to it.
+  - It does no I/O and does not iterate, so unlike `Http` it **never forces Async**.
 - **`EmailSend`** — one email through a registered **`EmailAccount`**. `account`
   (`{ "sys": { "id": … } }`), **`to` XOR `toServiceUser`** (exactly one — neither or both is rejected):
   **`to` is a single address** (value expression), **`toServiceUser` is `{ "sys": { "id": … } }`**;
@@ -455,7 +471,7 @@ operator needs a **`$` prefix** to be read as an operator:
 |---|---|---|
 | **Data** | `fields` (Create/Update/Patch) · `Http.body` · `Return.value` · `SetVar.value` | A key without `$` is **always a field name**. Operators **must** use `$`: `{ "$+": [ … ] }`. |
 | **Expression** | `If.condition` · `Loop.while` · `version` | The whole value is an expression — bare (`{ "and": [ … ] }`) and `$` both work. |
-| **Template** | everything else — `url`, `method`, `headers[].value`, `locale`, `order`, `over`, `target.sys.id`, `EmailSend.*` | Plain strings; only `{ /pointer }` applies. |
+| **Template** | everything else — `url`, `method`, `headers[].value`, `locale`, `order`, `over`, `target.sys.id`, `EmailSend.*`, `ParseJson.value` | Plain strings; only `{ /pointer }` applies. |
 
 - Once inside a `$` operation, **nested** operators need no `$` (adding it is still valid).
 - **When unsure, prefix every operator with `$`** — it is correct in every slot.
@@ -592,6 +608,7 @@ it. One Script does the whole thing.
    - optionally validates/charges (`ResourceFind` the caller's wallet by `where: {createdBy: ":self"}`,
      `If` balance check, `ResourcePatch` to deduct — wrap risky steps in `Try`/`catch` to refund),
    - `Http` POSTs to the provider (key in a `secret` header),
+   - `ParseJson` when the provider nests its JSON inside a string (LLM structured output),
    - writes the result back with `ResourceCreate`/`ResourcePatch` (text field, or a **Media** ingest
      for images: `ResourceCreate resource:"Media"` with `file.{locale}.source`+`encoding`),
    - `Return`s a small summary.
@@ -618,6 +635,21 @@ Minimal cookbook (call LLM, write result Content, return id):
   ] }
 }
 ```
+
+> **Structured output — the result arrives as a string, not as JSON.** Asking an LLM for JSON gets you
+> JSON *inside* `content`, so the cookbook's `{ /resp/body/choices/0/message/content }` is one long
+> string: pointers into it (`…/content/score`) resolve to nothing and the field is written as raw text.
+> Put a `ParseJson` between the call and the write, then address the parsed value:
+>
+> ```jsonc
+> { "type": "ParseJson", "name": "answer", "value": "{ /resp/body/choices/0/message/content }" },
+> { "type": "ResourceCreate", "resource": "Content", "contentType": { "sys": { "id": "ct_result" } },
+>   "fields": { "score":   { "en-US": "{ /answer/score }" },
+>               "summary": { "en-US": "{ /answer/summary }" } }, "name": "out" }
+> ```
+>
+> Wrap it in `Try` — a model that replies in prose instead of JSON fails the `ParseJson`, and `catch`
+> is where you record that or `Return` a retryable error.
 
 > **Large `Http` responses — image / file generation.** The `Http` response body is capped at **10 MiB**
 > (see *Statements → Http* and the limits table). A generation API that returns the asset **inline as
