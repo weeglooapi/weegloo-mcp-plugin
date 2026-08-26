@@ -1,6 +1,6 @@
 ---
 name: weegloo-script
-description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/ForEach, ResourceCreate/Update/Patch/Delete/Publish/Unpublish/Archive/Unarchive, Http, EmailSend, SetVar, ParseJson, Signature, Hash, Regex, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions over the roots /payload, /rawPayload, /headers, /now (seconds|millis|iso), /vars and /error, plus JsonLogic operations (operators take a `$` prefix in data slots such as `fields` / `Http.body`, where a bare key is a field name), sync (10s, fixed) or async (30s base, capped at 180s, poll by requestId). Verify an inbound webhook signature without leaving Sync: Signature (HMAC, constant-time, accepts hex or base64 with no encoding field), Hash (unkeyed digest for schemes that salt the message with a shared secret), Regex (Match/Capture — the only way to cut text apart) and /now for the replay window. Also covers the two resource-level invocation flags — directCallEnabled, and anonymousCallEnabled which opens POST /execute/anonymous to a caller with NO token (runs as the Script's author, Sync only, no :self filter, and the Script itself must verify what it was sent). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
+description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/ForEach, ResourceCreate/Update/Patch/Delete/Publish/Unpublish/Archive/Unarchive, Http, EmailSend, SetVar, Cache, ParseJson, Signature, Hash, Regex, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions over the roots /payload, /rawPayload, /headers, /now (seconds|millis|iso), /vars and /error, plus JsonLogic operations (operators take a `$` prefix in data slots such as `fields` / `Http.body`, where a bare key is a field name), sync (10s, fixed) or async (30s base, capped at 180s, poll by requestId). Verify an inbound webhook signature without leaving Sync: Signature (HMAC, constant-time, accepts hex or base64 with no encoding field), Hash (unkeyed digest for schemes that salt the message with a shared secret), Regex (Match/Capture — the only way to cut text apart) and /now for the replay window. Also covers the two resource-level invocation flags — directCallEnabled, and anonymousCallEnabled which opens POST /execute/anonymous to a caller with NO token (runs as the Script's author, Sync only, no :self filter, and the Script itself must verify what it was sent). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
 ---
 
 # Weegloo — Script (declarative backend endpoints)
@@ -213,10 +213,25 @@ run top-to-bottom and stop at `Return`.
   the value is delivered as the response **`error`** instead of `return`), `statusCode` (default
   `200`). **Terminates** the Script.
 
-### Variables, parsing, HTTP & email
+### Variables, cache, parsing, HTTP & email
 
 - **`SetVar`** — `var` (variable name; read as `{ /vars/<var> }`), `value` (value expression; may
   reference the variable itself to **accumulate**).
+- **`Cache`** — a short-lived key/value store **private to one Script**, there to make a Script faster
+  by not redoing work it already did. Ordinary cache semantics: `action` is **`Set`** (write) /
+  **`Get`** (read) / **`Delete`** (drop); `key` is the cache key; `value` is what to store (`Set`
+  only); `ttl` is how long it lives in seconds (**1–30**, default **5**); `defaultValue` is what `Get`
+  binds when nothing is there. **`Get` requires `name`** — the value it reads has nowhere else to go.
+  The point is latency: park an expensive `Http` result (an access token, an exchange rate, a search
+  response) for a few seconds so repeat calls inside that window skip the round trip. **A miss and an
+  expired entry are the same thing** — both hand you `defaultValue`.
+  - `key` is a **literal, not a value expression**. A caller-chosen key would let one caller read what
+    another caller's run had cached.
+  - Scoped to **one Script** — another Script using the same key sees nothing, and editing or deleting
+    the Script drops its data. It does no external I/O, so it **never forces Async** and does not count
+    against the external-call limit.
+  - At most **5 per definition**, and **not allowed inside `Loop`/`ResourceForEach`** (a repetition
+    would write one entry per lap, which no per-definition cap can bound).
 - **`Http`** — `method` (GET/POST/PUT/PATCH/DELETE), `url` (value expression), `headers`
   (`[{ key, value, secret?: bool }]` — **`secret: true`** ⇒ stored **encrypted**, never exposed to
   ServiceUsers, CMA-only), `body` (value expression / JSON), `timeoutMs` (per-call; omitted ⇒ **30s** default, hard cap **60s**),
@@ -472,7 +487,7 @@ operator needs a **`$` prefix** to be read as an operator:
 
 | Slot | Fields | How keys are read |
 |---|---|---|
-| **Data** | `fields` (Create/Update/Patch) · `Http.body` · `Return.value` · `SetVar.value` | A key without `$` is **always a field name**. Operators **must** use `$`: `{ "$+": [ … ] }`. |
+| **Data** | `fields` (Create/Update/Patch) · `Http.body` · `Return.value` · `SetVar.value` · `Cache.value` · `Cache.defaultValue` | A key without `$` is **always a field name**. Operators **must** use `$`: `{ "$+": [ … ] }`. |
 | **Expression** | `If.condition` · `Loop.while` · `version` | The whole value is an expression — bare (`{ "and": [ … ] }`) and `$` both work. |
 | **Template** | everything else — `url`, `method`, `headers[].value`, `locale`, `order`, `over`, `target.sys.id`, `EmailSend.*`, `ParseJson.value` | Plain strings; only `{ /pointer }` applies. |
 
@@ -513,6 +528,7 @@ short-running type — an unknown statement type is Async-only by default.
 | Async timeout | **computed**: `min(30s + Σ declared, 180s)` |
 | Max statements / max external I/O ops | **per-plan** (see below) |
 | Max `SetVar` | **10** |
+| Max `Cache` | **5** (none inside `Loop`/`ResourceForEach`) |
 | `Http` retry cap | **2** |
 | Per-`Http` `timeoutMs` cap | **60s** (omitted ⇒ 30s) |
 | Per-`EmailSend` `timeoutMs` cap | **30s** |
