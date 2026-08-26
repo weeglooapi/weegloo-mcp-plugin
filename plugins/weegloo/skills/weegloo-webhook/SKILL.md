@@ -25,6 +25,11 @@ A **Webhook** reacts to **Space events**. On a matching event it performs **exac
 - External API call that stores its result in the Space → author a **`weegloo-script`** (trigger it
   here or call `/execute` directly).
 
+> **A Webhook reacts to an event, not to a clock.** "Every night", "every 15 minutes", a daily digest,
+> a periodic sync — those are a **`weegloo-scheduler`** (a cron entry that runs one Script). Do not
+> approximate a schedule by subscribing to unrelated events, and do not subscribe to an event just to
+> check whether something is due.
+
 > Base URLs, vendor JSON, OpenAPI discovery: `weegloo-api-endpoints`. Role for job Content and the
 > Script `Execute` permission: `weegloo-space-role` / `weegloo-script`.
 
@@ -104,6 +109,7 @@ missing, configure the Weegloo MCP with `?group=extra` or `?group=all` (project 
 ## Related
 
 - **`weegloo-script`** — the Script that does the work a Webhook triggers (or the frontend calls directly).
+- **`weegloo-scheduler`** — the time-driven sibling: a cron entry that runs one Script on a schedule.
 - **`weegloo-space-role`** — Script `Execute` grant; async-job Content `createdBy :self` split.
 - **`weegloo-create-content-type`** / **`weegloo-default-locale`** — job/result ContentType fields, locale buckets.
 - **`weegloo-api-endpoints`** — base URLs, vendor JSON, OpenAPI discovery.

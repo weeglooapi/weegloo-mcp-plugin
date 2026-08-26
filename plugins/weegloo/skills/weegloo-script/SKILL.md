@@ -122,6 +122,13 @@ whenever one of these fits. These are the situations an AI agent should map to S
 - **Execution + polling run on CMA *or* ACMA** — a Service User (ServiceLogin Bearer) executes a
   Script on `https://acma.weegloo.com`; a Weegloo User executes on CMA. Both need the **Script
   `Execute`** permission (below).
+- **The platform also starts Scripts with no caller at all** — a **Webhook**'s linked action
+  (`weegloo-webhook`) and a **Scheduler**'s cron run (`weegloo-scheduler`). Neither goes through
+  `/execute`, so neither is affected by `directCallEnabled`, and there is no `requestId` to poll — a
+  result that must be kept has to be written into Content/Media by the Script itself. A **Scheduler**
+  run additionally carries **no `payload` / `rawPayload` / `headers`** and is attributed to the
+  **Scheduler's creator** (so `:self` resolves to them) — a Script meant to be scheduled must find its
+  own work from `{ /now }` and `ResourceFind`.
 
 ### Endpoints
 
@@ -131,7 +138,7 @@ whenever one of these fits. These are the situations an AI agent should map to S
 | Create | `POST /v1/spaces/{spaceId}/scripts` | CMA |
 | Read | `GET /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
 | Update (full PUT, `X-Weegloo-Version`) | `PUT /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
-| Delete (no unpublish; **blocked while a Webhook references it**) | `DELETE /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
+| Delete (no unpublish; **blocked while a Webhook or a Scheduler references it**) | `DELETE /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
 | **Execute** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute` | CMA **or** ACMA |
 | **Execute unauthenticated** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute/anonymous` | CMA |
 | **Poll (async)** | `GET /v1/spaces/{spaceId}/scripts/{scriptId}/executions/{requestId}` | CMA **or** ACMA |
@@ -162,7 +169,8 @@ whenever one of these fits. These are the situations an AI agent should map to S
 ### Who may invoke it — the two resource-level flags
 
 - **`directCallEnabled`** (default `true`) — when `false` the Script runs **only** as a Webhook's
-  linked action and both execute endpoints reject the call with **`WGL422062`**.
+  linked action or a **Scheduler**'s scheduled run (`weegloo-scheduler`), and both execute endpoints
+  reject the call with **`WGL422062`**. That is the right setting for a Script only the platform starts.
 - **`anonymousCallEnabled`** (default `false`) — when `true` the Script may **also** be invoked with
   **no token at all**, through **`/execute/anonymous`**. That is the path a third party which cannot
   present a Weegloo token (a payment provider's callback, say) can reach. Leave it off unless you need
@@ -687,9 +695,16 @@ The number of Scripts per Space is **plan-limited** (illustrative: Free **3** / 
 **50** / Enterprise unlimited). On a limit error (`WGL429*`), do not loop-retry — surface the upgrade
 path per `weegloo-global-rules`. Confirm current caps on the pricing page; do not hardcode.
 
+**Executions are a monthly allowance for the Organization, and `/execute` is not its only consumer** —
+every **Scheduler** run spends one too (`weegloo-scheduler`), so a tight cron competes with the
+product's own traffic. When that allowance is spent, Script execution is suspended for the
+Organization and any Scheduler that comes due is **deactivated** rather than run.
+
 ## Related
 
 - `weegloo-webhook` — event triggers that run a Script (or call a URL).
+- `weegloo-scheduler` — clock triggers: a cron entry that runs one Script on a schedule (each run
+  spends one Script execution from the monthly allowance).
 - `weegloo-payment` — PG / MoR integration: the confirm and callback shapes, and what `Signature` /
   `Hash` / `Regex` / `/now` are for in practice.
 - `weegloo-space-role` — the `script.Execute` permission and `:self` filter.

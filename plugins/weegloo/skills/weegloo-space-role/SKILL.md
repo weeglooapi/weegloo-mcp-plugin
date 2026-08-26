@@ -1,6 +1,6 @@
 ---
 name: weegloo-space-role
-description: SpaceRole and ServiceUserRole permission rules — scope ContentType, Content, Media, and Script with optional filters (contentType, createdBy, tag, self), plus the SpaceRole `settings` axis (a flat SETTING_* list, no filters) that gates Space configuration — Webhook, Locale, ServiceLogin, SpaceRole, WebHosting, DeliveryAccessToken and SpaceAccessToken (separate actions), SpaceMembership, EmailAccount, Tag, app install, usage monitoring. Script adds an Execute action (call /execute); on Script only createdBy and self apply. Use createdBy.sys.id ':self' for the authenticated caller's own resources, or the `self` filter (a Refer to one entity) to pin a rule to exactly one resource — e.g. Execute a single specific Script. Use when designing least-privilege roles, per-user private Content, granting Script Execute (all / own / one specific), or member-scoped ACMA/ACDA access. English only.
+description: SpaceRole and ServiceUserRole permission rules — scope ContentType, Content, Media, and Script with optional filters (contentType, createdBy, tag, self), plus the SpaceRole `settings` axis (a flat SETTING_* list, no filters) that gates Space configuration — Webhook, Locale, ServiceLogin, SpaceRole, WebHosting, DeliveryAccessToken and SpaceAccessToken (separate actions), SpaceMembership, EmailAccount, Tag, app install, usage monitoring, Scheduler. Script adds an Execute action (call /execute, and own a Scheduler that runs it); on Script only createdBy and self apply. Use createdBy.sys.id ':self' for the authenticated caller's own resources, or the `self` filter (a Refer to one entity) to pin a rule to exactly one resource — e.g. Execute a single specific Script. Use when designing least-privilege roles, per-user private Content, granting Script Execute (all / own / one specific), or member-scoped ACMA/ACDA access. English only.
 ---
 
 # Weegloo — SpaceRole & ServiceUserRole (`createdBy` filters)
@@ -86,6 +86,7 @@ permissions still cannot touch:
 | `SETTING_SERVICE_LOGIN` | **ServiceLogin**, **ServiceUser**, **ServiceUserRole** |
 | `SETTING_EMAIL_ACCOUNT` | **EmailAccount** (the SMTP sender — `weegloo-email-account`) |
 | `SETTING_MONITORING` | **usage & metrics** — Space monthly reports, network / storage usage |
+| `SETTING_SCHEDULER` | **Scheduler** (+ its run history) — the cron entries that run a Script (`weegloo-scheduler`) |
 | `SETTING_ALL` | all of the above — **avoid**; grant only the specific actions the caller needs |
 
 That table is the complete set. `settings` accepts these names only — anything else is rejected at save.
@@ -94,6 +95,12 @@ That table is the complete set. `settings` accepts these names only — anything
 
 - **A settings action is not a Content permission.** A `403` on creating a Webhook or an EmailAccount
   needs the **settings** action added — widening `content` / `media` will never fix it.
+  - ⚠️ **`SETTING_SCHEDULER` alone is not enough to create a Scheduler.** That endpoint checks a
+    **second** grant on the same role: **`script`** → **`Execute`** covering the Script the Scheduler
+    will run (scope it with the `self` filter below). And it is not a create-time formality — the
+    Scheduler's **creator** must keep that Execute grant, because it is re-checked before every run and
+    a Scheduler whose creator has lost it is **deactivated**. So narrowing a role's `script` map can
+    silently stop the Schedulers its members own — see **`weegloo-scheduler`**.
 - **A settings action is necessary but not sufficient — the *token type* is a second gate.** The whole
   `settings` axis is reachable **only by a console login session or a Personal Access Token**. Every
   other Weegloo credential is refused on **every** row above, no matter what the role says:
@@ -278,6 +285,11 @@ Grant the caller the right to call a Script's `/execute`, without letting them a
 
 Use `"Execute": { "Allow": [] }` instead to allow executing **every** Script in the Space.
 
+**`Execute` is also what a Scheduler owner needs.** Creating a **Scheduler** (`weegloo-scheduler`)
+requires `script.Execute` covering the target Script — the `self` form above is the right scope — on
+top of `SETTING_SCHEDULER`. Unlike an `/execute` call, this grant is **re-checked before every
+scheduled run**: revoke it and the Scheduler is deactivated (and not rescheduled when it comes back).
+
 **Why this is powerful (privilege delegation):** because the Script's inner writes run with the
 **author's** authority, granting a caller `Execute` (and nothing else) lets them perform **one
 specific privileged operation** they otherwise can't. e.g. end users have **no** write on a `Log`
@@ -337,4 +349,5 @@ OpenAPI field shapes: **`weegloo-api-endpoints`** → CMA API docs → **`Create
 - **`weegloo-service-architecture`** — which role type each service pattern needs.
 - **`weegloo-script`** — Script `Execute` permission, the author unconditional-Allow gate, and async external-API jobs (Create vs `:self` Read/Edit/Delete split).
 - **`weegloo-webhook`** — Webhook triggers that run a Script or POST to a URL.
+- **`weegloo-scheduler`** — `SETTING_SCHEDULER` + the `script.Execute` grant a Scheduler owner must keep.
 - **`weegloo-api-endpoints`** — API base URLs, docs index, `SpaceRole` reference link.
