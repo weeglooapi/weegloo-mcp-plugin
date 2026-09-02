@@ -6,7 +6,7 @@
  * 치환은 HOST 문자열 단위로 한다: 본문에는 scheme 없는
  * bare 호스트 언급이 ~52곳 있어(auth 29·cma 17…) origin 단위 치환만으로는 산문 안내가
  * 프로덕션 호스트로 남아 뒤섞인다. 호스트 치환은 scheme URL(경로 보존)과 bare 언급을 한 번에
- * 처리한다. 단 8개 호스트는 상호 비중첩이 **아니다** — `acma.weegloo.com` ⊃ `cma.weegloo.com`,
+ * 처리한다. 단 호스트들은 상호 비중첩이 **아니다** — `acma.weegloo.com` ⊃ `cma.weegloo.com`,
  * `acda.weegloo.com` ⊃ `cda.weegloo.com` — 그래서 단순 replaceAll이 아니라 **호스트 문자
  * 경계 검사**(앞뒤가 [A-Za-z0-9-]가 아닐 때만 매칭)로 치환한다. 이 경계 덕에 순서 무관하고,
  * 오답 예시(`cda-weegloo.com`)도 dash 경계라 안 걸린다.
@@ -20,7 +20,7 @@ import fs from 'node:fs';
 export const TERMS_CONSENT_RULE_ID = 'weegloo-terms-consent';
 
 /**
- * 매핑 가능한 서비스 8개: 키는 짧은 서비스 이름(사람이 쓰는 입력 형식 — 소스 origin은 고정이라
+ * 매핑 가능한 서비스 9개: 키는 짧은 서비스 이름(사람이 쓰는 입력 형식 — 소스 origin은 고정이라
  * 전체 URL 키는 순수 중복 타이핑), 값은 그 서비스의 weegloo 소스 origin. 이 밖의 키는
  * 에러(오타가 조용히 무시되지 않도록). 입력에서 전체 origin 키도 받아 서비스명으로 정규화한다.
  */
@@ -30,6 +30,7 @@ export const MAPPABLE_SERVICES = {
   acma: 'https://acma.weegloo.com',
   acda: 'https://acda.weegloo.com',
   upload: 'https://upload.weegloo.com', // manifest.mcp.uploadApiUrl 포함
+  script: 'https://script.weegloo.com', // Script /execute 전용 호스트(작성은 cma)
   auth: 'https://auth.weegloo.com', // 최대 표면(~50곳) — provider redirect URI 포함
   console: 'https://console.weegloo.com', // PAT 페이지 + FE 로그인 팝업 origin
   ai: 'https://ai.weegloo.com', // /v1/version(버전체크) + /mcp(MCP 서버)

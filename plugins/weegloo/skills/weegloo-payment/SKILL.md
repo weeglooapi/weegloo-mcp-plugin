@@ -25,7 +25,7 @@ Everything below is a consequence of that one rule.
 |---|---|---|
 | Trigger | your frontend, after the PG SDK / redirect returns | the PG POSTs to you |
 | Truth comes from | an `Http` call to the PG's verify/confirm API | the request body + its signature |
-| Script mode | **Async** (`Http` forces it) → `202` + poll `requestId` | **Sync** → real `200` inline |
+| Inside the Script | an outbound `Http` to the PG, then the write | verify + write only, no outbound call |
 | Endpoint | `…/execute` (your frontend holds a token) | `…/execute` with a token, or `…/execute/anonymous` with none — see B-1 |
 | Use for | checkout approval, "did this payment really go through" | refunds, disputes, subscription renewals, virtual-account deposits, anything you cannot pull |
 
@@ -67,8 +67,9 @@ authentication, and no idempotency key — you are asking the authoritative sour
 
 - **Send the amount you recorded, not the amount the caller sent.** A confirm call that the provider
   itself amount-checks only protects you if the amount you send came from your own record.
-- `Http` **forces Async**, so `/execute` answers `202` + `requestId` and the frontend polls. Budget
-  and poll semantics: `weegloo-script`.
+- The PG round trip happens **inside the run**, while the frontend waits on `/execute` — keep the
+  `Http` `timeoutMs` tight, and answer a failed or unconfirmed payment from `catch` / `else` rather
+  than letting the run hit its budget. Budget: `weegloo-script`.
 
 ---
 
@@ -87,8 +88,11 @@ endpoint; many only POST to whatever URL you paste in. Look it up before choosin
 
 | If it can… | Register this URL | What authenticates the call |
 |---|---|---|
-| send a **custom header** | `…/scripts/{scriptId}/execute` | a **`SpaceAccessToken`** in `Authorization: Bearer …` **and** the Script's signature check |
-| only POST to a **bare URL** | `…/scripts/{scriptId}/execute/anonymous` | the Script's **signature check alone** |
+| send a **custom header** | `https://script.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute` | a **`SpaceAccessToken`** in `Authorization: Bearer …` **and** the Script's signature check |
+| only POST to a **bare URL** | `https://script.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute/anonymous` | the Script's **signature check alone** |
+
+The URL you paste into the provider's console is the **full** one above — Script execution is served by
+`script.weegloo.com`, not the CMA host (`weegloo-api-endpoints`).
 
 **Prefer the token path whenever the provider supports it** — two independent gates beat one, and an
 endpoint that answers only to a known token never runs on someone else's traffic at all.
@@ -111,9 +115,9 @@ that one endpoint. See `weegloo-space-access-token` and `weegloo-space-role`.
   failure, and do nothing before that (B-2).
 - The run is attributed to the **Script's author** (`sys.createdBy` on every write), since there is no
   caller to attribute to. No role permission is consulted — the flag is the whole decision.
-- The Script must be **`Sync`** and may not use the **`:self`** filter; both are refused when the
-  Script is saved (**`WGL400062`** / **`WGL400061`**). Sync-only means **no `Http`** in it — which is
-  what you want here anyway (B-2).
+- The Script may not use the **`:self`** filter — refused when the Script is saved
+  (**`WGL400061`**); with no caller to resolve it to, an ownership filter would widen to the author's
+  own rows.
 - Anonymous calls still consume the Organization's Script-execution quota and nothing rate-limits
   them, so do not leave the flag on for a Script that verifies nothing.
 
@@ -125,10 +129,11 @@ third party calling in. See `weegloo-webhook`.
 
 ### B-2. Verify the signature as the FIRST statement
 
-`Signature`, `Hash` and `Regex` are all short-running, so **a verifying Script stays `Sync`** and the
-PG gets a genuine `200` inline. Keep `Http` out of it — one `Http` turns the whole Script Async, the
-PG sees `202` and stops caring, and any later failure is invisible to it (no retry). If you must call
-out, verify + record in the Sync Script and let a `Webhook` on that write do the rest.
+`Signature`, `Hash` and `Regex` are pure computation, so a Script that only verifies and writes answers
+the PG in milliseconds with a genuine `200`. **Keep `Http` out of a callback receiver** — an outbound
+call the provider has to wait for turns a receiver that should be instant into one that can exceed the
+provider's own timeout, and a PG that stopped waiting treats the delivery as failed and retries. If you
+must call out, verify + record here and let a `Webhook` on that write do the rest.
 
 ```jsonc
 { "type": "Signature", "name": "verified", "algorithm": "SHA256",
@@ -264,7 +269,7 @@ equivalent flag on `Signature` today.)
 
 ## Related
 
-- `weegloo-script` — statements, value expressions, limits, Sync/Async, `Execute` permission.
+- `weegloo-script` — statements, value expressions, limits, the run budget, `Execute` permission.
 - `weegloo-space-access-token` / `weegloo-space-role` — the least-privilege callback token and the
   `script.Execute` `self` filter.
 - `weegloo-create-content-type` — modelling the order / receipt / entitlement ContentTypes.

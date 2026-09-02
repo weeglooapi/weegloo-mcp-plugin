@@ -28,7 +28,7 @@
 |---|---|---|
 | 치환 방식 | **origin 문자열 치환** (설치/업데이트 시 콘텐츠에 적용) | **placeholder 전면화 기각** — 18개 파일 ~70곳을 `{{…}}`로 뜯으면 소스 가독성 훼손 + 향후 모든 스킬 작성 규칙이 바뀜. origin 치환은 소스 무변경, 신규 스킬 자동 커버, 오답 예시(`cda-weegloo.com`)는 문자열이 달라 자연히 안전 |
 | 적용 위치 | **인스톨러 측** (install + `--update` 공용 함수) | **콘텐츠 측 엔터프라이즈 브랜치(CI 생성) 기각** — 릴리스마다 N개 브랜치 재생성 운영비 + 백엔드가 브랜치를 알아야 함. 단, 완전 격리 납품 모델에서는 이 방식(origins 파일을 CI에서 적용해 브랜치 생성)을 **이 구현 위에** 얹을 수 있음 — 상호 배타가 아님 |
-| 매핑 단위 | 키는 **서비스명 8개**(cma/cda/acma/acda/upload/auth/console/ai — 전체 origin 키도 정규화 수용), 값은 대상 origin — 치환은 **호스트 문자열 + 문자 경계 검사** | 경로 단위 매핑은 과설계. **호스트 단위 치환의 근거(실측)**: 본문에 scheme 없는 bare 호스트 언급이 52곳(auth 29·cma 17·cda 4·upload 2) — origin 단위로만 치환하면 산문 언급이 프로덕션 호스트로 남아 안내가 뒤섞임. ⚠️ 단 8개 호스트는 상호 비중첩이 **아님**(`acma`⊃`cma`, `acda`⊃`cda` — 구현 중 테스트로 발견) → 단순 replaceAll이면 cma 매핑이 acma를 오염. **앞뒤가 호스트 문자([A-Za-z0-9-])가 아닐 때만 매칭**하는 경계 정규식으로 치환(순서 무관·오답 예시 `cda-weegloo.com`은 dash 경계라 불변) |
+| 매핑 단위 | 키는 **서비스명 9개**(cma/cda/acma/acda/upload/script/auth/console/ai — 전체 origin 키도 정규화 수용), 값은 대상 origin — 치환은 **호스트 문자열 + 문자 경계 검사** | 경로 단위 매핑은 과설계. **호스트 단위 치환의 근거(실측)**: 본문에 scheme 없는 bare 호스트 언급이 52곳(auth 29·cma 17·cda 4·upload 2) — origin 단위로만 치환하면 산문 언급이 프로덕션 호스트로 남아 안내가 뒤섞임. ⚠️ 단 호스트들은 상호 비중첩이 **아님**(`acma`⊃`cma`, `acda`⊃`cda` — 구현 중 테스트로 발견) → 단순 replaceAll이면 cma 매핑이 acma를 오염. **앞뒤가 호스트 문자([A-Za-z0-9-])가 아닐 때만 매칭**하는 경계 정규식으로 치환(순서 무관·오답 예시 `cda-weegloo.com`은 dash 경계라 불변) |
 | 기본값 | 매핑 없음 = **현행과 바이트 동일** | breaking 없음이 최우선 |
 | 버전 체크 | **매핑 대상** (`ai.weegloo.com` 통째로) | 초안은 "공용 유지"였으나 사용자 결정으로 전환 — 고객 스택이 `/v1/version?branch=`를 제공. `/mcp`(MCP 서버)와 같은 origin이라 별도 `mcp` 키 없이 origin 매핑 하나로 둘 다 커버(단순화) |
 | 약관 게이트 | **origins 매핑이 하나라도 있으면 `weegloo-terms-consent` 룰 자동 제외** | origins 사용 = 사실상 B2B 납품/스테이징뿐(사용자 판단) — weegloo 운영 스택의 약관 게이트가 성립하지 않는 환경. **초안(cma 키 조건부 제외)은 단순화를 위해 기각** — 조건부가 설명 비용만 늘리고, cda-only 스테이징에서 게이트를 잃는 비용은 실질 0(내부 사용자). 링크(`weegloo.com/terms`)는 이 룰에만 존재(3곳)해 룰 제외와 함께 자연 소멸 |
@@ -40,15 +40,16 @@
 ## 3. 매핑 스키마
 
 ```jsonc
-// origins.json — 값은 환경/고객별. 키는 아래 서비스명 8개만 유효(모르는 키 → 에러). 부분 매핑 허용.
+// origins.json — 값은 환경/고객별. 키는 아래 서비스명 9개만 유효(모르는 키 → 에러). 부분 매핑 허용.
 // 키가 전체 origin("https://cma.weegloo.com")으로 와도 서비스명으로 정규화 수용(복붙 관용) —
-// 소스 origin은 고정 8개라 전체 URL 키는 중복 타이핑일 뿐이라 짧은 키를 표준으로 채택(사용자 결정).
+// 소스 origin은 고정 9개라 전체 URL 키는 중복 타이핑일 뿐이라 짧은 키를 표준으로 채택(사용자 결정).
 {
   "cma":     "https://cma.acme.com",
   "cda":     "https://cda.acme.com",
   "acma":    "https://acma.acme.com",
   "acda":    "https://acda.acme.com",
   "upload":  "https://upload.acme.com",  // manifest.mcp.uploadApiUrl 에도 적용
+  "script":  "https://script.acme.com",  // Script /execute 전용 호스트(작성은 cma)
   "auth":    "https://auth.acme.com",    // 최대 표면(~50곳, provider redirect URI 포함)
   "console": "https://console.acme.com", // PAT 페이지 + FE 로그인 팝업 origin
   "ai":      "https://ai.acme.com"       // /v1/version(버전체크) + /mcp(MCP 서버)
@@ -135,7 +136,7 @@
 
 ## 8. 납품 체크리스트 (엔터프라이즈 전제조건)
 
-- [ ] 8개 origin 중 매핑할 것들의 고객 스택 엔드포인트 가동 (특히 `ai.*/v1/version?branch=`,
+- [ ] 9개 origin 중 매핑할 것들의 고객 스택 엔드포인트 가동 (특히 `ai.*/v1/version?branch=`,
       `ai.*/mcp`, `auth.*` OAuth 경로)
 - [ ] provider 콘솔(구글 등)에 고객 auth 도메인의 redirect URI 등록
 - [ ] `version?branch=` ↔ 매니페스트 `version` 동일 소스 확인
@@ -146,7 +147,7 @@
 ## 9. 작업 분할
 
 ### PR-A — 매핑 코어 (~1.5일)
-- `origins.js` (신규): 스키마 검증(유효 키 8개 · origin 형태 · 순환 거부) +
+- `origins.js` (신규): 스키마 검증(유효 키 9개 · origin 형태 · 순환 거부) +
   `applyOriginMapping(content, hosts)` + 매니페스트 mcp 적용 헬퍼.
 - `cli.js`: `--origins <file>` (+ `WEEGLOO_ORIGINS` env) — **install 전용**, `--update` 와 조합 시 에러(§5).
 - `index.js` / `update.js`: `loadResources` 후 콘텐츠·mcp 재작성 (룰은 템플릿 치환 **후**).

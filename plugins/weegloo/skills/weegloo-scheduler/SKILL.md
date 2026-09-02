@@ -194,9 +194,9 @@ So a scheduled Script **finds its own work**: "every Content of type `job` whose
 `pending`", "everything whose `expiresAt` is before `{ /now/iso }`". Write that `ResourceFind` first and
 branch on an empty result.
 
-**Timeout.** A scheduled run gets the **async budget** — `min(30s + Σ declared Http/EmailSend timeouts,
-180s)` — not the 10s sync path. As always, a Script that does external I/O or iterates must be saved
-as **`executionMode: "Async"`**.
+**Timeout.** A scheduled run is bounded by the same run budget as any other execution — sized by the
+`timeoutMs` values the Script declares on `Http` / `EmailSend`, up to the platform cap
+(`weegloo-script`). Work that does not fit belongs in smaller resumable runs, not a longer cron.
 
 **`directCallEnabled` does not block a Scheduler.** A Script with `directCallEnabled: false` still runs
 on a schedule (and as a Webhook action); that flag only closes the `/execute` endpoints.
@@ -231,7 +231,7 @@ cannot read run history over MCP — application code reads it over REST.
 
 ## Worked example — hourly sync into Content
 
-**1. The Script** (`weegloo-script`) — Async, not directly callable, finds its own work:
+**1. The Script** (`weegloo-script`) — not directly callable, finds its own work:
 
 ```jsonc
 {
@@ -239,7 +239,6 @@ cannot read run history over MCP — application code reads it over REST.
   "directCallEnabled": false,               // only the Scheduler starts it
   "definition": {
     "method": "Post",
-    "executionMode": "Async",               // Http forces Async
     "statements": [
       { "type": "Http", "name": "rates", "method": "Get",
         "url": "https://api.example.com/rates", "timeoutMs": 10000 },
@@ -291,8 +290,8 @@ the history and the written data are.
 
 1. Is the trigger really **time**, not an event (`weegloo-webhook`) or a caller (`/execute`)?
 2. Does the Script work with **no payload** — does it find its own work and handle "nothing to do"?
-3. Is the Script **`Async`** if it calls out or iterates, and `directCallEnabled: false` if only the
-   Scheduler should start it?
+3. Does the Script fit the run budget (`weegloo-script`), and is `directCallEnabled: false` set if only
+   the Scheduler should start it?
 4. Is the cron **converted to UTC**, with any day-of-week / day-of-month shift confirmed with the user?
 5. Does the intended owner hold **`SETTING_SCHEDULER`** *and* **`script.Execute`** on that Script — from
    a **console session or PAT**, not a SpaceAccessToken?

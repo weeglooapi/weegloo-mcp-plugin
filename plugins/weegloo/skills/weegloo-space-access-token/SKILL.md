@@ -17,7 +17,7 @@ description: Create a Weegloo SpaceAccessToken (CMA) — a read+write token conf
 
 A SpaceAccessToken is a **Weegloo User-plane** bearer token (prefix **`SPCAT`**). Its scope is deliberately confined:
 
-- ✅ **Read + write the Space's data** — Content / ContentType / Media / Comment / Snapshot / publish / archive, and **Script `Execute`** — **each only to the extent the bound `SpaceRole` grants that permission**.
+- ✅ **Read + write the Space's data** — Content / ContentType / Media / Comment / Snapshot / publish / archive, and **Script `Execute`** (run against `https://script.weegloo.com`) — **each only to the extent the bound `SpaceRole` grants that permission**.
 - ✅ **CDA** — read published resources in its Space.
 - ✅ **Upload** — upload files (then a CMA Media create attaches them).
 - ❌ **The entire Space *settings* axis — always 403, regardless of the bound role.** Not one `SETTING_*` action is reachable: no **`SpaceAccessToken`** CRUD (self-mint blocked), no **Space object**, **`SpaceMembership`**, **`SpaceRole`**, **Webhook**, **ServiceLogin / ServiceUser / ServiceUserRole**, **WebHosting / CustomDomain**, **Locale** writes, **Tag** writes, **`EmailAccount`**, **`DeliveryAccessToken` issuance**, app install, or usage monitoring. Script **Create/Read/Edit/Delete** is likewise out of reach (**`Execute`** still works).

@@ -1,6 +1,6 @@
 ---
 name: weegloo-script
-description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/ForEach, ResourceCreate/Update/Patch/Delete/Publish/Unpublish/Archive/Unarchive, Http, EmailSend, SetVar, Cache, ParseJson, Signature, Hash, Regex, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions over the roots /payload, /rawPayload, /headers, /now (seconds|millis|iso), /vars and /error, plus JsonLogic operations (operators take a `$` prefix in data slots such as `fields` / `Http.body`, where a bare key is a field name), sync (10s, fixed) or async (30s base, capped at 180s, poll by requestId). Verify an inbound webhook signature without leaving Sync: Signature (HMAC, constant-time, accepts hex or base64 with no encoding field), Hash (unkeyed digest for schemes that salt the message with a shared secret), Regex (Match/Capture — the only way to cut text apart) and /now for the replay window. Also covers the two resource-level invocation flags — directCallEnabled, and anonymousCallEnabled which opens POST /execute/anonymous to a caller with NO token (runs as the Script's author, Sync only, no :self filter, and the Script itself must verify what it was sent). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
+description: Weegloo Script — declarative, statement-based backend endpoints stored in a Space that your frontend calls via POST /execute. A Script runs a sequence of statements (ResourceRead/Find/ForEach, ResourceCreate/Update/Patch/Delete/Publish/Unpublish/Archive/Unarchive, Http, EmailSend, SetVar, Cache, ParseJson, Signature, Hash, Regex, If/Loop/Parallel/Try, Return) with `{ /pointer }` value expressions over the roots /payload, /rawPayload, /headers, /now (seconds|millis|iso), /vars and /error, plus JsonLogic operations (operators take a `$` prefix in data slots such as `fields` / `Http.body`, where a bare key is a field name). A run executes on the request against script.weegloo.com and answers with its Return value, so calling one is an ordinary API call. Verify an inbound webhook signature inside that run: Signature (HMAC, constant-time, accepts hex or base64 with no encoding field), Hash (unkeyed digest for schemes that salt the message with a shared secret), Regex (Match/Capture — the only way to cut text apart) and /now for the replay window. Also covers the two resource-level invocation flags — directCallEnabled, and anonymousCallEnabled which opens POST /execute/anonymous to a caller with NO token (runs as the Script's author, no :self filter, and the Script itself must verify what it was sent). Call an external API and write the result back into Content/Media from one Script. Also covers the Script `Execute` role permission (scopable to all / caller-created / one specific Script via the `self` Refer filter) and per-plan Script limits. Use when a product must call a third-party API (LLM/image/search/payment) without its own backend, react to a Space event with follow-up work (Webhook + Script), run ordered all-or-nothing multi-step work with Try/catch compensation, do concurrency-safe writes via the sys.version field (optimistic locking, no lost updates), let a low-privilege caller perform ONE privileged operation through author-delegated authority (e.g. append to a Log they cannot otherwise write, or gate an anonymous board's edit/delete on a caller-supplied password checked against a credential store they cannot read), or run any "create a job → poll for the result" flow.
 ---
 
 # Weegloo — Script (declarative backend endpoints)
@@ -27,11 +27,13 @@ see *The external-API job pattern* below.
 
 ## Mental model
 
-- A Script is a **resource** in a Space with a **`definition`**: `{ method, executionMode, statements[] }`.
-- The frontend calls **`POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute`** with a JSON
+- A Script is a **resource** in a Space with a **`definition`**: `{ method, statements[] }`.
+- The frontend calls
+  **`POST https://script.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute`** with a JSON
   **payload**; statements read it as **`{ /payload/... }`**.
-- **Sync** returns the `Return` value immediately (`200`). **Async** returns **`202` + `requestId`**;
-  the caller **polls** `GET …/scripts/{scriptId}/executions/{requestId}` until `200`.
+- The run happens **on the request** and the response carries what `Return` produced (`200` by
+  default) — from the caller's side it is an ordinary API call. Nothing is queued and there is nothing
+  to poll, so **the time the Script can spend is a design constraint** (*Run budget and limits*).
 - A **Webhook** can run a Script instead of calling an external URL (event-driven trigger) — its
   `script` field points at the Script. See `weegloo-webhook`.
 
@@ -49,8 +51,8 @@ whenever one of these fits. These are the situations an AI agent should map to S
 2. **Ordered, all-or-nothing multi-step work.** Steps that must run **in a fixed order and never be
    left half-done** belong in **one** Script, not a chain of separate client calls that can be
    interrupted between steps. Statements run **sequentially, server-side**; wrap the risky middle in
-   **`Try`/`catch`/`finally`** to **compensate** (undo) on failure, and via `/execute` +
-   poll-by-`requestId` the caller can confirm success or retry the whole unit. *Example:* *reserve
+   **`Try`/`catch`/`finally`** to **compensate** (undo) on failure; the caller gets one answer for
+   the whole unit and can retry it as a unit. *Example:* *reserve
    stock → charge → create order*, with `catch` releasing the reservation if a later step throws.
 3. **Concurrency-safe writes with `version` (optimistic locking).** To mutate a shared row without
    **lost updates**, read it (`ResourceRead`/`ResourceFind`), then `ResourcePatch`/`ResourceUpdate`
@@ -90,8 +92,8 @@ whenever one of these fits. These are the situations an AI agent should map to S
    *Secrets & auth*), `ResourceFind`s that credential, compares, and **`Return`s an error on
    mismatch** — only a match proceeds to the `ResourcePatch` / delete. Because the comparison happens
    *inside* the Script, the secret store never reaches the client: a caller holding nothing but
-   `script.Execute` can neither read another post's password nor skip the gate. No `Http` / ingest ⇒
-   it can run **Sync**. (Anonymous callers carry `script.Execute` via a **`SpaceAccessToken`** — the
+   `script.Execute` can neither read another post's password nor skip the gate. (Anonymous callers
+   carry `script.Execute` via a **`SpaceAccessToken`** — the
    Space-scoped token that, with a suitably narrow bound role, authorizes `/execute` for an
    anonymous/public caller with no logged-in Weegloo User; see **`weegloo-space-access-token`**.)
 
@@ -119,13 +121,13 @@ whenever one of these fits. These are the situations an AI agent should map to S
 
 - **Authoring is CMA-only** — create/read/update/delete a Script with a **Weegloo User** Bearer on
   `https://cma.weegloo.com`. There is **no ACMA authoring**; Service Users do not create Scripts.
-- **Execution + polling run on CMA *or* ACMA** — a Service User (ServiceLogin Bearer) executes a
-  Script on `https://acma.weegloo.com`; a Weegloo User executes on CMA. Both need the **Script
-  `Execute`** permission (below).
+- **Execution has its own host** — **`https://script.weegloo.com`**, whatever identity calls it: a
+  **Weegloo User** Bearer, a **`SpaceAccessToken`**, or a **Service User** (ServiceLogin) Bearer. Each
+  needs the **Script `Execute`** permission (below) on the role that identity resolves to.
 - **The platform also starts Scripts with no caller at all** — a **Webhook**'s linked action
   (`weegloo-webhook`) and a **Scheduler**'s cron run (`weegloo-scheduler`). Neither goes through
-  `/execute`, so neither is affected by `directCallEnabled`, and there is no `requestId` to poll — a
-  result that must be kept has to be written into Content/Media by the Script itself. A **Scheduler**
+  `/execute`, so neither is affected by `directCallEnabled`, and neither hands the `Return` value to
+  anyone — a result that must be kept has to be written into Content/Media by the Script itself. A **Scheduler**
   run additionally carries **no `payload` / `rawPayload` / `headers`** and is attributed to the
   **Scheduler's creator** (so `:self` resolves to them) — a Script meant to be scheduled must find its
   own work from `{ /now }` and `ResourceFind`.
@@ -139,9 +141,8 @@ whenever one of these fits. These are the situations an AI agent should map to S
 | Read | `GET /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
 | Update (full PUT, `X-Weegloo-Version`) | `PUT /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
 | Delete (no unpublish; **blocked while a Webhook or a Scheduler references it**) | `DELETE /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
-| **Execute** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute` | CMA **or** ACMA |
-| **Execute unauthenticated** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute/anonymous` | CMA |
-| **Poll (async)** | `GET /v1/spaces/{spaceId}/scripts/{scriptId}/executions/{requestId}` | CMA **or** ACMA |
+| **Execute** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute` | **Script** — `script.weegloo.com` |
+| **Execute unauthenticated** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute/anonymous` | **Script** — `script.weegloo.com` |
 
 - The **execute request's HTTP method must match** the Script's **`definition.method`** (e.g. a
   `Post` Script is executed with `POST`).
@@ -160,7 +161,6 @@ whenever one of these fits. These are the situations an AI agent should map to S
   "definition": {
     "method": "Post",                       // Get|Post|Put|Patch|Delete — execute must use this method
     "payloadSchema": { /* optional JSON Schema; the /execute payload is validated against it */ },
-    "executionMode": "Async",               // "Sync" | "Async"
     "statements": [ /* run top-to-bottom, stop on Return */ ]
   }
 }
@@ -180,12 +180,9 @@ whenever one of these fits. These are the situations an AI agent should map to S
     run as the caller.
   - **No role permission is consulted.** The Script `Execute` grant gates `/execute`, not this path:
     the flag *is* the authorization decision, made once by whoever saved the Script.
-  - Two rules are enforced **when the Script is saved**: it may not use the **`:self`** filter
+  - One rule is enforced **when the Script is saved**: it may not use the **`:self`** filter
     (**`WGL400061`** — under anonymity `:self` resolves to the *author*, so an ownership filter written
-    for an authenticated caller would silently widen to the author's own rows), and it must be
-    **`Sync`** (**`WGL400062`** — an anonymous caller cannot poll an async result). Sync-only means a
-    statement that forces Async — `Http`, `EmailSend`, Media ingest, `Loop`, `ResourceForEach` — cannot
-    appear in it.
+    for an authenticated caller would silently widen to the author's own rows).
   - ⚠️ **The Script itself is the only thing authenticating the request.** Verify something before
     doing anything: a `Signature` over `{ /rawPayload }` is the usual answer (`weegloo-payment`).
     Anonymous calls also consume the Organization's Script-execution quota, and nothing rate-limits
@@ -207,8 +204,8 @@ run top-to-bottom and stop at `Return`.
   (`{ from, to, step? }`, inclusive) — plus **`name`** (binds the element, the 0-based counter, or the
   counter value, read as `{ /<name> }`), `body`, and `maxIterations` (**optional**; omitted ⇒ platform
   cap **10,000**, declaring above it is rejected at save).
-  **External calls ARE allowed in `body`** (`Http`, Media ingest). **Always `Async`** — the budget is
-  priced `body × maxIterations`, so a big loop gets cut off mid-run, not rejected.
+  **External calls ARE allowed in `body`** (`Http`, Media ingest). The time budget is priced
+  `body × maxIterations`, so a big loop gets cut off mid-run, not rejected.
   **Declare a realistic `maxIterations`.** Omitting it prices the loop at the 10,000-iteration default,
   which truncates immediately; and because the run dies on budget rather than a statement failure, the
   writes already done stay done — **make the body idempotent / resumable** rather than relying on
@@ -236,8 +233,8 @@ run top-to-bottom and stop at `Return`.
   - `key` is a **literal, not a value expression**. A caller-chosen key would let one caller read what
     another caller's run had cached.
   - Scoped to **one Script** — another Script using the same key sees nothing, and editing or deleting
-    the Script drops its data. It does no external I/O, so it **never forces Async** and does not count
-    against the external-call limit.
+    the Script drops its data. It does no external I/O, so it does not count against the external-call
+    limit.
   - At most **5 per definition**, and **not allowed inside `Loop`/`ResourceForEach`** (a repetition
     would write one entry per lap, which no per-definition cap can bound).
 - **`Http`** — `method` (GET/POST/PUT/PATCH/DELETE), `url` (value expression), `headers`
@@ -259,7 +256,7 @@ run top-to-bottom and stop at `Return`.
   ⇒ the engine surfaces a **502**). Because a failed statement binds no result, read the failure via
   `catch`'s **`{ /error/message }`** (it carries the status + a body snippet), **not** `{ /<name>/body }`.
   Set **`ignoreStatusCode: true`** to bind `{ status, body }` as-is for **any** status and branch on
-  `{ /<name>/status }` yourself. **Forces Async.** Script `Http` draws on the Organization's **webhook
+  `{ /<name>/status }` yourself. Script `Http` draws on the Organization's **webhook
   outbound-network quota** — if that feature is quota-suspended the call fails with a catchable
   **`WGL403012`** (Forbidden), and request bytes are metered against it.
 - **`ParseJson`** — turn a **JSON string into a value** you can address with pointers. `value` (the
@@ -272,13 +269,13 @@ run top-to-bottom and stop at `Return`.
   - A value that is **already** an object or array is bound unchanged, so it is safe to point at
     something that may or may not still be a string.
   - `value` is a **template** slot — the `$` operator rules do not apply to it.
-  - It does no I/O and does not iterate, so unlike `Http` it **never forces Async**.
+  - It does no I/O, so it costs the run nothing beyond the parse itself.
 - **`EmailSend`** — one email through a registered **`EmailAccount`**. `account`
   (`{ "sys": { "id": … } }`), **`to` XOR `toServiceUser`** (exactly one — neither or both is rejected):
   **`to` is a single address** (value expression), **`toServiceUser` is `{ "sys": { "id": … } }`**;
   `cc?`/`bcc?` are **arrays of addresses**; `subject`, `body`, `replyTo?`, `timeoutMs?` (cap **30s**).
   Recipients (`to` 1 + `cc` + `bcc`) cap at **50** — SMTP puts them all in `RCPT TO`, so that sum is
-  what the provider counts. **Forces Async**, so it never runs on the Sync `/execute` path.
+  what the provider counts. The caller waits for the send, so keep `timeoutMs` tight.
   - **The sender comes from the `EmailAccount`** (`fromAddress`/`fromName`), not the statement. The
     account must exist first, and **creating one sends a real test email** — see
     **`weegloo-email-account`**.
@@ -292,8 +289,8 @@ run top-to-bottom and stop at `Return`.
 
 ### Verification & text — `Signature`, `Hash`, `Regex`
 
-All three are **pure computation and short-running**, so a Script that only verifies and writes stays
-**`Sync`** — which is what lets an inbound webhook receiver answer a real `200` inline. They take a
+All three are **pure computation and short-running**, so a Script that only verifies and writes answers
+its caller in milliseconds — which is what an inbound webhook receiver needs. They take a
 **required `name`**: the result is their only effect, so one with nothing bound does nothing.
 
 - **`Signature`** — is the code the caller sent the one a keyed hash (HMAC) of the message produces?
@@ -364,7 +361,6 @@ default `false`) — **Advanced Search** over Content (see the *Advanced Search*
   save), `name` (the **current item**), **`onEach`** (statements[] per item).
   - **Binds no result** — a foreach, not a map. Accumulate in `onEach` with `SetVar` + `merge`.
   - **The engine pages internally** — no cursor to handle. **External calls allowed** in `onEach`.
-    **Always `Async`**, `limit` or not.
   - **Two different ceilings.** The **item** cap: hitting it with matches left **fails the run** (no
     silent truncation). The **time** budget is separate and *is* truncating — a long `onEach` can stop
     partway through the items it was allowed. **Make `onEach` idempotent / resumable**; do not assume
@@ -448,8 +444,8 @@ default `false`) — **Advanced Search** over Content (see the *Advanced Search*
 Media **`ResourceCreate`**, **`ResourceUpdate`** (re-ingests the listed locales — full replace), or
 **`ResourcePatch`** (re-ingests just the named locales). **`encoding`** is **`url`** (the worker
 fetches the URL's bytes) or **`base64`** (decodes the value). *(The `Binary` encoding is **rejected**
-in Scripts with a `400` — use `url` or `base64`.)* A file ingest **forces Async** and **may** appear
-inside a `Loop` `body` / `ResourceForEach` `onEach`. A Media that is still **processing** cannot be updated/patched/deleted (busy), and
+in Scripts with a `400` — use `url` or `base64`.)* A file ingest **may** appear inside a `Loop`
+`body` / `ResourceForEach` `onEach`. A Media that is still **processing** cannot be updated/patched/deleted (busy), and
 publish is refused until all its files are processed.
 
 **Ids are validated:** every `target.sys.id` / `contentType.sys.id` must resolve to a real id token
@@ -511,29 +507,25 @@ operator needs a **`$` prefix** to be read as an operator:
 "condition": { "and": [ { "<": [ "{ /a/body/risk }", 0.5 ] } ] }               // expression slot: bare OK
 ```
 
-## Sync vs Async, and limits
+## Run budget and limits
 
-- **Sync** (`executionMode: "Sync"`): runs on the request path, returns `200` with the `Return`
-  value. **≤ 10s.**
-- **Async** (`"Async"`): runs in the background, returns `202` + **`requestId`**; poll the
-  executions endpoint (`202` = still running, `200` = done: `durationMs`, `statusCode`, and
-  `return` or `error`).
+A run executes **on the request**: the response carries what `Return` produced — its `statusCode`
+(default `200`) and `return`, or `error` when the run failed. The caller holds the connection for the
+whole run, so **how long the Script can take is a design constraint**, not something to find out in
+production.
 
-**The async budget is computed from the script, not fixed:** **min(30s base + Σ declared
-Http/EmailSend `timeoutMs`, 180s cap)**. Anything that declares no time of its own — store
-round-trips, Media ingest, work inside iterations — comes out of the base. `Http` counts `1 + retry`
-times, `EmailSend` once. Sequences add, `If` takes the wider branch, `Parallel` the slowest, `Try`
-adds `body`+`catch`+`finally`, iterations **multiply**. Over the cap the budget is **truncated, not
-rejected** — a big loop is cut off mid-run.
-
-**Async is forced** by external I/O (`Http`, `EmailSend`, Media ingest) **or** by `Loop` /
-`ResourceForEach` (always, cap or not). Sync needs **every** leaf statement to be a declared
-short-running type — an unknown statement type is Async-only by default.
+**The time budget is computed from the Script, not fixed**, and the platform caps it. Every declared
+`timeoutMs` adds to it — `Http` counts `1 + retry` times, `EmailSend` once — while anything that
+declares no time of its own (store round-trips, Media ingest, work inside iterations) comes out of the
+base. Sequences add, `If` takes the wider branch, `Parallel` the slowest, `Try` adds
+`body`+`catch`+`finally`, iterations **multiply**. At the cap the budget is **truncated, not rejected**
+— a big loop is cut off mid-run, and the writes it already made stay made. So keep an iterating body
+**idempotent / resumable**, and split work that cannot fit into runs that can (*The external-API job
+pattern*).
 
 | Limit | Value |
 |-------|-------|
-| Sync timeout | **10s**, fixed |
-| Async timeout | **computed**: `min(30s + Σ declared, 180s)` |
+| Run timeout | **computed** from the declared `timeoutMs` values, then capped by the platform — size the Script to fit it; do not hardcode a number |
 | Max statements / max external I/O ops | **per-plan** (see below) |
 | Max `SetVar` | **10** |
 | Max `Cache` | **5** (none inside `Loop`/`ResourceForEach`) |
@@ -547,19 +539,16 @@ short-running type — an unknown statement type is Async-only by default.
 | `Regex` `pattern` — as authored | **128 chars** (rejected at save) |
 | `Regex` `value` — **resolved** text | **10,240 chars** (over ⇒ statement fails) |
 | Max `Http` **response body** size | **10 MiB** (larger ⇒ statement throws) |
-| Async result TTL (poll before it expires) | **~30s** |
-| Max async result size (whole response JSON) | **10 KB** (larger ⇒ replaced by a 500 error) |
-| External calls inside `Loop` / `ResourceForEach` | **allowed** (forces Async) |
+| External calls inside `Loop` / `ResourceForEach` | **allowed** |
 
 > **Statement count and external-I/O count are per-plan, not constants — never hard-code them.** When a
 > save is rejected for exceeding one, the caller simplifies the Script or upgrades the plan.
 
-**Save-time validation** also enforces: `executionMode` must be `Async` if any statement does external
-I/O or iterates; a **`ResourceForEach` `onEach` block may not be empty** (empty `If`/`Loop`/`Try`/`Parallel`
+**Save-time validation** also enforces: a **`ResourceForEach` `onEach` block may not be empty** (empty `If`/`Loop`/`Try`/`Parallel`
 bodies are allowed); binding **`name`**s must match **`^[a-zA-Z0-9_-]+$`** (letters, digits, `_`, `-` only —
 so no `/` or `~`, and also no dots, spaces, or other punctuation), be unique, and not a reserved root
 (`payload`/`rawPayload`/`headers`/`now`/`vars`/`error`); and — when **`anonymousCallEnabled`** is true —
-no `:self` filter (**`WGL400061`**) and `executionMode` **`Sync`** (**`WGL400062`**).
+no `:self` filter (**`WGL400061`**).
 
 **The resolved-length caps above are checked when the statement runs, not at save** — they bound the
 message a `Signature`/`Hash` actually authenticates and the text a `Regex` scans, and those lengths are
@@ -632,7 +621,7 @@ is unique to Script (the right to call `/execute`). On `script` the meaningful f
 **Goal:** frontend submits input → an external API is called → the result is stored → frontend gets
 it. One Script does the whole thing.
 
-1. **Author a Script** (`executionMode: "Async"`, `method: "Post"`) that:
+1. **Author a Script** (`method: "Post"`) that:
    - optionally validates/charges (`ResourceFind` the caller's wallet by `where: {createdBy: ":self"}`,
      `If` balance check, `ResourcePatch` to deduct — wrap risky steps in `Try`/`catch` to refund),
    - `Http` POSTs to the provider (key in a `secret` header),
@@ -641,11 +630,13 @@ it. One Script does the whole thing.
      for images: `ResourceCreate resource:"Media"` with `file.{locale}.source`+`encoding`),
    - `Return`s a small summary.
 2. **Grant `script.Execute`** to the caller's role.
-3. **Frontend**: `POST …/scripts/{id}/execute` with the payload → **`202` + `requestId`** → poll
-   `GET …/executions/{requestId}` until `200`. (Or, if the Script writes results into a Content row,
-   poll that Content by `sys.id` as before — see `weegloo-api-query-optimization`. If that job
-   Content is polled on **ACDA / CDA** under a `createdBy :self` role, its ContentType needs
-   **`publishWithAuthor: true`**, or the delivery read matches nothing — `weegloo-create-content-type`.)
+3. **Frontend**: `POST …/scripts/{id}/execute` with the payload and read the result off the response.
+   **When the provider is too slow to answer inside one run**, keep the wait off the request: the
+   frontend creates a job Content row, a **`Webhook`** on `Content.Create` runs the Script that calls
+   the provider and writes the result back (`weegloo-webhook`), and the frontend **polls that row by
+   `sys.id`** — `weegloo-api-query-optimization`. If that job Content is polled on **ACDA / CDA**
+   under a `createdBy :self` role, its ContentType needs **`publishWithAuthor: true`**, or the
+   delivery read matches nothing — `weegloo-create-content-type`.
 4. **Event-driven variant**: instead of the frontend calling `/execute`, attach the Script to a
    **Webhook** (`script` Refer, on e.g. `Content.Create`) so it runs automatically — `weegloo-webhook`.
 
@@ -653,7 +644,7 @@ Minimal cookbook (call LLM, write result Content, return id):
 
 ```jsonc
 {
-  "name": "gen", "definition": { "method": "Post", "executionMode": "Async", "statements": [
+  "name": "gen", "definition": { "method": "Post", "statements": [
     { "type": "Http", "method": "POST", "url": "https://api.llm.com/v1/gen",
       "headers": [ { "key": "Authorization", "value": "Bearer sk-…", "secret": true } ],
       "body": { "prompt": "{ /payload/fields/prompt }" }, "timeoutMs": 15000, "name": "resp" },

@@ -31,13 +31,14 @@ rules:
 
   - section: Base URL by API Type (never guess or infer)
     items:
-      - Weegloo APIs include **CMA**, **CDA**, **Upload**, and when the product runs its own end-user (Service User) directory, **ACMA** and **ACDA** instead of CMA/CDA for those flows.
+      - Weegloo APIs include **CMA**, **CDA**, **Upload**, **Script**, and when the product runs its own end-user (Service User) directory, **ACMA** and **ACDA** instead of CMA/CDA for those flows.
       - **CMA** (Content Management API): Read, create, update, delete as a **Weegloo User**. Base URL: `https://cma.weegloo.com`
       - **CDA** (Content Delivery API): Cache-based, read-only delivery of **published** resources. Base URL: `https://cda.weegloo.com`
       - **Upload**: File uploads. Accepts both a **Weegloo User** Bearer (followed by **CMA** Media create) and a **Service User** Bearer (followed by **ACMA** Media create). Base URL: `https://upload.weegloo.com`. **REST mechanics (multipart/binary endpoints, the temporary `Upload.sys.id`, and the Media/WebHosting create payloads that consume it) live in the `weegloo-upload-api` skill.** The raw REST upload endpoints are for **application code**; when the **agent** uploads a local file it uses the **`weegloo-upload` MCP** instead (the Upload OpenAPI states the REST endpoints are "not for the MCP protocol"). Do not conflate the two.
       - **ACMA** (App Content Management API): Use when the product uses **its own end-user (Service User) directory** instead of having every writer be a Weegloo platform account. In that case use **ACMA instead of CMA** for those member-scoped operations. Base URL: `https://acma.weegloo.com`
       - **ACDA** (App Content Delivery API): Same scenario—**Service Users**. Use **ACDA instead of CDA** for delivery/read paths that map to that model. Base URL: `https://acda.weegloo.com`
       - **Auth** (ServiceLogin OAuth): Sign-in entry, token exchange, refresh, and logout for **Service Users** (`ServiceUser`). Base URL: `https://auth.weegloo.com`. **Endpoint mechanics, exact paths, request/response shapes, and the official browser SDK live in the `weegloo-service-login-sdk` skill** — do not re-derive them ad hoc.
+      - **Script** (Script execution): Run a **Script** stored in a Space — **`POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute`**, plus the token-free **`…/execute/anonymous`** when the Script allows it. Base URL: `https://script.weegloo.com`. **This host runs Scripts and nothing else** — a Script is **authored** (create / read / update / delete) on **CMA**. The run answers on the request with the Script's `Return` value, so from the caller's side it is an ordinary API call. Both identities may call it (**Weegloo User** Bearer or `SpaceAccessToken`, and a **Service User** ServiceLogin Bearer), each needing Script `Execute` on its role. The REST endpoint is for **application code**; the agent runs a Script through the Weegloo **MCP** Script tools. Mechanics: **`weegloo-script`** skill.
       - API paths typically use `/v1/...`, e.g. `https://cda.weegloo.com/v1` for CDA.
 
   - section: Accept header and JSON media type (mandatory for HTTP clients)
@@ -55,6 +56,7 @@ rules:
       - **CMA**: `https://docs.weegloo.com/api-docs/cma`
       - **CDA**: `https://docs.weegloo.com/api-docs/cda`
       - **Upload**: `https://docs.weegloo.com/api-docs/upload`
+      - **Script**: `https://docs.weegloo.com/api-docs/script`
       - **ACMA**: `https://docs.weegloo.com/api-docs/acma`
       - **ACDA**: `https://docs.weegloo.com/api-docs/acda`
       - Use these for **`FieldValidation`**, **`CreateSpaceRole`**, **`CreateDeliveryAccessToken`**, **`CreateContentType`**, **`PATCH`** paths, query parameters, and any operation-level detail.
@@ -186,12 +188,14 @@ rules:
       - Correct: For CDA content fetch, use `https://cda.weegloo.com/v1/spaces/{spaceId}/...`.
       - Wrong: `Accept: application/json` on Weegloo API requests. Prefer **no** `Accept` header, or **`application/vnd.com.weegloo.v1+json;charset=UTF-8`** if `Accept` is required.
       - Wrong (ACMA/ACDA): flat Content paths like `https://acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}` — these **do not exist** on ACMA. Use the nested `…/content-types/{contentTypeId}/contents/{contentId}` form (see *ACMA / ACDA — Content is addressed UNDER its ContentType*).
+      - Wrong (Script): executing a Script on the CMA host, `https://cma.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute`. **Script execution has its own host:** `https://script.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute` (and `…/execute/anonymous`). CMA is where a Script is authored, not run.
 
   - section: Base URL quick reference
     items:
       - CMA: `https://cma.weegloo.com`
       - CDA: `https://cda.weegloo.com`
       - Upload: `https://upload.weegloo.com`
+      - Script (execution): `https://script.weegloo.com`
       - ACMA: `https://acma.weegloo.com`
       - ACDA: `https://acda.weegloo.com`
       - Auth (ServiceLogin OAuth): `https://auth.weegloo.com` — see **`weegloo-service-login-sdk`** skill for endpoint paths and the official browser SDK

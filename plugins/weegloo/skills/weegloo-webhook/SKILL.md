@@ -66,9 +66,9 @@ is the **event → external call → follow-up work** pattern: the Script can ca
 in one ordered, server-side run. *Example:* on `Content.Publish`, a Script POSTs the item to a search
 index, then `ResourcePatch`es an `indexedAt` value back onto it. (Full patterns: `weegloo-script`.)
 
-- The Script is enqueued **async, fire-and-forget** — the Webhook does **not** poll or store the
-  Script's return value. (If you need the result back, have the Script write it into Content/Media,
-  or call the Script from the frontend via `/execute` and poll `requestId` — `weegloo-script`.)
+- The Script runs **fire-and-forget** — the Webhook does **not** keep the Script's return value. (If
+  you need the result back, have the Script write it into Content/Media, or call the Script from the
+  frontend via `/execute`, which answers with its `Return` value — `weegloo-script`.)
 - The **triggering resource becomes the Script's `payload`** (read it as `{ /payload/... }`).
 - **`runAs` is attribution only, not authorization.** It sets who the resource writes are attributed
   to (`HookOwner` = the webhook's creator; `EventUser` = the user who caused the change). Under
