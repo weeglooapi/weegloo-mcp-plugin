@@ -101,7 +101,7 @@ whenever one of these fits. These are the situations an AI agent should map to S
    // Edit a post only if the supplied password matches the stored one.
    // Public role holds script.Execute on THIS script only — NOT Read on ct_pw, NOT Edit on ct_post.
    { "type": "ResourceFind", "resource": "Content", "contentType": { "sys": { "id": "ct_pw" } },
-     "where": { "postId": { "eq": "{ /payload/postId }" } }, "name": "cred" },
+     "where": { "fields.postId": { "eq": "{ /payload/postId }" } }, "name": "cred" },
    { "type": "If", "condition": { "or": [
        { "==": [ "{ /cred }", null ] },
        { "!=": [ "{ /cred/fields/password/en-US }", "{ /payload/password }" ] } ] },
