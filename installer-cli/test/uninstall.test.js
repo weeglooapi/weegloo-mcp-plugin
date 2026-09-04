@@ -141,7 +141,6 @@ test('removeMcpServers (json): drops only the weegloo entries, keeps other serve
     const result = removeMcpServers({ kind: 'json', file, container: 'mcpServers' });
 
     assert.deepEqual(result.removed, ['weegloo', 'weegloo-upload']);
-    assert.equal(result.fileRemoved, false);
     assert.deepEqual(readJson(file), {
       mcpServers: { other: { command: 'node' } },
       someOtherSetting: true,
@@ -149,15 +148,18 @@ test('removeMcpServers (json): drops only the weegloo entries, keeps other serve
   });
 });
 
-test('removeMcpServers (json): deletes a file the removal empties out completely', () => {
+test('removeMcpServers (json): KEEPS a file the removal empties out — it may not be ours', () => {
   withTmp('weegloo-mcp-json-', (root) => {
     const file = path.join(root, '.mcp.json');
     fs.writeFileSync(file, JSON.stringify({ mcpServers: { weegloo: {}, 'weegloo-upload': {} } }), 'utf-8');
 
     const result = removeMcpServers({ kind: 'json', file, container: 'mcpServers' });
 
-    assert.equal(result.fileRemoved, true);
-    assert.equal(fs.existsSync(file), false, 'a {} leftover is not the pre-install state');
+    assert.deepEqual(result.removed, ['weegloo', 'weegloo-upload']);
+    // Deleting it took a repo-COMMITTED .mcp.json once. Nothing records who created the file,
+    // so an untidy {} is the correct outcome and the deletion is not.
+    assert.equal(fs.existsSync(file), true);
+    assert.deepEqual(readJson(file), {});
   });
 });
 
@@ -208,13 +210,14 @@ test('removeMcpServers (toml): strips the weegloo tables and keeps the rest', ()
   });
 });
 
-test('removeMcpServers (toml): deletes a config.toml that held nothing but weegloo', () => {
+test('removeMcpServers (toml): empties a config.toml that held nothing but weegloo, keeps the file', () => {
   withTmp('weegloo-mcp-toml-', (root) => {
     const file = path.join(root, 'config.toml');
     fs.writeFileSync(file, '[mcp_servers.weegloo]\nurl = "x"\n', 'utf-8');
     const result = removeMcpServers({ kind: 'toml', file });
-    assert.equal(result.fileRemoved, true);
-    assert.equal(fs.existsSync(file), false);
+    assert.deepEqual(result.removed, ['weegloo']);
+    assert.equal(fs.existsSync(file), true);
+    assert.equal(fs.readFileSync(file, 'utf-8'), '');
   });
 });
 
@@ -282,11 +285,10 @@ test('detectInstall: reports skills, rules, MCP and state — and unions record 
 
     assert.equal(detected.present, true);
     assert.equal(detected.strong, true);
-    assert.deepEqual(detected.skills.sort(), [
-      'weegloo-disk-only',
-      'weegloo-recorded-only',
-      'weegloo-script',
-    ]);
+    // the record is the authority — a recorded id absent from disk stays in (harmless no-op)…
+    assert.deepEqual(detected.skills.sort(), ['weegloo-recorded-only', 'weegloo-script']);
+    // …and a weegloo-looking dir the record never claimed is UNVERIFIED, not removable
+    assert.deepEqual(detected.unverifiedSkills, ['weegloo-disk-only']);
     assert.deepEqual(detected.rules, ['weegloo-version']);
     assert.deepEqual(detected.mcpServers, ['weegloo', 'weegloo-upload']);
     assert.equal(detected.hasRecord, true);
@@ -299,6 +301,7 @@ test('detectInstall: a clean project is not present', async () => {
     const detected = detectInstall('claude', 'project');
     assert.equal(detected.present, false);
     assert.deepEqual(detected.skills, []);
+    assert.deepEqual(detected.unverifiedSkills, []);
     assert.deepEqual(detected.mcpServers, []);
   });
 });
@@ -311,6 +314,8 @@ test('detectInstall: markers in the SHARED AGENTS.md are weak evidence, not proo
     const codex = detectInstall('codex', 'project');
     assert.equal(codex.present, true, 'still offered — the markers may be codex\'s');
     assert.equal(codex.strong, false, 'but not checked by default');
+    assert.deepEqual(codex.rules, [], 'no record ⇒ nothing is removable without being picked');
+    assert.deepEqual(codex.unverifiedRules, ['weegloo-global-rules']);
 
     const androidstudio = detectInstall('androidstudio', 'project');
     assert.equal(androidstudio.strong, false, 'same file, same ambiguity');
@@ -323,7 +328,7 @@ test("detectInstall: antigravity's own .agents/rules files ARE strong evidence",
     fs.writeFileSync(path.join('.agents', 'rules', 'weegloo-version.md'), 'body', 'utf-8');
     const detected = detectInstall('antigravity', 'project');
     assert.equal(detected.strong, true);
-    assert.deepEqual(detected.rules, ['weegloo-version']);
+    assert.deepEqual(detected.unverifiedRules, ['weegloo-version'], 'no record yet ⇒ unverified');
   });
 });
 
@@ -340,7 +345,8 @@ test('uninstallTarget: removes weegloo skills/rules/MCP/state and nothing of the
     assert.deepEqual(report.removedSkills, ['weegloo-script']);
     assert.deepEqual(report.removedRules.sort(), ['weegloo-global-rules', 'weegloo-version']);
     assert.deepEqual(report.mcp.removed, ['weegloo', 'weegloo-upload']);
-    assert.equal(fs.existsSync('.mcp.json'), false, 'the token went with it');
+    assert.equal(fs.existsSync('.mcp.json'), true, 'the config file is the user\'s, not ours');
+    assert.deepEqual(readJson('.mcp.json'), {}, 'but the entries — and the token — are gone');
     assert.equal(fs.existsSync('.weegloo'), false, 'tracking state cleared');
     // the user's own files, and the dirs holding them, survive
     assert.equal(fs.existsSync(path.join('.claude', 'skills', 'my-own-skill', 'SKILL.md')), true);
@@ -409,19 +415,20 @@ test('uninstallTarget (codex): cuts the rule markers out of AGENTS.md, keeps the
     const body = fs.readFileSync('AGENTS.md', 'utf-8');
     assert.ok(!body.includes('weegloo:'), 'no marker sections left');
     assert.ok(body.includes('House rules here.'), 'hand-written prose preserved');
-    assert.equal(fs.existsSync(path.join('.codex', 'config.toml')), false);
-    assert.equal(fs.existsSync('.codex'), false, 'the emptied .codex dir goes too');
+    assert.equal(fs.readFileSync(path.join('.codex', 'config.toml'), 'utf-8'), '', 'emptied, not deleted');
   });
 });
 
-test('uninstallTarget (codex): an AGENTS.md that held only weegloo markers is deleted', async () => {
+test('uninstallTarget (codex): an AGENTS.md left with no content is emptied, NOT deleted', async () => {
   await inTmpProject(async () => {
     upsertRuleInAgentsMd('AGENTS.md', 'weegloo-version', 'version rule');
     writeState('codex', { record: { skills: [], rules: ['weegloo-version'] } });
 
     uninstallTarget(detectInstall('codex', 'project'));
 
-    assert.equal(fs.existsSync('AGENTS.md'), false, 'a BOM-only file is not the pre-install state');
+    // AGENTS.md is a file agents and humans both own; we cut our sections and stop there.
+    assert.equal(fs.existsSync('AGENTS.md'), true);
+    assert.equal(fs.readFileSync('AGENTS.md', 'utf-8').replace(/^﻿/, '').trim(), '');
   });
 });
 
@@ -457,20 +464,27 @@ test('uninstallTarget (antigravity): removes .agents/rules files and the AGENTS.
     const report = uninstallTarget(detectInstall('antigravity', 'project'));
 
     assert.deepEqual(report.removedRules, ['weegloo-version']);
-    assert.equal(fs.existsSync('AGENTS.md'), false, 'the bootstrap loader was the only content');
-    assert.equal(fs.existsSync('.agents'), false);
+    assert.equal(fs.existsSync('.agents'), false, 'the emptied rules dir and .agents are pruned');
+    // the loader marker is ours and goes; the file itself is left behind, emptied
+    assert.ok(!fs.readFileSync('AGENTS.md', 'utf-8').includes('weegloo:'));
   });
 });
 
-test('uninstallTarget (antigravity): pre-migration rule markers in AGENTS.md are removed too', async () => {
+test('uninstallTarget (antigravity): pre-migration markers go only when the record claims them', async () => {
   await inTmpProject(async () => {
     // A legacy install kept the rules themselves as markers in the shared context file.
     upsertRuleInAgentsMd('AGENTS.md', 'weegloo-version', 'legacy version rule');
     fs.writeFileSync('AGENTS.md', `${fs.readFileSync('AGENTS.md', 'utf-8')}\nKeep me.\n`, 'utf-8');
 
-    const report = uninstallTarget(detectInstall('antigravity', 'project'));
+    // No record ⇒ unverified ⇒ untouched (the marker could be codex's or the user's).
+    const noRecord = uninstallTarget(detectInstall('antigravity', 'project'));
+    assert.deepEqual(noRecord.removedRules, []);
+    assert.ok(fs.readFileSync('AGENTS.md', 'utf-8').includes('weegloo:'));
 
-    assert.deepEqual(report.removedRules, ['weegloo-version']);
+    // With the record claiming it, it goes — and the user's prose survives.
+    writeState('antigravity', { record: { skills: [], rules: ['weegloo-version'] } });
+    const withRecord = uninstallTarget(detectInstall('antigravity', 'project'));
+    assert.deepEqual(withRecord.removedRules, ['weegloo-version']);
     const body = fs.readFileSync('AGENTS.md', 'utf-8');
     assert.ok(!body.includes('weegloo:'));
     assert.ok(body.includes('Keep me.'));
@@ -630,4 +644,109 @@ test('getAgentStore: every agent exposes a skills, rules and MCP store per scope
     }
   }
   assert.equal(getAgentStore('nope', 'global'), null);
+});
+
+// ── regression: the user-authored `weegloo-*` false positive ─────────────────
+// A repo-authored `weegloo-npm-publish` project skill was deleted by an earlier version:
+// the candidate set was record ∪ prefix-scan, `claude (project)` had no record, and the
+// confirmation showed only "skills … (1)" — nothing the user could recognize.
+
+test('a user-authored weegloo-* skill is NEVER removed without being picked by name', async () => {
+  await inTmpProject(async () => {
+    // an MCP-only install (no record) + the user's own weegloo-prefixed project skill
+    writeSkill(path.join('.claude', 'skills'), 'weegloo-npm-publish');
+    fs.writeFileSync('.mcp.json', JSON.stringify({ mcpServers: { weegloo: {} } }), 'utf-8');
+
+    const detected = detectInstall('claude', 'project');
+    assert.deepEqual(detected.skills, [], 'no record ⇒ nothing is removable on its own');
+    assert.deepEqual(detected.unverifiedSkills, ['weegloo-npm-publish']);
+
+    const report = uninstallTarget(detected);
+
+    assert.deepEqual(report.removedSkills, []);
+    assert.equal(fs.existsSync(path.join('.claude', 'skills', 'weegloo-npm-publish')), true);
+    assert.deepEqual(report.mcp.removed, ['weegloo'], 'the MCP entry still goes');
+  });
+});
+
+test('an unverified id IS removed once the user picks it out by name', async () => {
+  await inTmpProject(async () => {
+    writeSkill(path.join('.claude', 'skills'), 'weegloo-orphan');
+
+    const detected = detectInstall('claude', 'project');
+    const report = uninstallTarget(detected, { extraSkillIds: ['weegloo-orphan'] });
+
+    assert.deepEqual(report.removedSkills, ['weegloo-orphan']);
+  });
+});
+
+test('extraSkillIds cannot smuggle in an id the target never offered as unverified', async () => {
+  await inTmpProject(async () => {
+    writeSkill(path.join('.claude', 'skills'), 'my-own-skill');
+
+    const report = uninstallTarget(detectInstall('claude', 'project'), {
+      extraSkillIds: ['my-own-skill', '../../escape'],
+    });
+
+    assert.deepEqual(report.removedSkills, []);
+    assert.equal(fs.existsSync(path.join('.claude', 'skills', 'my-own-skill')), true);
+  });
+});
+
+test('the plan NAMES every item it will delete (a bare count hid the bug)', async () => {
+  await inTmpProject(async () => {
+    seedClaude({ skills: ['weegloo-script'], rules: ['weegloo-version'] });
+    const lines = [];
+
+    await runUninstall(cfg({ agent: 'claude', nonInteractive: false }), {
+      log: (s) => lines.push(String(s)),
+      promptCheckbox: async ({ choices }) => choices.filter((c) => c.checked).map((c) => c.value),
+      promptConfirm: async () => true,
+    });
+
+    const plan = lines.join('\n');
+    assert.ok(plan.includes('weegloo-script'), 'skill id shown, not just a count');
+    assert.ok(plan.includes('weegloo-version'), 'rule id shown, not just a count');
+    assert.ok(plan.includes('the file is kept'), 'says the MCP file itself survives');
+  });
+});
+
+test('runUninstall: unverified items are offered separately, unchecked, after the main confirm', async () => {
+  await inTmpProject(async () => {
+    seedClaude({ skills: ['weegloo-script'], rules: ['weegloo-version'] });
+    writeSkill(path.join('.claude', 'skills'), 'weegloo-mine');
+    const asked = [];
+
+    await runUninstall(cfg({ agent: 'claude', nonInteractive: false }), {
+      ...quiet,
+      promptCheckbox: async ({ message, choices }) => {
+        asked.push({ message, choices });
+        // the target picker takes its defaults; the unverified picker takes nothing
+        return choices.filter((c) => c.checked).map((c) => c.value);
+      },
+      promptConfirm: async () => true,
+    });
+
+    assert.equal(asked.length, 2, 'a second, separate question for the unverified item');
+    const unverified = asked[1];
+    assert.ok(/Also remove these/.test(unverified.message));
+    assert.deepEqual(unverified.choices.map((c) => c.value), ['skill:weegloo-mine']);
+    assert.equal(unverified.choices[0].checked, false, 'never pre-checked');
+    assert.equal(fs.existsSync(path.join('.claude', 'skills', 'weegloo-mine')), true, 'declined ⇒ kept');
+    assert.equal(fs.existsSync(path.join('.claude', 'skills', 'weegloo-script')), false, 'recorded ⇒ removed');
+  });
+});
+
+test('runUninstall: -y never removes unverified items and names what it left', async () => {
+  await inTmpProject(async () => {
+    seedClaude({ skills: ['weegloo-script'], rules: ['weegloo-version'] });
+    writeSkill(path.join('.claude', 'skills'), 'weegloo-mine');
+    const lines = [];
+
+    await runUninstall(cfg({ agent: 'claude' }), { log: (s) => lines.push(String(s)) });
+
+    assert.ok(lines.some((l) => l.includes('weegloo-mine')), 'says what it skipped, by name');
+    assert.equal(fs.existsSync(path.join('.claude', 'skills', 'weegloo-mine')), true);
+    assert.equal(fs.existsSync(path.join('.claude', 'skills', 'weegloo-script')), false);
+  });
 });

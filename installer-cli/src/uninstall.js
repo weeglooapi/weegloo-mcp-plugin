@@ -115,14 +115,18 @@ export function listMcpServers(mcp) {
 
 /**
  * Removes the weegloo MCP server entries from one agent's config, leaving every other server —
- * and every unrelated setting in the same file — untouched. A file the removal empties out
- * completely is deleted: an install that created `.mcp.json` should not leave a `{}` behind.
+ * and every unrelated setting in the same file — untouched.
+ *
+ * The FILE is never deleted, even when the removal empties it out. Nothing records whether the
+ * installer created it or the user did, and guessing wrong is unrecoverable: a `.mcp.json`
+ * holding only weegloo servers was deleted this way even though it was committed to the repo.
+ * An empty `{}` is untidy; taking someone's tracked file is worse.
  *
  * @param {{ kind: 'json'|'toml', file: string, container?: string }} mcp
- * @returns {{ removed: string[], file: string, fileRemoved: boolean }}
+ * @returns {{ removed: string[], file: string }}
  */
 export function removeMcpServers(mcp) {
-  const result = { removed: [], file: mcp?.file ?? null, fileRemoved: false };
+  const result = { removed: [], file: mcp?.file ?? null };
   if (!mcp || !fs.existsSync(mcp.file)) return result;
 
   if (mcp.kind === 'toml') {
@@ -130,12 +134,7 @@ export function removeMcpServers(mcp) {
     result.removed = MCP_SERVER_NAMES.filter((name) => existing.includes(`[mcp_servers.${name}]`));
     if (result.removed.length === 0) return result;
     const stripped = stripWeeglooMcpSections(existing);
-    if (stripped.trim() === '') {
-      fs.rmSync(mcp.file, { force: true });
-      result.fileRemoved = true;
-    } else {
-      fs.writeFileSync(mcp.file, `${stripped}\n`, 'utf-8');
-    }
+    fs.writeFileSync(mcp.file, stripped.trim() === '' ? '' : `${stripped}\n`, 'utf-8');
     return result;
   }
 
@@ -148,36 +147,10 @@ export function removeMcpServers(mcp) {
     result.removed.push(name);
   }
   if (result.removed.length === 0) return result;
-  // An emptied container is install residue too — drop the key, then the file if nothing is left.
+  // The emptied container key is ours to drop; the file itself is not.
   if (Object.keys(container).length === 0) delete config[mcp.container];
-  if (Object.keys(config).length === 0) {
-    fs.rmSync(mcp.file, { force: true });
-    result.fileRemoved = true;
-  } else {
-    fs.writeFileSync(mcp.file, JSON.stringify(config, null, 2), 'utf-8');
-  }
+  fs.writeFileSync(mcp.file, JSON.stringify(config, null, 2), 'utf-8');
   return result;
-}
-
-/**
- * Deletes a Markdown context file (AGENTS.md / GEMINI.md) that the marker removal left with no
- * content — `removeRuleMarkers` writes back a BOM-only file, which is not "the state before the
- * install". A file still holding the user's own prose is kept as-is.
- *
- * @returns {boolean} whether the file was deleted
- */
-function removeEmptyContextFile(filePath) {
-  if (!filePath || !fs.existsSync(filePath)) return false;
-  let body;
-  try {
-    body = fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return false;
-  }
-  if (body.charCodeAt(0) === 0xfeff) body = body.slice(1);
-  if (body.trim() !== '') return false;
-  fs.rmSync(filePath, { force: true });
-  return true;
 }
 
 /**
@@ -247,11 +220,12 @@ function removeTrackingState(scope, agent, cwd) {
 /**
  * Looks at one agent+scope and reports what a weegloo install left there. Read-only.
  *
- * The removable id set is the per-agent record UNIONED with a `weegloo-*` disk scan of this
- * agent's own stores: the record alone misses a pre-record install, and the scan alone misses
- * nothing but is the weaker signal. Every removal downstream is existence-checked inside this
- * agent's directories and filtered through the shared-store guard, so a union is safe — and the
- * ids are printed for confirmation before anything is deleted.
+ * THE RECORD IS THE ONLY AUTHORITY on what this installer put here. A `weegloo-*` name found on
+ * disk that the record does not claim is reported as **unverified** and is never removed unless
+ * the user picks it out by name: it may be the user's own file. That is not hypothetical — an
+ * earlier version unioned the record with the prefix scan and deleted a repo-authored
+ * `weegloo-npm-publish` project skill, because the confirmation showed only a COUNT ("1 skill")
+ * and there was nothing for the user to recognize.
  *
  * `strong` distinguishes evidence that can ONLY come from installing this agent (its record, its
  * stamp, its private stores, its MCP config) from artifacts seen only in a store shared with
@@ -274,8 +248,13 @@ export function detectInstall(agent, scope, cwd = process.cwd()) {
   const diskSkills = listWeeglooSkillDirs(store.skills.dir);
   const ownRules = listOwnRuleIds(store.rules);
   const diskRules = union(ownRules, listLegacyRuleIds(store.rules));
-  const skills = union(record?.skills ?? [], diskSkills);
-  const rules = union(record?.rules ?? [], diskRules).filter((id) => id !== RULE_LOADING_ID);
+
+  // Removable = exactly what the record claims (a recorded id no longer on disk is a harmless
+  // no-op downstream). Everything else that merely LOOKS like ours needs the user's word.
+  const skills = record?.skills ?? [];
+  const rules = (record?.rules ?? []).filter((id) => id !== RULE_LOADING_ID);
+  const unverifiedSkills = diskSkills.filter((id) => !skills.includes(id));
+  const unverifiedRules = diskRules.filter((id) => id !== RULE_LOADING_ID && !rules.includes(id));
   const mcpServers = listMcpServers(store.mcp);
 
   const privateSkillEvidence = diskSkills.length > 0 && store.skills.sharedWith.length === 0;
@@ -284,7 +263,8 @@ export function detectInstall(agent, scope, cwd = process.cwd()) {
   // nothing about THIS folder — same weak signal as a marker in a shared AGENTS.md.
   const privateMcpEvidence = mcpServers.length > 0 && !store.mcp?.ideWide;
   const strong = hasRecord || hasStamp || privateMcpEvidence || privateSkillEvidence || privateRuleEvidence;
-  const present = strong || diskSkills.length > 0 || diskRules.length > 0 || mcpServers.length > 0;
+  const present =
+    strong || diskSkills.length > 0 || diskRules.length > 0 || mcpServers.length > 0;
 
   return {
     agent,
@@ -299,6 +279,8 @@ export function detectInstall(agent, scope, cwd = process.cwd()) {
     origins: record?.origins ?? null,
     skills,
     rules,
+    unverifiedSkills,
+    unverifiedRules,
     diskSkills,
     diskRules,
     mcpServers,
@@ -335,11 +317,21 @@ export function detectInstalls({ agent = null, scope = null, cwd = process.cwd()
  * partial run instead rewrites the record with the removed kinds emptied, so a later `--update`
  * does not treat the removal as drift and restore it.
  *
+ * `extraSkillIds` / `extraRuleIds` are unverified ids (see detectInstall) the user picked out by
+ * name. They are the ONLY way a `weegloo-*` artifact the record does not claim gets removed.
+ *
  * @param {ReturnType<typeof detectInstall>} target
- * @param {{ mcp?: boolean, skills?: boolean, rules?: boolean, cwd?: string }} [opts]
+ * @param {{ mcp?: boolean, skills?: boolean, rules?: boolean, extraSkillIds?: string[],
+ *           extraRuleIds?: string[], cwd?: string }} [opts]
  */
-export function uninstallTarget(target, { mcp = true, skills = true, rules = true, cwd = process.cwd() } = {}) {
+export function uninstallTarget(
+  target,
+  { mcp = true, skills = true, rules = true, extraSkillIds = [], extraRuleIds = [], cwd = process.cwd() } = {}
+) {
   const { agent, scope, store } = target;
+  // Only ids this target actually offered as unverified can be opted in.
+  const skillIds = union(target.skills, extraSkillIds.filter((id) => target.unverifiedSkills.includes(id)));
+  const ruleIds = union(target.rules, extraRuleIds.filter((id) => target.unverifiedRules.includes(id)));
   const report = {
     agent,
     scope,
@@ -347,8 +339,7 @@ export function uninstallTarget(target, { mcp = true, skills = true, rules = tru
     keptSkills: [],
     removedRules: [],
     keptRules: [],
-    mcp: { removed: [], file: store.mcp?.file ?? null, fileRemoved: false },
-    removedFiles: [],
+    mcp: { removed: [], file: store.mcp?.file ?? null },
     removedDirs: [],
     removedState: [],
   };
@@ -356,67 +347,61 @@ export function uninstallTarget(target, { mcp = true, skills = true, rules = tru
   if (skills) {
     const claimable =
       store.skills.sharedWith.length > 0
-        ? withoutSharerClaims(target.skills, {
+        ? withoutSharerClaims(skillIds, {
             scope,
             sharers: store.skills.sharedWith,
             kind: 'skills',
             cwd,
           })
-        : target.skills;
-    report.keptSkills = target.skills.filter((id) => !claimable.includes(id));
+        : skillIds;
+    report.keptSkills = skillIds.filter((id) => !claimable.includes(id));
     report.removedSkills = removeSkillDirs(store.skills.dir, claimable);
     report.removedDirs.push(...pruneEmptyDirs(store.skills.dir, scopeRoot(scope, cwd)));
   }
 
   if (rules) {
     if (store.rules.kind === 'files') {
-      report.removedRules = removeRuleFiles(store.rules.dir, target.rules, store.rules.ext);
+      report.removedRules = removeRuleFiles(store.rules.dir, ruleIds, store.rules.ext);
       report.removedDirs.push(...pruneEmptyDirs(store.rules.dir, scopeRoot(scope, cwd)));
     } else {
       const claimable =
         store.rules.sharedWith.length > 0
-          ? withoutSharerClaims(target.rules, {
+          ? withoutSharerClaims(ruleIds, {
               scope,
               sharers: projectMarkerRuleSharers(agent, cwd),
               kind: 'rules',
               cwd,
             })
-          : target.rules;
-      report.keptRules = target.rules.filter((id) => !claimable.includes(id));
+          : ruleIds;
+      report.keptRules = ruleIds.filter((id) => !claimable.includes(id));
       report.removedRules = removeRuleMarkers(store.rules.file, claimable);
-      if (removeEmptyContextFile(store.rules.file)) report.removedFiles.push(store.rules.file);
     }
 
     // Antigravity project installs ALSO put a bootstrap loader marker (and, before the
     // file-per-rule switch, the rules themselves) into the shared <cwd>/AGENTS.md.
     if (store.rules.legacyMarkersFile) {
       const legacyIds = listWeeglooRuleMarkers(store.rules.legacyMarkersFile);
-      const claimable = withoutSharerClaims(
-        legacyIds.filter((id) => id !== RULE_LOADING_ID),
-        { scope, sharers: projectMarkerRuleSharers(agent, cwd), kind: 'rules', cwd }
-      );
+      // Same authority rule as everywhere else: only ids we are removing anyway, never every
+      // marker the shared file happens to hold (those may be codex's or Android Studio's).
+      const mine = legacyIds.filter((id) => id !== RULE_LOADING_ID && ruleIds.includes(id));
+      const claimable = withoutSharerClaims(mine, {
+        scope,
+        sharers: projectMarkerRuleSharers(agent, cwd),
+        kind: 'rules',
+        cwd,
+      });
       // The loader marker is antigravity's alone — no other agent reads or claims it.
       const alsoRemoved = removeRuleMarkers(store.rules.legacyMarkersFile, [
         ...claimable,
         ...(legacyIds.includes(RULE_LOADING_ID) ? [RULE_LOADING_ID] : []),
       ]);
       report.removedRules = union(report.removedRules, alsoRemoved.filter((id) => id !== RULE_LOADING_ID));
-      report.keptRules = union(
-        report.keptRules,
-        legacyIds.filter((id) => id !== RULE_LOADING_ID && !claimable.includes(id))
-      );
-      if (removeEmptyContextFile(store.rules.legacyMarkersFile)) {
-        report.removedFiles.push(store.rules.legacyMarkersFile);
-      }
+      report.keptRules = union(report.keptRules, mine.filter((id) => !claimable.includes(id)));
     }
   }
 
   if (mcp && store.mcp) {
     report.mcp = removeMcpServers(store.mcp);
-    if (report.mcp.fileRemoved) {
-      report.removedFiles.push(store.mcp.file);
-      report.removedDirs.push(...pruneEmptyDirs(path.dirname(store.mcp.file), scopeRoot(scope, cwd)));
-    }
   }
 
   if (skills && rules) {
@@ -431,6 +416,11 @@ export function uninstallTarget(target, { mcp = true, skills = true, rules = tru
   return report;
 }
 
+/** Stable key for a detected target (agent + scope), used by the picker and the opt-in map. */
+function targetKey(target) {
+  return `${target.agent}:${target.scope}`;
+}
+
 /** A readable id list — a full 26-skill dump drowns the rest of the report. */
 function summarizeIds(ids, limit = 5) {
   return ids.length <= limit
@@ -443,25 +433,52 @@ function describeTarget(target) {
   const bits = [`${target.skills.length} skill(s)`, `${target.rules.length} rule(s)`];
   if (target.mcpServers.length > 0) bits.push(`MCP (${target.mcpServers.join(', ')})`);
   if (target.hasRecord || target.hasStamp) bits.push('tracking state');
+  const unverified = target.unverifiedSkills.length + target.unverifiedRules.length;
+  if (unverified > 0) bits.push(`${unverified} unverified`);
   return bits.join(', ');
 }
 
-/** The paths a removal would touch, for the pre-confirmation plan. */
+/** Wraps a long id list into indented lines so a plan stays readable at any count. */
+function idLines(ids, indent, width = 92) {
+  const lines = [];
+  let current = '';
+  for (const id of ids) {
+    const next = current ? `${current}, ${id}` : id;
+    if (next.length + indent.length > width && current) {
+      lines.push(indent + current);
+      current = id;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(indent + current);
+  return lines;
+}
+
+/**
+ * The plan shown before anything is deleted. It NAMES every item, because a bare count is
+ * unrecognizable: a plan reading "skills … (1)" is what let a user's own `weegloo-npm-publish`
+ * skill be deleted with their approval. The store path is on its own line so it cannot be
+ * misread as "this whole directory will be removed" — only the listed items are.
+ */
 function planLines(target, { mcp, skills, rules }) {
   const lines = [];
   if (skills && target.skills.length > 0) {
-    lines.push(`      skills  ${target.store.skills.dir}  ${chalk.dim(`(${target.skills.length})`)}`);
+    lines.push(`      skills  ${chalk.dim(`in ${target.store.skills.dir}`)}`);
+    lines.push(...idLines(target.skills, '              '));
   }
   if (rules && target.rules.length > 0) {
     const where =
       target.store.rules.kind === 'files' ? target.store.rules.dir : target.store.rules.file;
-    lines.push(`      rules   ${where}  ${chalk.dim(`(${target.rules.length})`)}`);
+    lines.push(`      rules   ${chalk.dim(`in ${where}`)}`);
+    lines.push(...idLines(target.rules, '              '));
   }
   if (mcp && target.mcpServers.length > 0) {
-    lines.push(`      mcp     ${target.store.mcp.file}  ${chalk.dim(`(${target.mcpServers.join(', ')})`)}`);
+    lines.push(`      mcp     ${chalk.dim(target.store.mcp.file)}`);
+    lines.push(`              ${target.mcpServers.join(', ')} ${chalk.dim('(entries only — the file is kept)')}`);
   }
   if (skills && rules && (target.hasRecord || target.hasStamp)) {
-    lines.push(`      state   ${path.dirname(target.recordPath)}`);
+    lines.push(`      state   ${chalk.dim(path.dirname(target.recordPath))}`);
   }
   return lines;
 }
@@ -502,6 +519,9 @@ export async function runUninstall(config, deps = {}) {
     return { ok: true, status: 'nothing-installed' };
   }
 
+  // Per-target opt-ins for unverified ids (interactive only) — empty means "record only".
+  const extras = new Map();
+
   let targets;
   if (config.nonInteractive) {
     const scope = config.agent === 'androidstudio' ? 'project' : config.scope || 'global';
@@ -528,11 +548,11 @@ export async function runUninstall(config, deps = {}) {
       message: 'Select the installs to remove:',
       choices: found.map((target) => ({
         name: `${target.agent} (${target.scope})  ${chalk.dim(describeTarget(target))}`,
-        value: `${target.agent}:${target.scope}`,
+        value: targetKey(target),
         checked: target.strong,
       })),
     });
-    targets = found.filter((t) => chosenKeys.includes(`${t.agent}:${t.scope}`));
+    targets = found.filter((t) => chosenKeys.includes(targetKey(t)));
     if (targets.length === 0) {
       log(chalk.yellow('  Nothing selected — nothing was changed.'));
       log('');
@@ -560,13 +580,60 @@ export async function runUninstall(config, deps = {}) {
       return { ok: true, status: 'cancelled' };
     }
     log('');
+
+    // Unverified items: `weegloo-*` names the install record does not claim. They are offered
+    // ONE BY ONE, unchecked, and only after the main confirm — a user's own `weegloo-…` file
+    // living in the agent's skills dir is indistinguishable from ours by name alone.
+    for (const target of targets) {
+      const offer = [
+        ...(kinds.skills ? target.unverifiedSkills.map((id) => ({ id, kind: 'skill' })) : []),
+        ...(kinds.rules ? target.unverifiedRules.map((id) => ({ id, kind: 'rule' })) : []),
+      ];
+      if (offer.length === 0) continue;
+      log(
+        chalk.yellow('  ⚠  ') +
+        `${target.agent} (${target.scope}): ${offer.length} item(s) look like weegloo's but are NOT in its install record.`
+      );
+      log(chalk.dim('     They may be your own files. Nothing here is removed unless you pick it.'));
+      const picked = await promptCheckbox({
+        message: `Also remove these from ${target.agent} (${target.scope})?`,
+        choices: offer.map((o) => ({
+          name: `${o.id}  ${chalk.dim(`(${o.kind}, not in the record)`)}`,
+          value: `${o.kind}:${o.id}`,
+          checked: false,
+        })),
+      });
+      extras.set(targetKey(target), {
+        extraSkillIds: picked.filter((v) => v.startsWith('skill:')).map((v) => v.slice(6)),
+        extraRuleIds: picked.filter((v) => v.startsWith('rule:')).map((v) => v.slice(5)),
+      });
+      log('');
+    }
+  }
+
+  if (config.nonInteractive) {
+    // Non-interactive has nobody to ask, so unverified items are never touched — say so by name
+    // rather than leaving the user to wonder what was skipped.
+    for (const target of targets) {
+      const skipped = [
+        ...(kinds.skills ? target.unverifiedSkills : []),
+        ...(kinds.rules ? target.unverifiedRules : []),
+      ];
+      if (skipped.length === 0) continue;
+      log(
+        chalk.yellow('  ⚠  ') +
+        `${target.agent} (${target.scope}): left alone (not in the install record) — ${summarizeIds(skipped)}`
+      );
+      log(chalk.dim('     Run without -y to review and remove them individually.'));
+      log('');
+    }
   }
 
   // Sequential on purpose: each target drops its own record before the next runs, so when the
   // user removes BOTH sharers of a store the last one standing finally frees the shared files.
   const reports = [];
   for (const target of targets) {
-    const report = uninstallTarget(target, { ...kinds, cwd });
+    const report = uninstallTarget(target, { ...kinds, ...(extras.get(targetKey(target)) ?? {}), cwd });
     reports.push(report);
 
     log(chalk.bold(`  ✔  ${target.agent} (${target.scope})`));
@@ -588,7 +655,6 @@ export async function runUninstall(config, deps = {}) {
         )
       );
     }
-    for (const file of report.removedFiles) log(chalk.dim(`     - Deleted empty file  ${file}`));
     for (const dir of report.removedDirs) log(chalk.dim(`     - Deleted empty dir   ${dir}`));
     for (const entry of report.removedState) log(chalk.dim(`     - Cleared tracking    ${entry}`));
     log('');

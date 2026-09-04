@@ -134,15 +134,16 @@ npx weegloo@latest -y --agent claude --location global --uninstall
 - the installed **Skills** (directories) and **Rules** (files, or the `<!-- weegloo:… -->` marker sections inside a shared `AGENTS.md` / `GEMINI.md`);
 - the **`weegloo` and `weegloo-upload` MCP server entries** — and with them the Personal Access Token the installer wrote into that config;
 - the **tracking state** in `.weegloo/<agent>/` (install record + version stamp);
-- anything the above leaves **empty** — an emptied `.claude/skills/`, a `{}`-only `.mcp.json`, a BOM-only `AGENTS.md`.
+- directories the above leaves **empty** (`.claude/skills/`, `.agents/rules/`, …) — pruned with `rmdir`, which refuses a directory that still holds anything.
 
 What it does **not** touch:
 
-- **your own files.** Only ids from the install record and `weegloo-*` artifacts in the agent's own stores are candidates, every removal is existence-checked inside those directories, and other MCP servers / unrelated settings in the same config file are preserved.
+- **anything the install record does not claim.** The per-agent record is the only authority on what the installer put there. A `weegloo-*` name found on disk that the record does not list is reported as **unverified** and never removed unless you pick it out by name — it may well be your own file (a repo-authored `weegloo-npm-publish` skill was deleted this way before this rule existed). `-y` never removes unverified items at all; it names what it skipped.
+- **files it cannot prove it created.** Config and context files — `.mcp.json`, `config.toml`, `AGENTS.md`, `GEMINI.md` — are only ever *edited*: our entries and marker sections come out, the file stays, even when that leaves it empty. Other MCP servers and unrelated settings in the same file are preserved.
 - **files another agent still uses.** `.agents/skills` and `<cwd>/AGENTS.md` are physically shared, so an id another agent's record still claims is left alone and only this agent's tracking lets go of it. Uninstall the last claimer and the file is finally freed.
 - **the Codex project-trust entry**, a Claude Code marketplace plugin, or **the PAT itself** — none of those are the installer's file writes (or they live in your account). They are reported at the end with what to do about them.
 
-Interactive runs detect every install in the current project and your home directory, list what each holds, and ask before deleting anything — an artifact seen only in a file shared with another agent is offered *unchecked*. `-y` skips both prompts and removes exactly `--agent` at `--location` (default `global`).
+Interactive runs detect every install in the current project and your home directory, list what each holds, and **name every item** before deleting anything (a bare count is unrecognizable). An install seen only in a file shared with another agent is offered *unchecked*, and unverified items get their own separate, unchecked question after the main confirmation. `-y` skips every prompt and removes exactly `--agent` at `--location` (default `global`).
 
 Removal is driven by the install record plus a disk scan, so it needs **no network, no branch and no token** — an install whose branch is long gone still uninstalls cleanly. Re-running it is a clean no-op.
 
