@@ -32,6 +32,7 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 | `--ignore-rule` | Do not install Rules. |
 | `--origins <file>` | Origins mapping (JSON file or inline JSON) for a staging or enterprise stack (see [Origins mapping](#origins-mapping-staging--enterprise)). Also reads `WEEGLOO_ORIGINS`. Install only. |
 | `--update` | Update an existing install's skills/rules, keeping your selection (see [Updating](#updating)). Requires `--agent`; never touches MCP config, so no token. |
+| `-u, --uninstall` | Remove an install and restore the pre-install state (see [Uninstalling](#uninstalling)). Works offline; no token. Interactive by default; with `-y` it needs `--agent`. |
 | `-y, --yes` | Non-interactive: use defaults for anything not given. |
 | `--all-branches` | Show all branches in the version picker (interactive only). |
 | `-h, --help` | Show this help. |
@@ -56,6 +57,9 @@ WEEGLOO_TOKEN=… npx weegloo@latest -y --agent codex --host xcode
 
 # Update an existing install (selection preserved; no token needed)
 npx weegloo@latest --agent claude --location global --update
+
+# Uninstall: remove everything the installer put there (no token needed)
+npx weegloo@latest -y --agent claude --location global --uninstall
 
 # Pre-fill a couple of choices, get prompted for the rest (interactive)
 npx weegloo@latest --agent cursor --location global
@@ -112,6 +116,47 @@ This is the command the installed `weegloo-version` rule shows when a newer vers
 - reapplies the [origins mapping](#origins-mapping-staging--enterprise) recorded at install time. `--update --origins` is rejected — changing environments is a reinstall.
 
 If nothing is installed for that agent/scope, `--update` is a no-op with a pointer to the install command (it never silently installs everything).
+
+## Uninstalling
+
+```bash
+# Interactive: find every install here and pick what to remove
+npx weegloo@latest --uninstall
+
+# Non-interactive: exactly this agent, at this location
+npx weegloo@latest -y --agent claude --location global --uninstall
+```
+
+> `npx uninstall weegloo@latest` does **not** work — npm reads the first argument as the package to run and fails with `could not determine executable to run`. Uninstalling is a flag on this CLI, not a separate package.
+
+`--uninstall` is the inverse of an install. It removes:
+
+- the installed **Skills** (directories) and **Rules** (files, or the `<!-- weegloo:… -->` marker sections inside a shared `AGENTS.md` / `GEMINI.md`);
+- the **`weegloo` and `weegloo-upload` MCP server entries** — and with them the Personal Access Token the installer wrote into that config;
+- the **tracking state** in `.weegloo/<agent>/` (install record + version stamp);
+- anything the above leaves **empty** — an emptied `.claude/skills/`, a `{}`-only `.mcp.json`, a BOM-only `AGENTS.md`.
+
+What it does **not** touch:
+
+- **your own files.** Only ids from the install record and `weegloo-*` artifacts in the agent's own stores are candidates, every removal is existence-checked inside those directories, and other MCP servers / unrelated settings in the same config file are preserved.
+- **files another agent still uses.** `.agents/skills` and `<cwd>/AGENTS.md` are physically shared, so an id another agent's record still claims is left alone and only this agent's tracking lets go of it. Uninstall the last claimer and the file is finally freed.
+- **the Codex project-trust entry**, a Claude Code marketplace plugin, or **the PAT itself** — none of those are the installer's file writes (or they live in your account). They are reported at the end with what to do about them.
+
+Interactive runs detect every install in the current project and your home directory, list what each holds, and ask before deleting anything — an artifact seen only in a file shared with another agent is offered *unchecked*. `-y` skips both prompts and removes exactly `--agent` at `--location` (default `global`).
+
+Removal is driven by the install record plus a disk scan, so it needs **no network, no branch and no token** — an install whose branch is long gone still uninstalls cleanly. Re-running it is a clean no-op.
+
+Partial removal reuses the install-mode opt-outs, which read the same way ("leave this kind alone"):
+
+```bash
+# drop the skills/rules but keep the MCP server configured
+npx weegloo@latest -y --agent claude --uninstall --no-mcp
+
+# unhook the MCP server but keep the guidance files
+npx weegloo@latest -y --agent claude --uninstall --ignore-skill --ignore-rule
+```
+
+Detection can only see the **current project** and your **home directory**. An install made inside another project folder has to be uninstalled from that folder.
 
 ## Origins mapping (staging / enterprise)
 

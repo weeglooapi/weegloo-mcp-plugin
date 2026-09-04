@@ -6,6 +6,7 @@ import { orderBranchesForPicker } from './versions.js';
 import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
 import { partitionCoreRules } from './self-update.js';
 import { runUpdate } from './update.js';
+import { runUninstall } from './uninstall.js';
 import { loadOrigins, applyOriginsToResources, applyTermsExclusion, applyOriginMapping } from './origins.js';
 import { installCursor } from './cursor.js';
 import { installClaude } from './claude.js';
@@ -196,6 +197,16 @@ async function main() {
       chalk.dim(`  Non-interactive mode${isTTY ? '' : ' (no TTY)'} — using flags + defaults.`)
     );
     console.log();
+  }
+
+  // --uninstall is the inverse of an install: remove this agent's skills/rules, its weegloo MCP
+  // entries (token included) and its tracking state, then whatever that leaves empty. Dispatched
+  // BEFORE the origins parsing below because it fetches nothing and takes no mapping from a flag
+  // (the mapping it reports comes from the install record) — see cli.js for why --origins warns.
+  if (config.uninstall) {
+    const result = await runUninstall(config);
+    if (!result.ok) process.exit(1);
+    return;
   }
 
   // Origins mapping (staging / enterprise domains — docs/origins-mapping.md). Parsed and
@@ -615,6 +626,11 @@ async function main() {
     );
     console.log();
   }
+  console.log(
+    '  ' +
+    chalk.dim('To remove all of this again: ') +
+    chalk.cyan(`npx weegloo@latest --agent ${ide} --location ${scope} --uninstall`)
+  );
   console.log(
     '  ' + chalk.dim('Docs: ') + chalk.cyan('https://docs.weegloo.com/en-US/ai/tools/mcp/')
   );

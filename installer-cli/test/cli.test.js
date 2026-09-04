@@ -243,3 +243,94 @@ test('resolveConfig: --update rejects --origins — ignoring would be a false su
     )
   );
 });
+
+// ── --uninstall mode ────────────────────────────────────────────────────────
+
+test('resolveConfig: --uninstall needs no agent in a TTY (detection asks) and no token', () => {
+  const { config, errors } = resolve(['--uninstall']);
+  assert.deepEqual(errors, []);
+  assert.equal(config.uninstall, true);
+  assert.equal(config.agent, null, 'interactive detection supplies the target');
+  assert.equal(config.pluginRef, null, 'nothing is fetched, so no branch is resolved');
+});
+
+test('resolveConfig: -u is the short form and needs --agent non-interactively', () => {
+  assert.equal(resolve(['-u']).config.uninstall, true);
+  assert.ok(
+    resolve(['-u'], { isTTY: false }).errors.some((e) =>
+      /--agent is required with --uninstall/.test(e)
+    )
+  );
+  assert.deepEqual(resolve(['-u', '-a', 'claude'], { isTTY: false }).errors, []);
+});
+
+test('resolveConfig: --uninstall never defaults the branch, even non-interactively', () => {
+  assert.equal(resolve(['-u', '-a', 'claude'], { isTTY: false }).config.pluginRef, null);
+});
+
+test('resolveConfig: --uninstall and --update cannot be combined', () => {
+  assert.ok(
+    resolve(['--uninstall', '--update', '-a', 'claude']).errors.some((e) =>
+      /--uninstall and --update cannot be used together/.test(e)
+    )
+  );
+});
+
+test('resolveConfig: --uninstall rejects --mcp <group> and points at --no-mcp', () => {
+  assert.ok(
+    resolve(['--uninstall', '-a', 'claude', '--mcp', 'all']).errors.some((e) =>
+      /--mcp <group> cannot be combined with --uninstall/.test(e)
+    )
+  );
+});
+
+test('resolveConfig: the install opt-outs scope the removal ("leave this kind alone")', () => {
+  const all = resolve(['-u', '-a', 'claude']).config;
+  assert.deepEqual(
+    [all.uninstallMcp, all.uninstallSkills, all.uninstallRules],
+    [true, true, true],
+    'default is a full removal'
+  );
+
+  const keepMcp = resolve(['-u', '-a', 'claude', '--no-mcp']).config;
+  assert.equal(keepMcp.uninstallMcp, false);
+  assert.equal(keepMcp.uninstallSkills, true);
+
+  const filesOnly = resolve(['-u', '-a', 'claude', '--ignore-skill', '--ignore-rule']).config;
+  assert.deepEqual(
+    [filesOnly.uninstallMcp, filesOnly.uninstallSkills, filesOnly.uninstallRules],
+    [true, false, false]
+  );
+});
+
+test('resolveConfig: --uninstall excluding all three kinds errors (nothing to remove)', () => {
+  assert.ok(
+    resolve(['-u', '-a', 'claude', '--no-mcp', '--ignore-skill', '--ignore-rule']).errors.some((e) =>
+      /Nothing to uninstall/.test(e)
+    )
+  );
+});
+
+test('resolveConfig: --uninstall warns (never errors) on flags that cannot apply', () => {
+  const { errors, warnings } = resolve([
+    '-u', '-a', 'claude', '-t', 'pat', '-b', 'develop', '--origins', './origins.json',
+  ]);
+  assert.deepEqual(errors, [], 'ignoring these still yields exactly what was asked');
+  assert.ok(warnings.some((w) => /--uninstall never needs one/.test(w)), 'token');
+  assert.ok(warnings.some((w) => /reads no manifest/.test(w)), 'branch');
+  assert.ok(warnings.some((w) => /--origins has no effect with --uninstall/.test(w)));
+});
+
+test('resolveConfig: --uninstall does not trip the install-only "nothing to install" check', () => {
+  const { errors } = resolve(['-u', '-a', 'claude', '--no-mcp', '--ignore-skill']);
+  assert.deepEqual(errors, []);
+});
+
+test('resolveConfig: uninstall fields are null outside uninstall mode', () => {
+  const { config } = resolve(['-a', 'claude', '-y', '-t', 'pat']);
+  assert.equal(config.uninstall, false);
+  assert.deepEqual(
+    [config.uninstallMcp, config.uninstallSkills, config.uninstallRules],
+    [null, null, null]
+  );
+});

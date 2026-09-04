@@ -60,6 +60,15 @@ export const HELP_TEXT = `
                          upstream-deleted ones). Skills/Rules only — never touches
                          MCP config, so no token is needed. Requires --agent; the
                          branch defaults to the one the agent was installed from.
+    -u, --uninstall      Remove an install and restore the pre-install state:
+                         deletes the installed Skills/Rules, the weegloo MCP server
+                         entries (and the token stored with them) and the tracking
+                         state, plus anything they leave empty. Works offline (no
+                         branch, no token). Interactive: detects every install in
+                         this project and your home directory and asks which to
+                         remove. With -y it removes --agent at --location (default
+                         global). --no-mcp / --ignore-skill / --ignore-rule keep
+                         that kind in place.
     -y, --yes            Non-interactive: use defaults for anything not given
     -d, --all-branches   Show all branches in the version picker (interactive only)
     -h, --help           Show this help
@@ -67,7 +76,7 @@ export const HELP_TEXT = `
   Non-interactive defaults: branch=latest, MCP+Skills+Rules on, group=default,
   location=global, all Skills and Rules selected. --agent is always required,
   and a token (--token / WEEGLOO_TOKEN) is required whenever MCP is installed
-  (never for --update).
+  (never for --update or --uninstall).
 `;
 
 const OPTIONS = {
@@ -87,6 +96,7 @@ const OPTIONS = {
   'ignore-rule': { type: 'boolean' },
   origins: { type: 'string' },
   update: { type: 'boolean' },
+  uninstall: { type: 'boolean', short: 'u' },
   yes: { type: 'boolean', short: 'y' },
   'all-branches': { type: 'boolean', short: 'd' },
   help: { type: 'boolean', short: 'h' },
@@ -151,8 +161,8 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
   // In update mode an unpinned ref must stay null: the update flow resolves it from the
   // agent's own stamp (the branch it was installed from), falling back to latest only when
   // the stamp predates ref tracking. Defaulting to latest here would silently migrate a
-  // pinned install's branch.
-  if (pluginRef == null && nonInteractive && !values.update) {
+  // pinned install's branch. Uninstall reads no manifest at all, so a ref means nothing there.
+  if (pluginRef == null && nonInteractive && !values.update && !values.uninstall) {
     pluginRef = pkgPluginRef || 'latest';
   }
 
@@ -273,15 +283,54 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
     }
   }
 
+  // ── uninstall mode (--uninstall): remove an install, restore the pre-install state ─────
+  // The removal set is read from the per-agent record + a disk scan, so this mode fetches
+  // nothing: no branch, no manifest, no token. The three "leave this kind alone" opt-outs
+  // (--no-mcp / --ignore-skill / --ignore-rule) keep their install-mode reading, which is
+  // what makes a partial uninstall expressible without inventing inverse flags.
+  const uninstall = !!values.uninstall;
+  const uninstallMcp = uninstall ? installMcp !== false : null;
+  const uninstallSkills = uninstall ? !ignoreSkill : null;
+  const uninstallRules = uninstall ? !ignoreRule : null;
+  if (uninstall) {
+    if (update) {
+      errors.push('--uninstall and --update cannot be used together.');
+    }
+    if (values.mcp != null) {
+      // A group selects which TOOLS a server exposes — meaningless when the server entry is
+      // being deleted. Erroring (not ignoring) keeps `--mcp all --uninstall` from reading as
+      // "uninstall everything", which is what it looks like.
+      errors.push('--mcp <group> cannot be combined with --uninstall (use --no-mcp to KEEP the MCP config).');
+    }
+    if (!uninstallMcp && !uninstallSkills && !uninstallRules) {
+      errors.push('Nothing to uninstall: MCP, Skills and Rules are all excluded.');
+    }
+    if (agent == null && values.agent == null && nonInteractive) {
+      errors.push(`--agent is required with --uninstall in non-interactive mode (${AGENTS.join(' | ')}).`);
+    }
+    if (token != null) {
+      warnings.push('A token was provided but --uninstall never needs one; the token is ignored.');
+    }
+    if (origins != null) {
+      warnings.push('--origins has no effect with --uninstall (the recorded mapping is used for reporting).');
+    }
+    if (pluginRef != null) {
+      warnings.push('A branch was provided but --uninstall reads no manifest; the branch is ignored.');
+    }
+    if (host != null) {
+      warnings.push(`--host ${host} only affects MCP config writes, so it has no effect with --uninstall.`);
+    }
+  }
+
   // Effective MCP toggle for the token-required check: in non-interactive mode an
   // unspecified toggle takes its default (on); in interactive mode it stays "ask" (null).
   const effInstallMcp = installMcp != null ? installMcp : nonInteractive ? true : null;
 
   // ── hard errors that depend on resolved state ───────────────────────────────
-  if (!update && installMcp === false && installSkillsRules === false) {
+  if (!update && !uninstall && installMcp === false && installSkillsRules === false) {
     errors.push('Nothing to install: MCP is disabled and both Skills and Rules are ignored.');
   }
-  if (nonInteractive && !update) {
+  if (nonInteractive && !update && !uninstall) {
     if (agent == null && values.agent == null) {
       errors.push(`--agent is required in non-interactive mode (${AGENTS.join(' | ')}).`);
     }
@@ -293,13 +342,13 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
   }
 
   // ── soft warnings (proceed anyway) ──────────────────────────────────────────
-  if (!update && token != null && installMcp === false) {
+  if (!update && !uninstall && token != null && installMcp === false) {
     warnings.push('A token was provided but --no-mcp is set; the token is ignored.');
   }
-  if (!update && host != null && installMcp === false) {
+  if (!update && !uninstall && host != null && installMcp === false) {
     warnings.push(`--host ${host} only affects the npx upload server, so it has no effect with --no-mcp.`);
   }
-  if (showAllBranches && (refPinned || nonInteractive)) {
+  if (showAllBranches && (refPinned || nonInteractive || uninstall)) {
     warnings.push('--all-branches has no effect when the branch is pinned or non-interactive (the picker is skipped).');
   }
   // The Antigravity "--location is a no-op for MCP-only" warning depends on values
@@ -322,6 +371,11 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
       ignoreRule,
       installSkillsRules,
       update,
+      uninstall,
+      // Only meaningful in uninstall mode (null otherwise): which kinds the removal covers.
+      uninstallMcp,
+      uninstallSkills,
+      uninstallRules,
       origins,
       token,
       showAllBranches,
