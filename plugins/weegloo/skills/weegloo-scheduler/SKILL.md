@@ -244,7 +244,7 @@ cannot read run history over MCP — application code reads it over REST.
         "url": "https://api.example.com/rates", "timeoutMs": 10000 },
       { "type": "ResourceFind", "resource": "Content", "name": "row",
         "contentType": { "sys": { "id": "ct_rate" } },
-        "where": { "code": { "eq": "USD" } } },
+        "where": { "fields.code": { "eq": "USD" } } },
       { "type": "If",
         "condition": { "==": [ "{ /row }", null ] },
         "then": [
