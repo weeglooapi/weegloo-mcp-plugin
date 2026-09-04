@@ -51,91 +51,10 @@ import {
   listWeeglooRuleFiles,
   listWeeglooRuleMarkers,
 } from './io.js';
-import { getClaudeSkillsDir, getClaudeRulesDir } from './claude.js';
-import { getCursorSkillsDir, getCursorRulesDir } from './cursor.js';
-import {
-  getCodexSkillsDir,
-  getCodexInstructionsPath,
-  upsertRuleInAgentsMd,
-  removeRuleMarkers,
-} from './codex.js';
-import {
-  getAntigravitySkillsDir,
-  getAntigravityRulesFile,
-  getAntigravityRulesDir,
-  maintainAntigravityProjectRulesFile,
-  toAntigravityRuleContent,
-  RULE_LOADING_ID,
-} from './antigravity.js';
+import { upsertRuleInAgentsMd, removeRuleMarkers } from './codex.js';
+import { maintainAntigravityProjectRulesFile, RULE_LOADING_ID } from './antigravity.js';
+import { getAgentStore } from './stores.js';
 import { normalizeOrigins, applyOriginsToResources, applyTermsExclusion, originsEqual } from './origins.js';
-
-/**
- * Where each agent keeps its weegloo artifacts, plus which stores are SHARED with other agents
- * in project scope. Sharing is a physical fact of the layout, not a choice here:
- *   - codex + antigravity (project) share the skills dir `.agents/skills`;
- *   - codex + antigravity + androidstudio (project) share rule markers in `<cwd>/AGENTS.md`
- *     (markers carry no agent namespace).
- * Global scope shares nothing (every path diverges per agent). `sharedWith` lists the OTHER
- * agents whose diverging branch would make writing that store a cross-agent overwrite.
- */
-function getAgentStore(agent, scope) {
-  switch (agent) {
-    case 'claude':
-      return {
-        skills: { dir: getClaudeSkillsDir(scope), sharedWith: [] },
-        rules: { kind: 'files', dir: getClaudeRulesDir(scope), ext: 'md', sharedWith: [] },
-      };
-    case 'cursor':
-      return {
-        skills: { dir: getCursorSkillsDir(scope), sharedWith: [] },
-        rules: { kind: 'files', dir: getCursorRulesDir(scope), ext: 'mdc', sharedWith: [] },
-      };
-    case 'codex':
-      return {
-        skills: { dir: getCodexSkillsDir(scope), sharedWith: scope === 'project' ? ['antigravity'] : [] },
-        rules: {
-          kind: 'markers',
-          file: getCodexInstructionsPath(scope),
-          sharedWith: scope === 'project' ? ['antigravity', 'androidstudio'] : [],
-        },
-      };
-    case 'antigravity':
-      // Project rules are file-per-rule in .agents/rules (out of the shared AGENTS.md marker
-      // store) — AGENTS.md keeps only the agent-agnostic bootstrap loader, which the other
-      // marker agents never touch, so rules carry no sharedWith anymore. `legacyMarkersFile`
-      // lets detection still see a pre-migration install whose rules exist only as markers.
-      // Global stays markers in the antigravity-private GEMINI.md.
-      return scope === 'project'
-        ? {
-            skills: { dir: getAntigravitySkillsDir(scope), sharedWith: ['codex'] },
-            rules: {
-              kind: 'files',
-              dir: getAntigravityRulesDir(),
-              ext: 'md',
-              sharedWith: [],
-              legacyMarkersFile: getAntigravityRulesFile('project'),
-              // Antigravity parses rule-file frontmatter for a `trigger` — inject always_on.
-              transform: toAntigravityRuleContent,
-            },
-          }
-        : {
-            skills: { dir: getAntigravitySkillsDir(scope), sharedWith: [] },
-            rules: { kind: 'markers', file: getAntigravityRulesFile(scope), sharedWith: [] },
-          };
-    case 'androidstudio':
-      // Project-only agent; its skills dir is private but its rules share <cwd>/AGENTS.md.
-      return {
-        skills: { dir: path.join(process.cwd(), '.android-studio', 'skills'), sharedWith: [] },
-        rules: {
-          kind: 'markers',
-          file: path.join(process.cwd(), 'AGENTS.md'),
-          sharedWith: ['codex', 'antigravity'],
-        },
-      };
-    default:
-      return null;
-  }
-}
 
 /** Reads a small JSON file, or {} when absent/corrupt (same tolerance as the rule's reader). */
 function readJsonSafe(filePath) {
