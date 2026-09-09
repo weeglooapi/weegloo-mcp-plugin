@@ -480,9 +480,36 @@ Any string value may embed a pointer. Roots:
   substrings (brace, optional space, a `/pointer`, optional space, brace) resolve at all, so other
   braces (e.g. a JSON literal `{"k":…}`) are left as-is and need no escape.
 - **JsonLogic** operators: `if`/`?:`, `and`/`or`/`!`/`!!`,
-  `==`/`!=`/`===`/`!==`/`<`/`<=`/`>`/`>=`, `+`/`-`/`*`/`/`/`%`, `min`/`max`, `cat`, `in`, `merge`.
+  `==`/`!=`/`===`/`!==`/`<`/`<=`/`>`/`>=`, `+`/`-`/`*`/`/`/`%`, `min`/`max`, `cat`, `in`, `merge`, `date`.
   Operands resolve pointers first, then apply the op: `{ "$+": [ "{ /vars/n }", 1 ] }`.
-  **Not supported:** array iterators `map` / `filter` / `reduce` / `all` / `some` / `none`.
+  **Not supported:** array iterators `map` / `filter` / `reduce` / `all` / `some` / `none` — iterate with
+  `Loop`, and filter a *list* by date server-side through `where` (`gte`/`lte`), not in JsonLogic.
+
+### `date` — comparing dates, whatever the format
+
+**Comparison coerces its operands to numbers, so date TEXT is `NaN` and every comparison over it is
+silently `false`** — never compare `"2026-10-03"` directly. Normalize it first. There is deliberately no
+`before` / `after` / `equal` operator, because once normalized the stock ones are the answer:
+
+```jsonc
+{ "date": [ <value>, <output>? ] }                                 // `$date` in a data slot
+{ "<":  [ { "date": a }, { "date": b } ] }                         // before  (`>` = after)
+{ "<=": [ { "date": from }, { "date": x }, { "date": to } ] }      // between — chained comparison
+{ "==": [ { "date": [a, "day"] }, { "date": [b, "day"] } ] }       // same DAY (bare `date` = same instant)
+{ "date": [ { "+": [ "{ /now/millis }", 604800000 ] }, "iso" ] }   // 7 days from now, ready to store
+```
+
+- **Reads** ISO-8601 / RFC 3339 (`2026-10-03T09:00:00+09:00`; fraction and offset optional, a space
+  accepted in place of `T`), a bare `2026-10-03` (UTC midnight), RFC 1123 as an HTTP `Date` header carries
+  it (`Sat, 03 Oct 2026 00:00:00 GMT`), and an epoch count (`< 1e11` ⇒ seconds, else milliseconds — so
+  `{ /now/seconds }` and `{ /now/millis }` both read correctly). **No offset ⇒ UTC.**
+- **`output`:** `millis` (default — the comparable one) · `seconds` · `iso` · `day` (`2026-10-03`).
+- **`iso` is the only form a `Date` FIELD accepts on write.** Storing a payload date needs it:
+  `"fields": { "visitAt": { "en-US": { "$date": [ "{ /payload/fields/visitAt }", "iso" ] } } }` — a bare
+  `2026-10-03` written straight into a Date field is rejected.
+- **Absent or unreadable ⇒ 400** (catchable by `Try`), and so is a number outside the epoch window
+  (`20261003`, `2026`, `0`). That is deliberate: read as epochs they would become silent 1970 dates, and a
+  guard comparing against 1970 does not fail — it inverts.
 
 ### `$` on operators — required in data slots
 
