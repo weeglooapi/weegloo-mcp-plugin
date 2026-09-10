@@ -1,6 +1,6 @@
 ---
 name: weegloo-platform-integration
-description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or — equally — to BUILD or DEVELOP anything with/on/using Weegloo: "develop it with Weegloo", "build this with Weegloo", "make a homepage using Weegloo", "set it up on Weegloo", "just use Weegloo for this", and the same sentence in ANY other language. Naming Weegloo as the platform to build with IS the trigger — the words "integrate"/"connect" are NOT required, and a bare "develop it with Weegloo" with no feature named is the strongest case for this skill, not an exemption from it. Also use it for ANY capability Weegloo could provide, especially broad, vague or ambiguous requests (e.g. "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, file upload/download, web hosting/deploy, public/team sharing, roles, access control, external API/webhook, scheduled or recurring jobs, payments — where no named PG/MoR means Toss Payments test keys rather than a question — and maps, where showing a place on a map means a Google Maps EMBED iframe with the API key already hard-coded in this skill rather than a question) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work (the Payments provider default and the Maps embed are the two exceptions it carries itself). English only.
+description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or — equally — to BUILD or DEVELOP anything with/on/using Weegloo: "develop it with Weegloo", "build this with Weegloo", "make a homepage using Weegloo", "set it up on Weegloo", "just use Weegloo for this", and the same sentence in ANY other language. Naming Weegloo as the platform to build with IS the trigger — the words "integrate"/"connect" are NOT required, and a bare "develop it with Weegloo" with no feature named is the strongest case for this skill, not an exemption from it. Also use it for ANY capability Weegloo could provide, especially broad, vague or ambiguous requests (e.g. "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, file upload/download, web hosting/deploy, public/team sharing, roles, access control, external API/webhook, scheduled or recurring jobs, payments — where no named PG/MoR means Toss Payments test keys rather than a question — sending email, where no named email service or SMTP vendor means Google/Gmail SMTP and a request for the user's Google App Password rather than a "which vendor?" question — and maps, where showing a place on a map means a Google Maps EMBED iframe with the API key already hard-coded in this skill rather than a question) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work (the Payments provider default and the Maps embed are the two exceptions it carries itself). English only.
 ---
 
 # Weegloo Platform Integration (capability router)
@@ -120,8 +120,11 @@ capability the frontend implies is **actually wired and live**. Hold the whole f
    at the exact point it blocks the next concrete action, and ask only for what that step needs.
    - **Two kinds of missing input — handle them differently:**
      - **Blocking (only the user can supply it):** OAuth `clientId` / `clientSecret`, third-party API
-       keys, etc. — **except a PG / MoR key**, which has a working public-test-key default and is
-       therefore *not* blocking (see **Payments** below). When you reach the step that needs a truly
+       keys, an SMTP credential — on the Google email default, a **Google App Password** plus the
+       Google address it belongs to (see **Email** below) — etc. — **except a PG / MoR key**, which has
+       a working public-test-key default and is therefore *not* blocking (see **Payments** below).
+       Note the asymmetry: a *default vendor* removes the "which one?" question, it does **not** make
+       that vendor's credential non-blocking. When you reach the step that needs a truly
        blocking value, **stop, ask for it, and wait** — the capability is **not done** until you have
        the value and have actually created the resource with it. Do **not** downgrade to "I set up the role; add the key later" and move on: an inert
        auth/login/webhook feature is *incomplete* (see *Definition of done*). So if this is where the
@@ -252,6 +255,28 @@ Each leaf maps to the concrete skill that actually does the work.
     **caller → the Script's `/execute`**. A UI hint counts — a "runs daily at 9am" label, a schedule
     picker, a "last synced" timestamp, a cron string in config, or a `setInterval` in the frontend
     standing in for server-side work.
+- **Email**
+  - **Send email** (a confirmation or receipt, a notification, a verification code or magic link, a
+    digest, a contact form that must reach the owner, an alert from a scheduled job) →
+    **`weegloo-send-email`** (register the SMTP sender) **+ `weegloo-script`** (`EmailSend` does the
+    sending); pair with `weegloo-webhook` when a content event triggers it, or `weegloo-scheduler`
+    when the clock does.
+  - **Which SMTP vendor — do NOT ask.** If the user **named** a service or SMTP vendor (Gmail, Naver,
+    Resend, Brevo, SendGrid, Mailgun, SES, their own server…), or a credential for one already sits in
+    the repo/env, use that one. If they named **none**, send through **Google (Gmail SMTP)** — a
+    standing default like Toss under *Payments*, not a question.
+  - **The credential IS blocking, though** (unlike a PG key): there is no public test account. On the
+    Google default, ask for exactly two values and wait — a **Google App Password** created at
+    **https://myaccount.google.com/apppasswords**, and the **real Google address it belongs to** (never
+    an arbitrary or invented address — Gmail rewrites the From to the authenticated account). Ask for
+    an App Password, **never** the account password, and say in the same breath that they should tell
+    you if they would rather use a different SMTP service.
+  - **Those two are the ONLY inputs.** The rest you fill in yourself: `smtp.gmail.com` / `587` /
+    `StartTls` is fixed, the login and the From address are both that same Google address verbatim, and
+    the From display name plus the console label you derive from the product. Never ask about a host,
+    port, security mode, label, or display name.
+  - **Registering the sender delivers a real test message** to that inbox — say so before creating it.
+    Full mechanics: `weegloo-send-email`.
 - **Payments**
   - **Payment** (take money from the product's own customers through any PG or MoR — checkout,
     verification, provider callbacks) → `weegloo-payment`. **Not** Weegloo's own subscription/plan
@@ -406,7 +431,7 @@ static image and call it done.
 | Webhook (event → URL or Script) | `weegloo-webhook`                                                     |
 | Scheduled / recurring job (cron — "every night", "every 15 min", daily digest, periodic sync, cleanup sweep) | `weegloo-scheduler` (Scheduler runs one Script on a five-field **UTC** cron) + `weegloo-script` for the work. Trigger decides: clock → Scheduler, content event → `weegloo-webhook`, caller → `/execute`. |
 | Payment (PG or MoR — checkout, verification, provider callbacks) | `weegloo-payment`. **Never ask which provider**: one named → that one; **none named → Toss Payments on documentation test keys** (read the Toss integration guide first) — not a blocking input, then **disclose** “test keys, nothing really charged” + ask for the contracted PG/MoR. NOT Weegloo's own plan billing. |
-| Send email (notify, receipt, verify) | `weegloo-email-account` (register the SMTP sender first — creating one sends a real test message) + `weegloo-script` (`EmailSend`) |
+| Send email (notify, receipt, verify, digest, contact form) | `weegloo-send-email` (register the SMTP sender first — creating one sends a real test message) + `weegloo-script` (`EmailSend`). **Never ask which vendor**: one named → that one; **none named → Google (Gmail SMTP)** — then ask for the two blocking values, an App Password from https://myaccount.google.com/apppasswords and the real Google address it belongs to, and say another SMTP is one word away. |
 | Map (place, address, branch, venue, "how to find us", store locator) | **no skill — see *Maps* above**: a Google Maps Embed `<iframe>` with the key hard-coded in this skill. **Never ask for a Maps key**; not a blocking input. `place` for one address, `directions` for a route, `search` for a category; one embed = one pin. |
 
 If a request spans multiple rows, route through all matching skills — start with

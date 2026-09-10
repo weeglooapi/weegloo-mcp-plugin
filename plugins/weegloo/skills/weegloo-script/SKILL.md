@@ -278,7 +278,7 @@ run top-to-bottom and stop at `Return`.
   what the provider counts. The caller waits for the send, so keep `timeoutMs` tight.
   - **The sender comes from the `EmailAccount`** (`fromAddress`/`fromName`), not the statement. The
     account must exist first, and **creating one sends a real test email** — see
-    **`weegloo-email-account`**.
+    **`weegloo-send-email`**.
   - **`body` is always `text/html`** — use `<br>`/`<p>`, not bare newlines. Interpolated values are
     **HTML-escaped** (only the author's markup survives), `SetVar` values included.
   - `subject`/`replyTo`/addresses **reject CR·LF** (header injection). `body` may contain newlines.

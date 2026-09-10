@@ -84,7 +84,7 @@ permissions still cannot touch:
 | `SETTING_ROLE` | **SpaceRole** |
 | `SETTING_WEB_HOSTING` | **WebHosting**, **CustomDomain** |
 | `SETTING_SERVICE_LOGIN` | **ServiceLogin**, **ServiceUser**, **ServiceUserRole** |
-| `SETTING_EMAIL_ACCOUNT` | **EmailAccount** (the SMTP sender — `weegloo-email-account`) |
+| `SETTING_EMAIL_ACCOUNT` | **EmailAccount** (the SMTP sender — `weegloo-send-email`) |
 | `SETTING_MONITORING` | **usage & metrics** — Space monthly reports, network / storage usage |
 | `SETTING_SCHEDULER` | **Scheduler** (+ its run history) — the cron entries that run a Script (`weegloo-scheduler`) |
 | `SETTING_ALL` | all of the above — **avoid**; grant only the specific actions the caller needs |
