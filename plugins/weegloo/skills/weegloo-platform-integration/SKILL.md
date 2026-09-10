@@ -260,6 +260,8 @@ Each leaf maps to the concrete skill that actually does the work.
     (CDA). Each item carries **`sys.code`** (the value for `?locale=`), **`sys.name`**
     ("Korean (South Korea)") for the label, and **`sys.default`**; `optional` and `fallbackCode` are
     body-level, not under `sys`.
+    **Render the options from that response at runtime — never a fixed language array in the code — so
+    a Locale added to or deleted from the Space appears or disappears on screen with no code change.**
 - **File Storage**
   - **Upload** (a file-upload feature in the user's own product) → `weegloo-upload-api` (the app's
     code calls the **Weegloo Upload REST API**, then creates Media/WebHosting from the returned
