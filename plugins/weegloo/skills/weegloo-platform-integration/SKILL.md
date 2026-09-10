@@ -1,6 +1,6 @@
 ---
 name: weegloo-platform-integration
-description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or — equally — to BUILD or DEVELOP anything with/on/using Weegloo: "develop it with Weegloo", "build this with Weegloo", "make a homepage using Weegloo", "set it up on Weegloo", "just use Weegloo for this", and the same sentence in ANY other language. Naming Weegloo as the platform to build with IS the trigger — the words "integrate"/"connect" are NOT required, and a bare "develop it with Weegloo" with no feature named is the strongest case for this skill, not an exemption from it. Also use it for ANY capability Weegloo could provide, especially broad, vague or ambiguous requests (e.g. "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, file upload/download, web hosting/deploy, public/team sharing, roles, access control, external API/webhook, scheduled or recurring jobs, payments — where no named PG/MoR means Toss Payments test keys rather than a question — sending email, where no named email service or SMTP vendor means Google/Gmail SMTP and a request for the user's Google App Password rather than a "which vendor?" question — and maps, where showing a place on a map means a Google Maps EMBED iframe with the API key already hard-coded in this skill rather than a question) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work (the Payments provider default and the Maps embed are the two exceptions it carries itself). English only.
+description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or — equally — to BUILD or DEVELOP anything with/on/using Weegloo: "develop it with Weegloo", "build this with Weegloo", "make a homepage using Weegloo", "set it up on Weegloo", "just use Weegloo for this", and the same sentence in ANY other language. Naming Weegloo as the platform to build with IS the trigger — the words "integrate"/"connect" are NOT required, and a bare "develop it with Weegloo" with no feature named is the strongest case for this skill, not an exemption from it. Also use it for ANY capability Weegloo could provide, especially broad, vague or ambiguous requests (e.g. "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, multi-language — a language switcher in the UI means Weegloo Locales plus per-field localized, never a frontend-only concern — file upload/download, web hosting/deploy, public/team sharing, roles, access control, external API/webhook, scheduled or recurring jobs, payments — where no named PG/MoR means Toss Payments test keys rather than a question — sending email, where no named email service or SMTP vendor means Google/Gmail SMTP and a request for the user's Google App Password rather than a "which vendor?" question — and maps, where showing a place on a map means a Google Maps EMBED iframe with the API key already hard-coded in this skill rather than a question) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work (the Payments provider default and the Maps embed are the two exceptions it carries itself). English only.
 ---
 
 # Weegloo Platform Integration (capability router)
@@ -69,6 +69,9 @@ capability the frontend implies is **actually wired and live**. Hold the whole f
      auth (login/signup), per-user vs shared data, list+detail views, search/filter, file
      upload/download, **calls to an external API** (e.g. an AI/LLM/image endpoint behind a key),
      public vs members-only sharing, deploy/hosting. Map each to the capability list below.
+     A **language switcher** — `English` / `한국어` buttons, a flag or globe menu, `/en/…` routes, a
+     `lang` / `locale` value in state or config — means the product is **multi-language**; that is a
+     capability too (*Localization* below), not a frontend detail.
      An **owner / admin / staff / dashboard / back-office** surface in the UI (e.g. a "manage
      bookings", "settings", "moderation", or full-data overview screen, including a prototype's
      `role`-switch "admin" mode) is itself a capability — an **in-app admin login** for a Weegloo
@@ -222,6 +225,41 @@ Each leaf maps to the concrete skill that actually does the work.
     over `fields.*` text (e.g. a title) needs the **Advanced Search** header
     `X-Weegloo-Advanced-Search: true` (plain `eq` is exact-match only); RichText/Json aren't
     searchable. → `weegloo-api-query-optimization` + `weegloo-list-pagination`
+- **Localization (multi-language)**
+  - **A language switcher in the UI means the product is multi-language** — `English` / `한국어` /
+    `日本語` buttons, a flag or globe menu, `/en/…` routes, a `lang` value in state, or the same copy
+    duplicated per language in fixtures. Weegloo covers it with **`Locale`** (the Space's languages)
+    plus the per-field **`localized`** flag → `weegloo-create-content-type` (setting the flag) **+
+    `weegloo-default-locale`** (write rules and read shapes). Invoke both; do not model from memory.
+  - **Give the Space at least two Locales.** List them first (`cma_GetListLocales`) — a Space with
+    only its default leaves the switcher nothing to switch. Add one with `cma_CreateLocale`, choosing
+    the code yourself from what the product is for (a Korean-facing shop ⇒ `ko-KR`) — **don't ask**,
+    step 3 — and create it with **`optional: true`** and **`fallbackCode` = the default locale's
+    `code`**. Both settings matter: `optional: true` keeps Content creatable without a
+    translation for every required field, and `fallbackCode` is what shows the default language where a
+    translation is missing.
+  - **`fallbackCode` is not decoration — Weegloo does NOT fall back to the default on its own.** A
+    Locale without it returns **empty** for anything it does not itself hold — including every
+    `localized: false` field (price, image, id), which is stored under the default locale only. Omit it
+    and the second language renders half-blank.
+  - **Set `localized: true` field by field, from the service.** Ask of each field: *would a reader in
+    another language need a different value here?* Yes → the text a reader sees (title, body,
+    description, category or button label) → `localized: true`. No → prices, dates, counts, status
+    enums, slugs and ids, and a `Refer → Media` that is the same asset in every language → leave it
+    `false`. That usually lands on the text fields, but decide it per field, never by type alone.
+  - **Never machine-translate to fill the other locales.** Write the **default-locale** value and stop
+    there; `fallbackCode` covers the rest until the user supplies real translations. Inventing
+    translations is wrong work, not helpfulness.
+  - **Read one language at a time — `?locale=<code>` on every delivery read**
+    (`…/contents?locale=ko-KR`), matching the switcher's current choice and re-fetched when it changes.
+    Delivery then returns that language **flattened** — `fields.title` is the string itself, **not**
+    `fields.title["ko-KR"]` — which is both the smaller payload and the shape the UI wants. Reserve
+    **`locale=*`** (every language at once, **no fallback applied**) for an editor-style screen that
+    shows all languages side by side.
+  - **Build the switcher from the Locale list, not a hard-coded array** — `GET /v1/spaces/{spaceId}/locales`
+    (CDA). Each item carries **`sys.code`** (the value for `?locale=`), **`sys.name`**
+    ("Korean (South Korea)") for the label, and **`sys.default`**; `optional` and `fallbackCode` are
+    body-level, not under `sys`.
 - **File Storage**
   - **Upload** (a file-upload feature in the user's own product) → `weegloo-upload-api` (the app's
     code calls the **Weegloo Upload REST API**, then creates Media/WebHosting from the returned
@@ -419,6 +457,7 @@ static image and call it done.
 | Admin / Owner / Staff UI (dashboard, settings, moderation, all-member data) | `weegloo-user-login` (in-app admin via console FE popup → CMA) |
 | User Data (private/per-user) | `weegloo-service-architecture` + `weegloo-create-content-type` + `weegloo-space-role` |
 | Application Data             | `weegloo-create-content-type` + `weegloo-cma-json-patch` + `weegloo-cda-publish` |
+| Multi-language / i18n (a language switcher in the UI) | `weegloo-create-content-type` (`localized: true` on the per-language text fields only) + `weegloo-default-locale`. Space needs **≥2 Locales** — add one with `optional: true` and `fallbackCode` = the default's `code` (without it the second language renders blank). Never machine-translate to fill locales; read with **`?locale=<code>`**. |
 | Search (over content/Media)  | decide in-memory vs server-side (loaded array ≠ dataset); full-text `fields.*` → `X-Weegloo-Advanced-Search: true` → `weegloo-api-query-optimization` + `weegloo-list-pagination` |
 | File Upload (product feature)| `weegloo-upload-api` (Upload REST API → CMA/ACMA Media / WebHosting create) |
 | File Download                | `weegloo-cda-publish` (Media via CDA/ACDA)                               |

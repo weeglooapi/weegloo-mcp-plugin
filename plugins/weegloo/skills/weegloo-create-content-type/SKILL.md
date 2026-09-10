@@ -70,7 +70,7 @@ This flag is part of the **ContentType** field definition. It tells Weegloo whet
 ### Semantics for Content / Media writes
 
 - **`localized: false`**: when creating or updating entries, put the value **only in the default locale** key for that field. The API **does not** allow additional locale buckets for that field-**non-default locale values are rejected** (or invalid). This is stricter than “fallback”: there is simply **no** per-locale map for that field.
-- **`localized: true`**: per-locale buckets; the **default locale** value is **required** when the field is populated; other locales are optional overrides (read-time **fallback** to default when missing-see **`weegloo-default-locale`** rule/skill).
+- **`localized: true`**: per-locale buckets; the **default locale** value is **required** when the field is populated; other locales are optional overrides. A missing override reads **empty** unless that `Locale` carries a **`fallbackCode`** chain reaching a locale that holds a value — Weegloo does **not** fall back to the default on its own (see **`weegloo-default-locale`** rule/skill).
 
 ### LLM checklist
 
