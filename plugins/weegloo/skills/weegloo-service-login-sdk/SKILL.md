@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-sdk
-description: How to add Weegloo ServiceLogin (OAuth 2.0 — Google, GitHub, Facebook, GitLab, LINE, Kakao, or Naver) sign-in to a browser app — the official npm SDK `weegloo-service-user` (vanilla JS, 0 deps) and the underlying `auth.weegloo.com` HTTP wire protocol (login redirect, exchangeToken POST, refresh, logout), all parameterized by `{provider}`, inferred from the product (not asked, and with no built-in default — never reflexively reach for Google, and never apply one provider's console steps to another). Covers the entry-URL vs provider redirect-URI confusion, ACMA current user at GET https://acma.weegloo.com/v1/me (not /spaces/{spaceId}/me), the browser GET-with-body limitation, and the `exchangeToken` URL-stripping security pattern. This is the provider-agnostic spine; detailed per-provider console steps live in dedicated skills for Google (`weegloo-service-login-google`), GitHub (`weegloo-service-login-github`), Kakao (`weegloo-service-login-kakao`), Naver (`weegloo-service-login-naver`), and LINE (`weegloo-service-login-line`); Facebook and GitLab follow the same generic shape described here (no dedicated skill). Use when wiring sign-in for a Weegloo Space's product, debugging the OAuth callback flow, or implementing the protocol where the JS SDK cannot run (server-side, native mobile, scripts). For native apps (Android/iOS), also covers the `callbackUrl` http/https-only limit (no custom deep-link scheme) and the Weegloo WebHosting bridge page that redirects the OAuth callback into the app's deep link.
+description: How to add Weegloo ServiceLogin (OAuth 2.0 — Google, GitHub, Facebook, GitLab, LINE, Kakao, or Naver) sign-in to a browser app — the official npm SDK `weegloo-service-user` (vanilla JS, 0 deps) and the underlying `auth.weegloo.com` HTTP wire protocol (login redirect, exchangeToken POST, refresh, logout), all parameterized by `{provider}`, inferred from the product (not asked, and with no built-in default — never reflexively reach for Google, and never apply one provider's console steps to another). Covers the entry-URL vs provider redirect-URI confusion, ACMA current user at GET https://acma.weegloo.com/v1/me (not /spaces/{spaceId}/me), the browser GET-with-body limitation, and the `exchangeToken` URL-stripping security pattern. This is the provider-agnostic spine; detailed per-provider console steps live in dedicated skills for Google (`weegloo-service-login-google`), GitHub (`weegloo-service-login-github`), Kakao (`weegloo-service-login-kakao`), Naver (`weegloo-service-login-naver`), and LINE (`weegloo-service-login-line`); Facebook and GitLab follow the same generic shape described here (no dedicated skill). Use when wiring sign-in for a Weegloo Space's product, debugging the OAuth callback flow, or implementing the protocol where the JS SDK cannot run (server-side, native mobile, scripts). For native apps (Android/iOS), also covers the app path - registering the app's deep link in `ServiceLogin.allowedCallbackUrls` (required) and driving the entry URL with `redirect_uri` + PKCE so the callback returns straight into the app.
 ---
 
 # Weegloo - ServiceLogin SDK / OAuth wire protocol
@@ -78,6 +78,18 @@ const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID', provider: 'goo
 
 All paths are under `/v1/spaces/{spaceId}/...`. All bodies and responses are JSON.
 
+**Pick the path first - browser or native app.** They differ in exactly three places; everything else
+in this protocol is identical.
+
+| | Browser (web) | Native app (Android / iOS) |
+|---|---|---|
+| Callback destination | `ServiceLogin.callbackUrl` | one entry of `ServiceLogin.allowedCallbackUrls`, chosen per request with `redirect_uri` |
+| Extra registration | none | **required** - the app's callback must be in `allowedCallbackUrls` first |
+| PKCE | not used | **required** - `code_challenge` on entry, `code_verifier` on exchange |
+
+A browser integration needs nothing from *Native apps* below. A native one needs that section **and**
+this protocol.
+
 ### 1. Login entry - browser navigates here
 
 ```
@@ -86,7 +98,7 @@ GET https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/{provider}
 
 - `{provider}` is one of Weegloo's supported providers — currently **`google`**, **`github`**, **`facebook`**, **`gitlab`**, **`line`**, **`kakao`**, **`naver`**. **Infer it from the product; do NOT ask the user to pick a provider, and do NOT treat any provider as the built-in default** (don't reflexively reach for `google`). If the product names/implies a specific one (e.g. a "Sign in with GitHub" button), use that; if nothing indicates a provider, **reason about which fits this product best and choose that** — then **surface the choice when you ask for its `clientId`/`clientSecret`** (that request reveals which provider you picked and lets the user redirect), so no separate "which provider?" question is needed. The only thing to avoid is wiring one provider's flow as another's, or giving Google's console steps for a non-Google product. (Confirm the current set from the `ServiceLogin` schema / docs if unsure.)
 - This is a **navigation** target, not an XHR/fetch call - assign it to `window.location` so the browser follows the OAuth redirect chain.
-- After provider sign-in, Weegloo redirects the browser to the `callbackUrl` registered on the `ServiceLogin` resource, appending `?exchangeToken=<one-time-code>`.
+- After provider sign-in, Weegloo redirects the browser to the `callbackUrl` registered on the `ServiceLogin` resource, appending `?exchangeToken=<one-time-code>`. A native app sends `redirect_uri` here instead and comes back to its own deep link - see *Native apps*.
 
 ### 2. Token exchange - first thing on the callback page
 
@@ -96,6 +108,9 @@ Content-Type: application/json
 
 { "exchangeToken": "<value-from-query-string>" }
 ```
+
+Add `codeVerifier` **only** when the login was started with a `code_challenge` (the native path); a
+browser login omits it.
 
 Successful response:
 
@@ -256,34 +271,67 @@ don't reach for Google by reflex.** The choice is surfaced — and stays correct
 shape above and look up that provider's current console specifics rather than pasting a
 hardcoded/possibly-stale URL.
 
-## Native apps (Android / iOS) — bridge `callbackUrl` into the app's deep link
+## Native apps (Android / iOS)
 
-ServiceLogin is **not browser-only** — native mobile apps (Android, iOS) can sign in with it too. One hard constraint shapes the wiring:
+ServiceLogin is **not browser-only**. A native app is returned **straight into its own deep link** and
+runs the exchange itself. Two steps are required that the browser path does not have.
 
-> **`ServiceLogin.callbackUrl` accepts only `http` / `https` — it does NOT accept a custom deep-link scheme** (`myapp://…`, `com.example.app://…`). Weegloo only ever redirects the OAuth flow to an `http(s)` URL, so you **cannot** register the app's deep link as the `callbackUrl` directly.
+**1. Register the app's callback** in `ServiceLogin.allowedCallbackUrls` - on create, or with
+`cma_UpdateOneServiceLogin` / `cma_PatchOneServiceLogin`. **A `redirect_uri` that is not registered is
+rejected at the login entry**, so register before the first sign-in attempt.
 
-The fix is a small **`https` "bridge" page that forwards into the app's deep link**, deployed as a **Weegloo WebHosting** and used as the `callbackUrl`:
-
-1. **Build a redirect (bridge) page** — one static page whose only job is: read the query string Weegloo appended (`?exchangeToken=<one-time-code>`) and immediately navigate to the app's deep link carrying that token, e.g. `myapp://auth/callback?exchangeToken=<code>`.
-2. **Deploy it as a Weegloo WebHosting** (see **`weegloo-web-hosting`**) so it has a stable, public `https://…` URL — a value `callbackUrl` accepts.
-3. **Set `ServiceLogin.callbackUrl` to that WebHosting URL** (console, or `cma_UpdateOneServiceLogin` / `cma_PatchOneServiceLogin`). This is the deploy-dependent field of pitfall **G** — for a native app, the WebHosting bridge *is* "your product's callback page."
-4. **Handle the deep link in the app** — the OS delivers `myapp://auth/callback?exchangeToken=…`; the app parses `exchangeToken` and runs the exchange itself (`POST …/oauth/token`, wire-protocol step 2). The JS SDK does not run here — follow *When the SDK cannot be used* below.
-
-End-to-end:
-
-```
-app → GET …/login/oauth2/{provider}          (system browser / in-app tab)
-    → provider sign-in
-    → Weegloo redirects to callbackUrl = https WebHosting bridge   ?exchangeToken=…
-    → bridge page redirects to   myapp://auth/callback?exchangeToken=…
-    → OS hands the deep link to the app
-    → app POST {exchangeToken} → …/oauth/token → accessToken (ACMA / ACDA)
+```json
+"allowedCallbackUrls": [
+  { "url": "myapp://login", "refreshTokenTtlInSec": 2592000 }
+]
 ```
 
-- **Pass only the one-time `exchangeToken` through the deep link — never the durable tokens.** The bridge forwards `exchangeToken`; the *app* exchanges it for `accessToken` / `refreshToken` directly with Weegloo, so the long-lived tokens never travel through the deep link. Pitfall **C** still applies to the bridge page: strip `exchangeToken` from its own URL after forwarding.
-- **Prefer verified deep links** (Android **App Links**, iOS **Universal Links**) over a bare custom URL scheme where you can — an unverified scheme can be claimed by another installed app, and `exchangeToken`, though single-use, is a bearer secret in transit. Registering the scheme/links is app-side OS config, unrelated to Weegloo.
-- **The provider's OAuth client stays a "Web application" type — even for a native app.** The OAuth redirect targets `auth.weegloo.com` (a web URL), not your app, so where a provider console asks for an application type (Google, for one), pick **Web** — do not create an "Android" / "iOS" OAuth client for this flow. (Google specifics: **`weegloo-service-login-google`**.)
-- **Provider-agnostic.** This bridge depends only on the `callbackUrl` scheme limit, not on which OAuth provider (Google, Kakao, …) you chose.
+`url` is an absolute URI of any scheme - a custom scheme (`myapp://login`) and an App Link / Universal
+Link (`https://app.example.com/cb`) are equally accepted - with no fragment; at most 10 entries.
+`refreshTokenTtlInSec` is optional and sets the refresh-token lifetime for logins returning through
+that callback, which mobile sessions usually want longer than the platform default. Unlike
+`callbackUrl` this value does not depend on a deploy address (pitfall **G**), so register it as soon as
+the Space exists.
+
+**2. Drive the flow with `redirect_uri` + PKCE.** Open the entry URL in the **system browser** (Android
+Custom Tabs, iOS `ASWebAuthenticationSession`); providers block in-app `WebView`.
+
+```
+GET https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/{provider}
+      ?redirect_uri=myapp://login
+      &code_challenge=<BASE64URL(SHA256(code_verifier)), unpadded>
+      &code_challenge_method=S256
+      &state=<opaque value the app generates>
+```
+
+`code_verifier` is 43-512 chars and freshly generated per attempt. `state` is optional and comes back
+untouched. Weegloo then returns to the registered `redirect_uri`:
+
+```
+myapp://login?exchangeToken=<one-time-code>&state=...           success
+myapp://login?error=<reason>&contact=<support email>&state=...  failure
+```
+
+`error` is one of `signup_limit_exceeded`, `approval_required`, `email_conflict`, `email_required`,
+`server_error`. Branch on it and write your own copy - Weegloo sends no localized text.
+
+**3. Exchange** exactly as wire-protocol step 2, carrying the verifier:
+
+```json
+{ "exchangeToken": "...", "codeVerifier": "..." }
+```
+
+- **The provider's OAuth client stays a "Web application" type - even for a native app.** The OAuth
+  redirect targets `auth.weegloo.com`, not your app, so where a provider console asks for an
+  application type, pick **Web**; do not create an "Android" / "iOS" client for this flow. (Google
+  specifics: **`weegloo-service-login-google`**.) Provider SDK / app-to-app sign-in is not part of this
+  flow.
+- **Prefer verified deep links** (Android **App Links**, iOS **Universal Links**) over a bare custom
+  scheme - an unverified scheme can be claimed by another installed app, and `exchangeToken`, though
+  single-use, is a bearer secret in transit. Registering either is app-side OS config, unrelated to
+  Weegloo.
+- **Provider-agnostic.** Nothing here depends on which OAuth provider the Space uses.
+- The JS SDK does not run here - follow *When the SDK cannot be used* below.
 
 ## When the SDK cannot be used
 

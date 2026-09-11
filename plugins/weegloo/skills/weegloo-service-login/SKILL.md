@@ -91,7 +91,7 @@ whatever its role — use a console session or a PAT (**`weegloo-space-access-to
 
 ### Native apps (Android / iOS)
 
-ServiceLogin is **not browser-only** — native mobile apps can use it too. One constraint drives the wiring: **`ServiceLogin.callbackUrl` accepts only `http` / `https`, never a custom deep-link scheme** (`myapp://…`). So a native app points `callbackUrl` at a small **`https` Weegloo WebHosting page that redirects into the app's deep link**, passing the `?exchangeToken=…` through to the app, which then completes the token exchange itself. Full mechanism (bridge page, end-to-end flow, security notes): **`weegloo-service-login-sdk`** → *Native apps (Android / iOS)*.
+ServiceLogin is **not browser-only** — native mobile apps can use it too. The app's own deep link (`myapp://login`, or an App Link / Universal Link) **must be registered in `ServiceLogin.allowedCallbackUrls`**; the app then starts the flow with `redirect_uri` + PKCE and is returned straight into that deep link with the one-time `exchangeToken`, which it exchanges itself. A browser app is unaffected — it keeps using `callbackUrl` and needs none of this. Full mechanism (registration, entry parameters, error returns): **`weegloo-service-login-sdk`** → *Native apps (Android / iOS)*.
 
 ## Token capability - ACMA / ACDA / Upload
 
