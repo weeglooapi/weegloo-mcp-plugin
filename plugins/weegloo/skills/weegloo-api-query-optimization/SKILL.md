@@ -27,6 +27,15 @@ On **resource list** endpoints, **`select`** names which parts of each item appe
 > window. See the *Projection* section of `weegloo-global-rules` for the standing obligation and the
 > per-purpose recipes; this section is the mechanics.
 
+### One `select` per request (comma-separated)
+
+Pass the parameter **once** and separate the paths with commas. Repeating the key is wrong:
+
+- **Correct:** **`?select=sys.id,fields.room,fields.price`**
+- **Wrong:** **`?select=sys.id&select=fields.room&select=fields.price`**
+
+Same shape for **`order`**.
+
 ### Include mode (whitelist)
 
 Only the listed paths are returned:
