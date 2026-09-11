@@ -188,8 +188,8 @@ The locale segment is required, and on the flat `/contents` list so is the Conte
 - **Delete auto-unpublishes.** The ACMA delete endpoint unpublishes and then deletes in one call, so a
   Service User never calls unpublish first (**`weegloo-cda-publish`**). The **busy-file** check still
   applies to Media.
-- A `ServiceUser` may delete only **their own** resources; `isAdmin` adds delete of *other* members'
-  resources — and nothing else (**`weegloo-service-login`**).
+- What a `ServiceUser` may delete is set by its `ServiceUserRole` alone — `createdBy :self` keeps it to
+  their own resources, and a role without that filter deletes anyone's (**`weegloo-service-login`**).
 - ACMA has no Space, ContentType, Locale, role or token deletes — those are CMA-only.
 
 ## Reporting a teardown

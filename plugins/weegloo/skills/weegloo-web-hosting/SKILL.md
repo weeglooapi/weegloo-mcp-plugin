@@ -44,7 +44,7 @@ does not, by default:
 2. **Render header/footer once at boot**, then on navigation only replace the content and update the
    active-nav highlight. Re-drawing chrome per route makes the layout jump.
 3. **Exception — leave these as real document loads:** the ServiceLogin OAuth callback and a payment
-   return URL. Those genuinely re-open the document (`weegloo-service-login-sdk`, `weegloo-payment`).
+   return URL. Those genuinely re-open the document (`weegloo-service-login-client`, `weegloo-payment`).
 
 ---
 
@@ -98,7 +98,7 @@ does not, by default:
 > `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google`. Setting `callbackUrl` to
 > a guessed `.com` host breaks login. If you must create the `ServiceLogin` before the URL is known,
 > update `callbackUrl` once the WebHosting `url` is returned (full PUT `cma_UpdateOneServiceLogin`;
-> note `providers` is preserved and need not be resent). See `weegloo-service-login-sdk`.
+> note `providers` is preserved and need not be resent). See `weegloo-service-login-client`.
 
 ---
 

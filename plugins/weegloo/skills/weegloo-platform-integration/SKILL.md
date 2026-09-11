@@ -189,11 +189,14 @@ Each leaf maps to the concrete skill that actually does the work.
 - **Authentication**
   - **Login** → identity model must be determined first (Weegloo has two separate ones):
     admin/staff = `weegloo-user-login`; product end-users = `weegloo-service-login`.
+    **`weegloo-user-login` is browser-only — a native Android / iOS app can only sign in as a
+    Service User**, whichever side of the product it serves.
     If unsure which, route to `weegloo-service-architecture` to disambiguate.
   - **Signup** (open end-user sign-up) → `weegloo-service-login`
   - **Social Login** (OAuth providers — Google / GitHub / Facebook / GitLab / LINE / Kakao / Naver;
-    browser SDK / wire protocol) →
-    `weegloo-service-login-sdk` (provider-agnostic spine); for Google, also `weegloo-service-login-google`,
+    browser SDK / wire protocol; **native Android / iOS apps take the same route and additionally
+    need their callback deep link registered in `ServiceLogin.allowedCallbackUrls`**) →
+    `weegloo-service-login-client` (provider-agnostic spine); for Google, also `weegloo-service-login-google`,
     for GitHub, `weegloo-service-login-github`, for Kakao, `weegloo-service-login-kakao`, for Naver,
     `weegloo-service-login-naver`, for LINE, `weegloo-service-login-line` (Facebook and GitLab: follow the
     spine's generic shape — no dedicated skill). Infer the provider
@@ -455,7 +458,7 @@ static image and call it done.
 |------------------------------|--------------------------------------------------------------------------|
 | Login                        | `weegloo-user-login` (admin) / `weegloo-service-login` (end-user); disambiguate via `weegloo-service-architecture` |
 | Signup                       | `weegloo-service-login`                                                   |
-| Social Login                 | `weegloo-service-login-sdk` (spine) + `weegloo-service-login-google` (Google), `weegloo-service-login-github` (GitHub), `weegloo-service-login-kakao` (Kakao), `weegloo-service-login-naver` (Naver), `weegloo-service-login-line` (LINE); Facebook/GitLab: spine's generic shape. Infer provider from product; no default; don't ask. |
+| Social Login                 | `weegloo-service-login-client` (spine) + `weegloo-service-login-google` (Google), `weegloo-service-login-github` (GitHub), `weegloo-service-login-kakao` (Kakao), `weegloo-service-login-naver` (Naver), `weegloo-service-login-line` (LINE); Facebook/GitLab: spine's generic shape. Infer provider from product; no default; don't ask. |
 | Admin / Owner / Staff UI (dashboard, settings, moderation, all-member data) | `weegloo-user-login` (in-app admin via console FE popup → CMA) |
 | User Data (private/per-user) | `weegloo-service-architecture` + `weegloo-create-content-type` + `weegloo-space-role` |
 | Application Data             | `weegloo-create-content-type` + `weegloo-cma-json-patch` + `weegloo-cda-publish` |

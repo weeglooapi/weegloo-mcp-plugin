@@ -9,7 +9,7 @@ description: >
   semantics (create/update/unpublish/delete), ACMA auto-publish on create and implicit unpublish
   on delete (no separate publish/unpublish vs CMA), Media list mimeGroup query filters,
   ServiceLogin Bearer Token scope (ACMA/ACDA only), ACMA `GET /v1/me` for current ServiceUser
-  (not `/spaces/{spaceId}/me`), ACMA ownership + `isAdmin`, ACDA per-member read scope with
+  (not `/spaces/{spaceId}/me`), ACMA member scope via the role's `createdBy` filter, ACDA per-member read scope with
   `ServiceUser.roleOverride`, service-type → API selection pointer, and MCP vs direct API
   usage. Follow when calling Weegloo APIs from application code.
 ---
@@ -26,7 +26,7 @@ rules:
     items:
       - Weegloo has **two completely separate identity systems**. The API a caller may use is determined by which identity issued the token.
       - **Weegloo User** — a Weegloo **platform account** (Space owner or **invited** Space member). Account sign-up is self-service, but membership in a given Organization/Space is **invite-or-own** (you must be invited to join someone else's). Bearer Token (a **Personal Access Token** for server/CI, or the token returned by the **Weegloo Console FE login popup** for browser admin UIs) authorizes **CMA**, **Upload**, and **CDA**. Mechanics: **`weegloo-user-login`** skill.
-      - **Service User** — an end-user of the product the Space ships, signed in via **ServiceLogin** (e.g. Google OAuth). **Anyone may sign up**. Bearer Token (issued via `auth.weegloo.com`) authorizes **ACMA**, **ACDA**, and **Upload** — never CMA / CDA. The Upload path lets a member contribute media: **Upload** with the ServiceLogin Bearer, then **ACMA** Media create to attach the resulting asset (CMA Media is still Weegloo-User-only). Mechanics: **`weegloo-service-login`** skill (wire protocol + SDK: **`weegloo-service-login-sdk`**).
+      - **Service User** — an end-user of the product the Space ships, signed in via **ServiceLogin** (e.g. Google OAuth). **Anyone may sign up**. Bearer Token (issued via `auth.weegloo.com`) authorizes **ACMA**, **ACDA**, and **Upload** — never CMA / CDA. The Upload path lets a member contribute media: **Upload** with the ServiceLogin Bearer, then **ACMA** Media create to attach the resulting asset (CMA Media is still Weegloo-User-only). Mechanics: **`weegloo-service-login`** skill (wire protocol + SDK: **`weegloo-service-login-client`**).
       - **Tokens do not cross identity boundaries.** A Service User Bearer must never be sent to CMA / CDA; a Weegloo User Bearer is not a valid caller on ACMA / ACDA. **Upload** is the one shared surface — both Weegloo User and Service User Bearers are accepted; the Media resource that follows is created on **CMA** (Weegloo User) or **ACMA** (Service User), matching the identity that did the upload.
 
   - section: Base URL by API Type (never guess or infer)
@@ -37,7 +37,7 @@ rules:
       - **Upload**: File uploads. Accepts both a **Weegloo User** Bearer (followed by **CMA** Media create) and a **Service User** Bearer (followed by **ACMA** Media create). Base URL: `https://upload.weegloo.com`. **REST mechanics (multipart/binary endpoints, the temporary `Upload.sys.id`, and the Media/WebHosting create payloads that consume it) live in the `weegloo-upload-api` skill.** The raw REST upload endpoints are for **application code**; when the **agent** uploads a local file it uses the **`weegloo-upload` MCP** instead (the Upload OpenAPI states the REST endpoints are "not for the MCP protocol"). Do not conflate the two.
       - **ACMA** (App Content Management API): Use when the product uses **its own end-user (Service User) directory** instead of having every writer be a Weegloo platform account. In that case use **ACMA instead of CMA** for those member-scoped operations. Base URL: `https://acma.weegloo.com`
       - **ACDA** (App Content Delivery API): Same scenario—**Service Users**. Use **ACDA instead of CDA** for delivery/read paths that map to that model. Base URL: `https://acda.weegloo.com`
-      - **Auth** (ServiceLogin OAuth): Sign-in entry, token exchange, refresh, and logout for **Service Users** (`ServiceUser`). Base URL: `https://auth.weegloo.com`. **Endpoint mechanics, exact paths, request/response shapes, and the official browser SDK live in the `weegloo-service-login-sdk` skill** — do not re-derive them ad hoc.
+      - **Auth** (ServiceLogin OAuth): Sign-in entry, token exchange, refresh, and logout for **Service Users** (`ServiceUser`). Base URL: `https://auth.weegloo.com`. **Endpoint mechanics, exact paths, request/response shapes, and the official browser SDK live in the `weegloo-service-login-client` skill** — do not re-derive them ad hoc. **Native Android / iOS apps sign in through this same host, but the app's callback deep link (`myapp://login`, or an App Link / Universal Link) must first be registered in `ServiceLogin.allowedCallbackUrls` — that is a `ServiceLogin` update, and without it the login entry rejects the request. The app flow then carries `redirect_uri` + PKCE.**
       - **Script** (Script execution): Run a **Script** stored in a Space — **`POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute`**, plus the token-free **`…/execute/anonymous`** when the Script allows it. Base URL: `https://script.weegloo.com`. **This host runs Scripts and nothing else** — a Script is **authored** (create / read / update / delete) on **CMA**. The run answers on the request with the Script's `Return` value, so from the caller's side it is an ordinary API call. Both identities may call it (**Weegloo User** Bearer or `SpaceAccessToken`, and a **Service User** ServiceLogin Bearer), each needing Script `Execute` on its role. The REST endpoint is for **application code**; the agent runs a Script through the Weegloo **MCP** Script tools. Mechanics: **`weegloo-script`** skill.
       - API paths typically use `/v1/...`, e.g. `https://cda.weegloo.com/v1` for CDA.
 
@@ -117,18 +117,18 @@ rules:
       - **Wrong (does not exist on ACMA):** `https://acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}` (404). **Correct (ACMA):** `https://acma.weegloo.com/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`.
       - **CMA / CDA** expose **both** the flat `/v1/spaces/{spaceId}/contents[...]` and the nested forms.
 
-  - section: ACMA — ownership and `isAdmin` (app-managed member CRUD scope)
+  - section: ACMA — member CRUD scope comes from the role's `createdBy` filter
     items:
-      - **Default scope:** a `ServiceUser` may CRUD **only the resources they created**. Resources created by other members are not editable or deletable from this member's session.
-      - **Cross-member delete via `isAdmin`:** when **`ServiceUser.isAdmin === true`**, that member may **additionally delete** resources created by **other** `ServiceUser`s — **within** the actions permitted by their `ServiceUserRole`. This **adds delete-of-others on top of** the default own-resource CRUD; the member does **not** lose their own-resource capabilities.
-      - **`isAdmin` scope is narrow.** It elevates **delete** on others' resources only. It does **not** grant **update** or **read-for-write** on others' resources, and it does **not** elevate the member to a Weegloo console / CMA admin. It also does not enable operations the underlying `ServiceUserRole` does not permit (e.g. if the role cannot delete this `ContentType` at all, `isAdmin` does not unlock it).
+      - **⚠️ There is no platform-level "own resources only" default.** What a `ServiceUser` may touch on ACMA is decided **entirely** by the effective `ServiceUserRole` (`roleOverride` if set, else `ServiceLogin.sys.defaultRole`). ACMA does not compare the caller against `sys.createdBy` on its own.
+      - **`"createdBy": { "sys": { "id": ":self" } }` on the role's `content` / `media` map is the only thing that limits a member to their own rows.** Omit that filter and every member reaches **every** member's rows — read, edit **and** delete alike, for whatever actions the role grants. A role wired to `ServiceLogin.sys.defaultRole` therefore **must** carry `:self`.
+      - **Moderators are a role WITHOUT the `createdBy` filter, attached per person via `ServiceUser.roleOverride`** — never as the Space default. Narrow it by action (e.g. `Read` + `Delete` only); it is not limited to delete.
       - **Do not** use ACMA to model team-staff editing of the whole Space. That is a **CMA** operation by a Weegloo console user—see the *Service type → API selection* section.
 
   - section: ACDA — per-member read scope and role overrides
     items:
       - ACDA returns **only** published resources **assigned to** the calling `ServiceUser` (per product/role rules). Unlike CDA (one shared, public, token-scoped read set), ACDA's result set is **per member**.
       - **Per-member customization:** set **`ServiceUser.roleOverride`** to point at a different `ServiceUserRole` to grant a single member access different from `ServiceLogin.sys.defaultRole`—useful for tiered subscriptions, beta cohorts, moderators, etc.
-      - **Effective role resolution:** `roleOverride` (if set) wins over `ServiceLogin.sys.defaultRole`. `isAdmin` is **additive** and **narrow**: on **ACMA**, it adds **delete** of other members' resources within the role's permitted operations. It does **not** widen ACDA's per-member read assignment, and it does **not** grant cross-member **update** or **read-for-write** on ACMA.
+      - **Effective role resolution:** `roleOverride` (if set) wins over `ServiceLogin.sys.defaultRole`. That one role decides both the ACDA read set and the ACMA write scope — nothing is layered on top of it.
       - Publish semantics from *CDA — published snapshot only* apply to ACDA as well; see **`weegloo-cda-publish`** skill.
 
   - section: Weegloo User login — token scope
@@ -142,7 +142,7 @@ rules:
   - section: ServiceLogin (Service User) — Bearer Token scope
     items:
       - **`ServiceLogin`** is a per-Space configuration that lets the product run its own end-user (**Service User**) directory (separate from Weegloo platform accounts) — typically via an OAuth provider (Google, etc.). **Anyone may sign up** through it.
-      - Resources involved: **`ServiceLogin`** (holds `sys.defaultRole`), **`ServiceUserRole`** (permission rule set for Service Users), **`ServiceUser`** (one per end-user; optional **`roleOverride`** and **`isAdmin`**).
+      - Resources involved: **`ServiceLogin`** (holds `sys.defaultRole`), **`ServiceUserRole`** (permission rule set for Service Users), **`ServiceUser`** (one per end-user; optional **`roleOverride`**).
       - A successful ServiceLogin sign-in returns a **Bearer Token** that authorizes **ACMA**, **ACDA**, and **Upload** (a member uploads via **Upload**, then attaches the asset with an **ACMA** Media create). It is **not** valid for **CMA** or **CDA**.
       - Do **not** confuse `ServiceUserRole` (Service Users → ACMA / ACDA) with `SpaceRole` (Weegloo Users / `DeliveryAccessToken` → CMA / CDA).
       - Mechanics, configuration, and security details: **`weegloo-service-login`** skill.
@@ -153,7 +153,7 @@ rules:
       - **Public site + team admin UI:** **CDA** for visitors; **CMA** for the team via **`weegloo-user-login`** (Weegloo User login — PAT for servers, console FE login popup for browsers). No ServiceLogin.
       - **Scoped write into ONE Space (no full-Org PAT):** **CMA** (+ Upload / CDA) with a **`SpaceAccessToken`** bound to a `SpaceRole` scoped to the use — a backend importer / sync job, **or a public / browser client such as anonymous posting** (with a suitably narrow role). Details: **`weegloo-space-access-token`** skill.
       - **Members-only read service (open end-user sign-up):** **ServiceLogin** + **ACDA**. Configure `ServiceLogin.sys.defaultRole` to a least-privilege `ServiceUserRole`.
-      - **Members read + write service (open end-user sign-up):** **ServiceLogin** + **ACMA** (member writes, scoped to own resources; moderators via `isAdmin`) + **ACDA** (member reads). Use **CDA** in addition for any resources that should also be readable by anonymous visitors.
+      - **Members read + write service (open end-user sign-up):** **ServiceLogin** + **ACMA** (member writes, scoped by the role's `createdBy :self` filter; moderators get a role that omits it, via `roleOverride`) + **ACDA** (member reads). Use **CDA** in addition for any resources that should also be readable by anonymous visitors.
       - **Composite service:** combine the above per caller identity. Each path uses the API matching the caller's identity for that path; tokens **do not** cross identity boundaries.
       - Full recipes, role-budget per service type, and anti-patterns: **`weegloo-service-architecture`** skill.
 
@@ -198,4 +198,4 @@ rules:
       - Script (execution): `https://script.weegloo.com`
       - ACMA: `https://acma.weegloo.com`
       - ACDA: `https://acda.weegloo.com`
-      - Auth (ServiceLogin OAuth): `https://auth.weegloo.com` — see **`weegloo-service-login-sdk`** skill for endpoint paths and the official browser SDK
+      - Auth (ServiceLogin OAuth): `https://auth.weegloo.com` — see **`weegloo-service-login-client`** skill for endpoint paths and the official browser SDK

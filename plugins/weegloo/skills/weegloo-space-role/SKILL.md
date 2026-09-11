@@ -28,6 +28,8 @@ Both **`SpaceRole`** and **`ServiceUserRole`** define these permission maps:
 | `media` | **Media** assets |
 | `script` | **Script** resources (declarative backend endpoints — `weegloo-script`) |
 
+**On a `ServiceUserRole`, only `Create` / `Read` / `Edit` / `Delete` — plus `Execute` on `script` — are ever consulted.** ACMA and ACDA expose no publish, unpublish, archive or unarchive endpoint: ACMA publishes on create and unpublishes on delete by itself. `Publish` / `Unpublish` / `Archive` / `Unarchive` entries are accepted by the schema and then never read, so leaving them in only advertises a capability the member does not have — omit them. They stay meaningful on a **`SpaceRole`**, where CMA does expose those operations.
+
 Each map lists **actions**. Content/Media/ContentType use `Read`, `Create`, `Edit` (`Save` is an accepted
 alias of `Edit`), `Delete`, `Publish`, `Unpublish`, `Archive`, `Unarchive`, `All`. **`script` additionally supports `Execute`**
 (the right to call a Script's `/execute`) — an action unique to Script. Under each action,
@@ -312,7 +314,7 @@ Script. Full patterns: **`weegloo-script`**.
 
 For **open sign-up** products, prefer **`ServiceUserRole`** + **ACMA** / **ACDA** (see **`weegloo-service-login`**).
 
-- **Platform default:** ACMA already limits members to **CRUD on resources they created** unless the role or **`isAdmin`** widens it.
+- **There is no platform default** — ACMA scopes a member by the role alone, so the `createdBy` filter below is what keeps members off each other's rows.
 - **Explicit role rules:** use the same **`createdBy.sys.id": ":self"`** (+ optional **`contentType`**) on **`ServiceUserRole`** when you need **read** tiers, **deny** rules, or stricter **ACDA** visibility than the default.
 
 Wire **`ServiceLogin.sys.defaultRole`** (or **`ServiceUser.roleOverride`**) to that role after **`cma_CreateServiceUserRole`**.
@@ -332,7 +334,7 @@ Wire **`ServiceLogin.sys.defaultRole`** (or **`ServiceUser.roleOverride`**) to t
 ## Related
 
 - **`weegloo-delivery-access-token`** — bind a least-privilege **SpaceRole** to a CDA token.
-- **`weegloo-service-login`** — ServiceUserRole, `defaultRole`, `roleOverride`, `isAdmin`, ACMA ownership defaults.
+- **`weegloo-service-login`** — ServiceUserRole, `defaultRole`, `roleOverride`, ACMA member scope.
 - **`weegloo-service-architecture`** — which role type each service pattern needs.
 - **`weegloo-script`** — Script `Execute` permission, the author unconditional-Allow gate, and async external-API jobs (Create vs `:self` Read/Edit/Delete split).
 - **`weegloo-webhook`** — Webhook triggers that run a Script or POST to a URL.

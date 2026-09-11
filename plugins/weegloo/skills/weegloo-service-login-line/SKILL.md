@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-line
-description: Provider-specific setup for Weegloo ServiceLogin with **LINE** (LINE Login) OAuth 2.0 — the exact LINE Developers steps to create a LINE Login channel and obtain the `clientId` / `clientSecret` (= Channel ID / Channel secret), the LINE Callback URL to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/line`), the LINE-"Provider"-is-not-Weegloo's-provider terminology trap, and the separate email-permission application gotcha. Use ONLY when the chosen provider is LINE. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-sdk`; for the conceptual model see `weegloo-service-login`. Do not use this for Google, GitHub, Facebook, GitLab, Kakao, or Naver.
+description: Provider-specific setup for Weegloo ServiceLogin with **LINE** (LINE Login) OAuth 2.0 — the exact LINE Developers steps to create a LINE Login channel and obtain the `clientId` / `clientSecret` (= Channel ID / Channel secret), the LINE Callback URL to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/line`), the LINE-"Provider"-is-not-Weegloo's-provider terminology trap, and the separate email-permission application gotcha. Use ONLY when the chosen provider is LINE. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-client`; for the conceptual model see `weegloo-service-login`. Do not use this for Google, GitHub, Facebook, GitLab, Kakao, or Naver.
 ---
 
 # Weegloo ServiceLogin — LINE provider setup
@@ -12,7 +12,7 @@ that `ServiceLogin` needs. Everything else (the `auth.weegloo.com` wire protocol
 
 > **Prerequisite gate.** Use this **only after** you have a ServiceLogin design from
 > **`weegloo-service-login`** (the conceptual model) and the wire-protocol/SDK flow from
-> **`weegloo-service-login-sdk`** (the spine). This skill does **not** decide whether to use LINE —
+> **`weegloo-service-login-client`** (the spine). This skill does **not** decide whether to use LINE —
 > the provider must already be chosen from the product's actual need. **Do not use this for a
 > non-LINE provider** (other providers follow the same *shape*, but their console steps differ —
 > Google, GitHub, Kakao, and Naver have their own dedicated skills; Facebook and GitLab ride the spine's
@@ -93,7 +93,7 @@ So treat email as **mandatory setup**, not optional:
 
 ## Related
 
-- **Provider-agnostic spine (wire protocol, SDK, `callbackUrl`, pitfalls):** **`weegloo-service-login-sdk`**.
+- **Provider-agnostic spine (wire protocol, SDK, `callbackUrl`, pitfalls):** **`weegloo-service-login-client`**.
 - **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser):** **`weegloo-service-login`**.
 - **Other dedicated provider skills:** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-github`** (GitHub), **`weegloo-service-login-kakao`** (Kakao), **`weegloo-service-login-naver`** (Naver).
 - **Picking the API combo per service type:** **`weegloo-service-architecture`**.

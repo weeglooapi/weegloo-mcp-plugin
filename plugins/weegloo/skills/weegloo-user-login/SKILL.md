@@ -16,7 +16,7 @@ Weegloo has **two completely separate identity systems**. The rest of this skill
 | Self sign-up? | **No** — it is a **login (authentication) feature only**, for a Weegloo User who **already** belongs to the Space; it has no registration step. (A Weegloo account is created on the Weegloo platform separately, and Space access is by ownership / invitation — not through this login.) | **Yes.** Anyone can sign up through the product — that is the entire point. |
 | Perspective in the product | **Admin / staff** of the product. | **Member / customer / reader** of the product. |
 | Token authorises which APIs? | **CMA**, **Upload**, **CDA**. (Management plane + uploads + delivery.) | **ACMA**, **ACDA**, and **Upload**. Never CMA / CDA. Member media flow is Upload → ACMA Media create. |
-| Documented in | **`weegloo-user-login`** (this skill). | **`weegloo-service-login`** + **`weegloo-service-login-sdk`** skills. |
+| Documented in | **`weegloo-user-login`** (this skill). | **`weegloo-service-login`** + **`weegloo-service-login-client`** skills. |
 
 **Quick disambiguation:** if the identity in front of you was **invited** to a Space and edits content there, it is a **Weegloo User**. If the identity **signed up through the product** (typically via the Space's OAuth providers) it is a **Service User** — stop reading this skill and go to **`weegloo-service-login`**.
 
@@ -29,6 +29,8 @@ Weegloo User login is the right model when **any** of the following are true:
 - **Server-side / CI scripts that talk to Weegloo.** Backfills, scheduled jobs, build-time content fetches, deploy automation. These run with a Weegloo User identity supplied as a **PAT**.
 
 It is **wrong** to use Weegloo User login for end-users of a product (paid members, community readers, forum posters, app sign-ups). Use **ServiceLogin** for that — see **`weegloo-service-login`**.
+
+**Browser-only — a native Android / iOS app cannot sign a Weegloo User in.** Both mechanisms below need a browser: the console FE popup is `window.open` + `postMessage`, and the platform login returns its exchange token as an `HttpOnly` cookie on `auth.weegloo.com` that no app can read, to a fixed console URL with no deep-link return. So for an app the signed-in identity is a **Service User** (**`weegloo-service-login`**); if the app genuinely needs Weegloo-User reach, put a backend in front that holds a **PAT** and never ship the PAT to the device.
 
 ## Token scope — what a Weegloo User Bearer Token authorizes
 
@@ -201,7 +203,7 @@ There is no server-side session to revoke unless the product also calls a CMA re
 ## Related
 
 - **End-user / member sign-up for the product itself (Service User, ACMA/ACDA):** **`weegloo-service-login`** skill.
-- **OAuth wire protocol + browser SDK for the Service User flow:** **`weegloo-service-login-sdk`** skill.
+- **OAuth wire protocol + browser SDK for the Service User flow:** **`weegloo-service-login-client`** skill.
 - **Picking the right login model per service type:** **`weegloo-service-architecture`** skill.
 - **Deploy ZIP / WebHosting platform constraints:** **`weegloo-web-hosting`** skill.
 - **HTTP bases / `Accept` header / OpenAPI links / token-scope rules:** **`weegloo-api-endpoints`** rule.

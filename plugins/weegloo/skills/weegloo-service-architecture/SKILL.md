@@ -33,7 +33,7 @@ These identity systems are **completely separate**: a Service User is **not** a 
 Detailed semantics:
 
 - **Weegloo User login (PAT + console FE login popup):** **`weegloo-user-login`** skill.
-- **ServiceLogin / ServiceUser / ServiceUserRole / `isAdmin`:** **`weegloo-service-login`** skill.
+- **ServiceLogin / ServiceUser / ServiceUserRole:** **`weegloo-service-login`** skill.
 - **Delivery token provisioning:** **`weegloo-delivery-access-token`** skill.
 - **Space-scoped write token (role-governed):** **`weegloo-space-access-token`** skill.
 - **Publish model (write → publish → readable on CDA / ACDA):** **`weegloo-cda-publish`** skill.
@@ -81,7 +81,7 @@ Pitfalls: don't bind the token to **Administrator** or any write-capable role - 
 > "Members-only forum or board where members write posts, edit their own, and read each other's."
 
 - **Sign-in:** **ServiceLogin**.
-- **Member writes:** **ACMA** - each `ServiceUser` may CRUD **their own** resources only. Promote moderators with **`ServiceUser.isAdmin: true`** so they can also **delete** other members' posts within their role's scope. `isAdmin` is **delete-only** for others' resources; it does not grant cross-member update or read. See **`weegloo-service-login`**.
+- **Member writes:** **ACMA** - a `ServiceUser` is scoped by the effective `ServiceUserRole` and nothing else, so the default role needs **`createdBy :self`** to keep members on their own rows. Promote moderators with a role that omits that filter, attached via **`ServiceUser.roleOverride`**. See **`weegloo-service-login`**.
 - **Member media uploads:** **Upload** with the ServiceLogin Bearer, then **ACMA** Media create with the same Bearer (the Media is owned by that ServiceUser). Do **not** route member media through CMA Media — that is Weegloo-User-only.
 - **Member reads:** **ACDA** for resources scoped to the member.
 - **Mixed-visibility resources:**
@@ -105,7 +105,7 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 - **Service User reads (private/personal content):** **ACDA** with **ServiceLogin** Bearer Token.
 - **Service User writes (their own resources):** **ACMA** with the same ServiceLogin Bearer Token.
 - **Weegloo User / staff editing (any resource in the Space):** **Weegloo User login** → **CMA** / **Upload** (**`weegloo-user-login`**).
-- **Owner / admin dashboard reading or editing *all* members' data** (e.g. a salon owner's full booking schedule, an ops console): this is **cross-member** access → **Weegloo User login → CMA** (**`weegloo-user-login`**), built as an **in-app admin UI by default**. It is **not** a public **CDA** read (that would leak every member's data to anyone holding the browser token) and **not** **ACDA** (which is per-member); `isAdmin` only adds cross-member **delete** on ACMA, never cross-member read. Do not implement the owner view as a client-side role-switch in the member app.
+- **Owner / admin dashboard reading or editing *all* members' data** (e.g. a salon owner's full booking schedule, an ops console): this is **cross-member** access → **Weegloo User login → CMA** (**`weegloo-user-login`**), built as an **in-app admin UI by default**. It is **not** a public **CDA** read (that would leak every member's data to anyone holding the browser token) and **not** **ACDA** (which is per-member). A `ServiceUserRole` that omits `createdBy :self` could read across members on ACMA, but an owner / ops surface belongs on CMA behind a Weegloo User — keep the member app's role scoped instead. Do not implement the owner view as a client-side role-switch in the member app.
 - **Role budget (must be configured):**
   - **`SpaceRole`** (least-privilege) for the **DeliveryAccessToken** used by CDA.
   - **`ServiceUserRole`** (least-privilege) for app-managed members used by ACMA / ACDA, with per-member overrides as needed.
@@ -120,7 +120,7 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 │ Service User reading their data             │ ACDA  + ServiceLogin Bearer Token             │
 │ Service User writing their data             │ ACMA  + ServiceLogin Bearer Token             │
 │ Service User uploading Media (member-owned) │ Upload + ServiceLogin Bearer → ACMA Media     │
-│ Service User moderator deleting others'     │ ACMA  + ServiceUser.isAdmin = true (delete)   │
+│ Service User moderator deleting others'     │ ACMA  + roleOverride to a role w/o :self      │
 │ Weegloo User editing in a custom admin UI   │ CMA   + console FE login token (Space mbr.)   │
 │ Weegloo User uploading Media (admin UI)     │ Upload + Weegloo User Bearer → CMA Media      │
 │ Scoped write into one Space                 │ CMA   + SpaceAccessToken (SpaceRole)          │
@@ -137,17 +137,17 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 - **Granting Administrator (or any broad write) on a CDA DeliveryAccessToken** — strictly forbidden per **`weegloo-delivery-access-token`**.
 - **Onboarding product end-users as Weegloo Space members.** Working *your* Space as a Weegloo User means owning it or being **invited** to it — so making every product user a member would mean inviting each one. End-user sign-up belongs to **ServiceLogin**. If you find yourself inviting every product user to the Space, you are using the wrong identity model.
 - **Routing Service User writes through CMA + Weegloo User login.** That makes every writing member a Weegloo platform account on the Space — the wrong identity model. Use ACMA via ServiceLogin. (Member-contributed media is the same story: **Upload → ACMA** Media create with the ServiceLogin Bearer, never CMA Media.)
-- **Treating `isAdmin` as Weegloo-admin.** It only adds **delete** of other members' resources on ACMA — within what the `ServiceUserRole` already permits. It never elevates the member to manage the Space itself.
-- **Treating `isAdmin` as cross-member edit/read.** `isAdmin` does **not** grant **update** or **read-for-write** on other members' resources — only **delete**. For full cross-member editing, use a Weegloo User via CMA, not ACMA + `isAdmin`.
+- **Treating a moderator role as Weegloo-admin.** A `ServiceUserRole` reaches Content / Media on ACMA and ACDA only. It never lets the member manage the Space itself.
+- **Leaving `createdBy :self` off the default role.** That silently lets every member edit and delete every other member's rows. Scope the default role; widen only through `roleOverride`.
 
 ## LLM checklist
 
 When planning an architecture, answer these in order:
 
 1. **Anonymous read?** → CDA + DeliveryAccessToken with a least-privilege `SpaceRole`.
-2. **Does the product have an owner / admin / staff surface (dashboard, settings, moderation, back-office, or any screen that reads/edits *all* members' data)?** → default to an **in-app admin UI**: Weegloo User login (console FE popup) → CMA / Upload. See **`weegloo-user-login`**. This is the default for any admin/owner surface — **do not silently drop it to "the team uses the Weegloo Console,"** and do **not** expose it as a public CDA read or a client-side role-switch. Console-only is an explicit alternative the user must request, not a default.
+2. **Does the product have an owner / admin / staff surface (dashboard, settings, moderation, back-office, or any screen that reads/edits *all* members' data)?** → default to an **in-app admin UI**: Weegloo User login (console FE popup) → CMA / Upload. See **`weegloo-user-login`**. This is the default for any admin/owner surface — **do not silently drop it to "the team uses the Weegloo Console,"** and do **not** expose it as a public CDA read or a client-side role-switch. Console-only is an explicit alternative the user must request, not a default. **This assumes a browser admin surface** — Weegloo User login is browser-only (**`weegloo-user-login`**), so a native Android / iOS admin app cannot use it: either keep that surface on the web, or model the operators as Service Users on a wider `ServiceUserRole` reached through **`ServiceUser.roleOverride`**.
 3. **Per-end-user accounts in the product itself (open sign-up)?** → enable **ServiceLogin**, define `ServiceUserRole`(s), set `ServiceLogin.sys.defaultRole`. See **`weegloo-service-login`**.
-4. **Service User writes?** → ACMA with Bearer Token. Moderators get `isAdmin: true` so they may additionally **delete** other members' resources within the role's scope (delete only — no cross-member update/read).
+4. **Service User writes?** → ACMA with Bearer Token. Give the default role **`createdBy :self`**; moderators get a role without it through `roleOverride`.
 5. **Service User reads of personal/assigned content?** → ACDA with the same Bearer Token.
 6. **Service User uploads media (avatar, attachment, etc.)?** → **Upload** with the ServiceLogin Bearer, then **ACMA** Media create with the same Bearer. Never route member media through CMA.
 
@@ -168,8 +168,8 @@ This chain is the intended path: pick the architecture here, then walk skills 1�
 - **`weegloo-api-endpoints`** — base URLs, Accept header, vendor JSON, OpenAPI links, ACMA/ACDA ownership invariants.
 - **`weegloo-upload-api`** — Upload REST API → Media / WebHosting create (the two-step file-upload flow for product code), and the Upload-API-vs-`weegloo-upload`-MCP distinction.
 - **`weegloo-user-login`** — Weegloo User login (PAT + console FE popup) for CMA / Upload / CDA. The admin-side identity model.
-- **`weegloo-service-login`** — ServiceLogin / ServiceUser / ServiceUserRole / `isAdmin` mechanics and Bearer Token scope. The end-user identity model.
-- **`weegloo-service-login-sdk`** — OAuth wire protocol on `auth.weegloo.com` and the official browser SDK for ServiceLogin.
+- **`weegloo-service-login`** — ServiceLogin / ServiceUser / ServiceUserRole mechanics and Bearer Token scope. The end-user identity model.
+- **`weegloo-service-login-client`** — OAuth wire protocol on `auth.weegloo.com` and the official browser SDK for ServiceLogin.
 - **`weegloo-delivery-access-token`** — least-privilege DeliveryAccessToken creation for CDA.
 - **`weegloo-space-access-token`** — Space-scoped read+write token whose power is set by a bound `SpaceRole`.
 - **`weegloo-space-role`** — SpaceRole / ServiceUserRole permission filters (`createdBy`, `:self`).

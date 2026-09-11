@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-google
-description: Provider-specific setup for Weegloo ServiceLogin with **Google** OAuth 2.0 — the exact Google Cloud Console steps to create an OAuth client and obtain the `clientId` / `clientSecret`, the Google redirect URI to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google`), the OAuth consent screen / Test users gotcha, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is Google. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-sdk`; for the conceptual model see `weegloo-service-login`. Do not use this for another provider (GitHub, Facebook, GitLab, LINE, Kakao, or Naver).
+description: Provider-specific setup for Weegloo ServiceLogin with **Google** OAuth 2.0 — the exact Google Cloud Console steps to create an OAuth client and obtain the `clientId` / `clientSecret`, the Google redirect URI to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google`), the OAuth consent screen / Test users gotcha, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is Google. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-client`; for the conceptual model see `weegloo-service-login`. Do not use this for another provider (GitHub, Facebook, GitLab, LINE, Kakao, or Naver).
 ---
 
 # Weegloo ServiceLogin — Google provider setup
@@ -12,7 +12,7 @@ that `ServiceLogin` needs. Everything else (the `auth.weegloo.com` wire protocol
 
 > **Prerequisite gate.** Use this **only after** you have a ServiceLogin design from
 > **`weegloo-service-login`** (the conceptual model) and the wire-protocol/SDK flow from
-> **`weegloo-service-login-sdk`** (the spine). This skill does **not** decide whether to use Google —
+> **`weegloo-service-login-client`** (the spine). This skill does **not** decide whether to use Google —
 > the provider must already be chosen from the product's actual need. **Do not use this for a
 > non-Google provider** (other providers follow the same *shape*, but their console steps differ —
 > GitHub, Kakao, Naver, and LINE have their own dedicated skills; Facebook and GitLab ride the spine's
@@ -60,7 +60,7 @@ this step-by-step walkthrough, with the real `{spaceId}` already filled into the
    *not* pick the "Android" or "iOS" type. Weegloo's redirect URI is `https://auth.weegloo.com/…` (a
    web URL), so from Google's side the OAuth client is always a web app — a native app receives its
    token through its own registered deep link, not a Google native client (see
-   **`weegloo-service-login-sdk`** → *Native apps (Android / iOS)*).
+   **`weegloo-service-login-client`** → *Native apps (Android / iOS)*).
 4. Under **Authorized redirect URIs**, **Add URI** and paste **exactly** the redirect URI above (with
    the real `{spaceId}`). **No "Authorized JavaScript origins" are needed** — the browser navigates to
    `auth.weegloo.com`, never to Google directly.
@@ -74,6 +74,6 @@ end the turn by *asking for the credentials*, not by reporting Google sign-in as
 
 ## Related
 
-- **Provider-agnostic spine (wire protocol, SDK, `callbackUrl`, pitfalls):** **`weegloo-service-login-sdk`**.
+- **Provider-agnostic spine (wire protocol, SDK, `callbackUrl`, pitfalls):** **`weegloo-service-login-client`**.
 - **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser):** **`weegloo-service-login`**.
 - **Picking the API combo per service type:** **`weegloo-service-architecture`**.

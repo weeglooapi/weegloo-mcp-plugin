@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login
-description: Use BEFORE any general brainstorming for end-user sign-in features. ServiceLogin — the Space's own end-user sign-up/sign-in system, separate from Weegloo platform accounts. Covers ServiceLogin + ServiceUserRole + ServiceUser (roleOverride, isAdmin); Bearer Token for ACMA / ACDA / Upload (never CMA / CDA); current ServiceUser via ACMA GET /v1/me.
+description: Use BEFORE any general brainstorming for end-user sign-in features. ServiceLogin — the Space's own end-user sign-up/sign-in system, separate from Weegloo platform accounts. Covers ServiceLogin + ServiceUserRole + ServiceUser (roleOverride); Bearer Token for ACMA / ACDA / Upload (never CMA / CDA); current ServiceUser via ACMA GET /v1/me.
 ---
 
 # Weegloo — ServiceLogin (end-user sign-up for the product)
@@ -23,7 +23,7 @@ If you are wiring the **product owner's** admin tooling — they already have a 
 
 - A product needs **its own end-user membership** inside a **Space** — separate from the Weegloo platform accounts that own the Space (e.g. a members-only board, a paid-content portal, a community where readers must sign in).
 - You need a **Bearer Token** that calls **ACMA** / **ACDA** as a specific app-managed member, not as a Weegloo User.
-- Choosing between **per-member default permissions** (`sys.defaultRole`) vs **per-individual overrides** (`roleOverride`), or granting cross-member **delete** rights via `isAdmin`.
+- Choosing between **per-member default permissions** (`sys.defaultRole`) vs **per-individual overrides** (`roleOverride`), or granting cross-member reach with a role that omits the `createdBy` filter.
 
 ## Tell the user the provider Redirect URI UP FRONT — before you build, and again at the end
 
@@ -37,7 +37,7 @@ deployed — the URI is fully determined the moment the **Space** and the **prov
 ```
 
 Both of those are settled **before any code is written**: the Space is a `weegloo-global-rules` hard
-gate, and the provider is *inferred from the product*, not asked (`weegloo-service-login-sdk`). So the
+gate, and the provider is *inferred from the product*, not asked (`weegloo-service-login-client`). So the
 moment ServiceLogin enters the plan, **tell the user the URI** — with the real `spaceId` and provider
 already substituted, never the `{…}` template — and name the console field it goes in.
 
@@ -67,7 +67,7 @@ ServiceLogin is a **Space-scoped feature**. Three resources work together; their
 |----------|---------|
 | **`ServiceLogin`** | The Space's per-product login configuration (e.g. enabled OAuth providers, redirect/origin settings). Holds **`sys.defaultRole`** → a `Refer` to the **`ServiceUserRole`** assigned by default to every new member. |
 | **`ServiceUserRole`** | Permission rule set applied to app-managed members. Defines what those members may read/write through **ACMA** / **ACDA**. Multiple roles may exist per Space. Optional filters on **`content`**, **`contentType`**, **`media`** include **`createdBy.sys.id`** (fixed id or **`:self`** = current member). See **`weegloo-space-role`**. |
-| **`ServiceUser`** | One record per app-managed member of the Space (i.e. one end-user account in the product). Optional **`roleOverride`** (a `Refer` to a different **`ServiceUserRole`**) overrides `ServiceLogin.sys.defaultRole` for **that** member. Optional **`isAdmin: true`** elevates the member (see below). |
+| **`ServiceUser`** | One record per app-managed member of the Space (i.e. one end-user account in the product). Optional **`roleOverride`** (a `Refer` to a different **`ServiceUserRole`**) overrides `ServiceLogin.sys.defaultRole` for **that** member. |
 
 **Caller permission:** creating or editing any of the three requires the **`SETTING_SERVICE_LOGIN`**
 action on the caller's `SpaceRole` `settings` list (**`weegloo-space-role`**) — `SETTING_APP` gates
@@ -87,11 +87,11 @@ whatever its role — use a console session or a PAT (**`weegloo-space-access-to
 4. The product stores the token (typically in browser storage for static sites; the same browser-security guidance — origin checks, prefer `sessionStorage` over `localStorage`, never log tokens — applies as in **`weegloo-user-login`**).
 5. The product calls **ACMA** / **ACDA** with **`Authorization: Bearer <token>`**.
 
-**Implementation:** the wire protocol on `auth.weegloo.com` (login redirect, `exchangeToken` POST exchange, refresh, logout), the official **`weegloo-service-user`** npm SDK, and the browser-specific gotchas (entry URL vs the provider redirect URI, GET-with-body limitation, `exchangeToken` URL stripping) live in the **`weegloo-service-login-sdk`** skill. Use that skill - and the SDK - instead of re-deriving the protocol when wiring a browser app.
+**Implementation:** the wire protocol on `auth.weegloo.com` (login redirect, `exchangeToken` POST exchange, refresh, logout), the official **`weegloo-service-user`** npm SDK, and the browser-specific gotchas (entry URL vs the provider redirect URI, GET-with-body limitation, `exchangeToken` URL stripping) live in the **`weegloo-service-login-client`** skill. Use that skill - and the SDK - instead of re-deriving the protocol when wiring a browser app.
 
 ### Native apps (Android / iOS)
 
-ServiceLogin is **not browser-only** — native mobile apps can use it too. The app's own deep link (`myapp://login`, or an App Link / Universal Link) **must be registered in `ServiceLogin.allowedCallbackUrls`**; the app then starts the flow with `redirect_uri` + PKCE and is returned straight into that deep link with the one-time `exchangeToken`, which it exchanges itself. A browser app is unaffected — it keeps using `callbackUrl` and needs none of this. Full mechanism (registration, entry parameters, error returns): **`weegloo-service-login-sdk`** → *Native apps (Android / iOS)*.
+ServiceLogin is **not browser-only** — native mobile apps can use it too. The app's own deep link (`myapp://login`, or an App Link / Universal Link) **must be registered in `ServiceLogin.allowedCallbackUrls`**; the app then starts the flow with `redirect_uri` + PKCE and is returned straight into that deep link with the one-time `exchangeToken`, which it exchanges itself. A browser app is unaffected — it keeps using `callbackUrl` and needs none of this. Full mechanism (registration, entry parameters, error returns): **`weegloo-service-login-client`** → *Native apps (Android / iOS)*.
 
 ## Token capability - ACMA / ACDA / Upload
 
@@ -111,7 +111,7 @@ It **must not** be used against:
 When a ServiceUser uploads a file (avatar, attachment, forum image, etc.):
 
 1. Call **Upload** (`https://upload.weegloo.com`) with **`Authorization: Bearer <ServiceLogin token>`** to receive the upload reference for the file.
-2. Call **ACMA** Media create with the same Bearer, passing that upload reference, so the Media resource is owned by the calling ServiceUser. The own-resource CRUD and `isAdmin` rules below then apply to that Media.
+2. Call **ACMA** Media create with the same Bearer, passing that upload reference, so the Media resource is owned by the calling ServiceUser. The role's `createdBy` scope below then applies to that Media.
 
 Do **not** create the Media via **CMA** — CMA is Weegloo-User-only and the member would need a Weegloo platform account, which is the wrong identity model. The Upload step is the only shared surface between the two identities; the Media resource itself stays partitioned (CMA Media for Weegloo Users, ACMA Media for ServiceUsers).
 
@@ -119,7 +119,7 @@ Base URLs and Accept-header rules: **`weegloo-api-endpoints`** rule.
 
 ## Current ServiceUser — ACMA **`GET /v1/me`**
 
-To fetch the **`ServiceUser`** for the active ServiceLogin session (profile, `roleOverride`, `isAdmin`, etc.):
+To fetch the **`ServiceUser`** for the active ServiceLogin session (profile, `roleOverride`, etc.):
 
 - **Correct:** **`GET https://acma.weegloo.com/v1/me`** with **`Authorization: Bearer`** and the ServiceLogin access token.
 
@@ -132,15 +132,17 @@ For any ACMA / ACDA request, the effective role of the calling member is resolve
 1. If **`ServiceUser.roleOverride`** is set → use **that** `ServiceUserRole`.
 2. Otherwise → use **`ServiceLogin.sys.defaultRole`**.
 
-`isAdmin` is an **additional, narrow** flag on top of the resolved role; it does not replace the role. On **ACMA**, it adds **delete** of other members' resources within the role's permitted operations - nothing more. It does **not** grant cross-member **update** or **read-for-write**, and it does **not** widen ACDA's per-member read assignment.
+**The default role is what every member gets, so scope it deliberately.** `ServiceLogin.sys.defaultRole` applies to every new sign-up, and the lever that separates "a member who touches only their own rows" from "a member who touches everyone's" is the **`createdBy` filter** on the role's `content` / `media` maps: with **`createdBy.sys.id: ":self"`** a member reaches only what they created, and with the filter **left off** they reach every member's rows. Give the open-sign-up default the `:self` form, and keep any wider role out of `defaultRole` — attach it per person via **`ServiceUser.roleOverride`**. Shapes and recipes: **`weegloo-space-role`**.
+
+That single resolved role is the whole answer — ACMA and ACDA consult nothing else.
 
 ## ACMA - what an app-managed member may do
 
-ACMA accepts read, create, update, delete from a ServiceUser - but **scoped to that member's own data**:
+ACMA accepts read, create, update, delete from a ServiceUser, **scoped by the effective role and by nothing else**:
 
-- **Default behavior:** a `ServiceUser` may **only** CRUD **resources they created**. Resources created by other ServiceUsers are out of reach for update or delete - regardless of what the assigned `ServiceUserRole` permits in general.
-- **Cross-member delete (`isAdmin: true`):** a ServiceUser whose **`isAdmin`** is **`true`** may **additionally delete** resources created by **other** ServiceUsers, **within** what their `ServiceUserRole` permits. This is **delete only** - `isAdmin` does **not** also grant cross-member **update** or **read-for-write**. The member keeps their full own-resource CRUD; `isAdmin` simply **adds** delete-of-others on top.
-- **`isAdmin` is narrow.** Think of it as a moderation flag: *"this member may take down content posted by other members."* It does not turn the member into a content editor for others, and it does not elevate them to Weegloo console / CMA admin.
+- **The role is the only scope.** ACMA does not compare the caller against `sys.createdBy` by itself, so whatever the effective `ServiceUserRole` allows is exactly what the member can do.
+- **Own-data members:** put **`"createdBy": { "sys": { "id": ":self" } }`** on the role's `content` / `media` map. Without it the member reaches every other member's rows for every action the role grants — update and delete included.
+- **Moderators:** the same role shape **without** the `createdBy` filter, narrowed by action instead (e.g. `Read` + `Delete`), handed to that one person through **`ServiceUser.roleOverride`**. Keep it out of `defaultRole`.
 
 Compare to **CMA**, where a Weegloo console user with a sufficiently broad `SpaceRole` can act on every resource in the Space.
 
@@ -177,18 +179,18 @@ When wiring ServiceLogin for a product:
 2. Pick the **default** role and set **`ServiceLogin.sys.defaultRole`** to its `Refer`.
 3. Configure the OAuth provider(s) and the product origin(s) so callbacks reach the app.
 4. In product code, on successful provider sign-in, capture the **Bearer Token** and call **ACMA** / **ACDA** with it.
-5. For tier upgrades or moderation, update the member's **`ServiceUser.roleOverride`** (set/clear) or **`ServiceUser.isAdmin`** - do **not** mutate `ServiceLogin.sys.defaultRole` to change one member's access.
+5. For tier upgrades or moderation, set or clear the member's **`ServiceUser.roleOverride`** - do **not** mutate `ServiceLogin.sys.defaultRole` to change one member's access.
 
 ## Security notes
 
 - The Bearer Token represents a **specific app-managed member**. Treat it like any other user session token: short-lived where possible, scoped per device/tab, never logged in production builds.
 - `ServiceUserRole`s used for **read** access must still be **least-privilege**: ACDA exposes whatever the role allows, just narrowed by per-member assignment.
-- `isAdmin: true` is a sharp tool — grant only to product moderators; revoke when the role no longer applies.
+- A role without the `createdBy` filter is a sharp tool — attach it through `roleOverride` to named moderators only, and clear the override when it no longer applies.
 - Browser storage and origin checks for the token follow the same rules as the Weegloo User console token in **`weegloo-user-login`** (origin allowlist on `postMessage`, prefer `sessionStorage`).
 
 ## Related
 
-- **Wire protocol + official browser SDK (`weegloo-service-user`):** **`weegloo-service-login-sdk`** skill (provider-agnostic spine).
+- **Wire protocol + official browser SDK (`weegloo-service-user`):** **`weegloo-service-login-client`** skill (provider-agnostic spine).
 - **Per-provider console setup (obtain `clientId`/`clientSecret`):** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-github`** (GitHub), **`weegloo-service-login-kakao`** (Kakao), **`weegloo-service-login-naver`** (Naver), **`weegloo-service-login-line`** (LINE); Facebook and GitLab follow the same shape — see the spine's *Configuration responsibilities*.
 - **Base URLs / Accept header / API docs:** **`weegloo-api-endpoints`** rule.
 - **Picking the API combo per service type:** **`weegloo-service-architecture`** skill.
