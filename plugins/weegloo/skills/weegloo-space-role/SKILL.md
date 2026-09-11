@@ -28,9 +28,17 @@ Both **`SpaceRole`** and **`ServiceUserRole`** define these permission maps:
 | `media` | **Media** assets |
 | `script` | **Script** resources (declarative backend endpoints — `weegloo-script`) |
 
-**On a `ServiceUserRole`, only `Create` / `Read` / `Edit` / `Delete` — plus `Execute` on `script` — are ever consulted.** ACMA and ACDA expose no publish, unpublish, archive or unarchive endpoint: ACMA publishes on create and unpublishes on delete by itself. `Publish` / `Unpublish` / `Archive` / `Unarchive` entries are accepted by the schema and then never read, so leaving them in only advertises a capability the member does not have — omit them. They stay meaningful on a **`SpaceRole`**, where CMA does expose those operations.
+**A `ServiceUserRole` accepts only a subset of the actions — the rest are rejected at save (`WGL400076`), not silently ignored.** ACMA and ACDA expose no publish, unpublish, archive or unarchive endpoint (ACMA publishes on create and unpublishes on delete by itself), so `cma_CreateServiceUserRole` / `cma_UpdateServiceUserRole` / patch refuse those action keys outright:
 
-Each map lists **actions**. Content/Media/ContentType use `Read`, `Create`, `Edit` (`Save` is an accepted
+| Map on a `ServiceUserRole` | Actions it accepts |
+|---|---|
+| `contentType` | **`Read` only** — not even `All` |
+| `content`, `media` | `All`, `Create`, `Read`, `Edit`, `Delete` |
+| `script` | those, plus **`Execute`** |
+
+`Save`, `Publish`, `Unpublish`, `Archive` and `Unarchive` are rejected on **every** map. A **`SpaceRole`** is unaffected — it keeps the full action set, because CMA does expose those operations.
+
+Each map lists **actions** (a `SpaceRole` takes them all; a `ServiceUserRole` only the subset above). Content/Media/ContentType use `Read`, `Create`, `Edit` (`Save` is an accepted
 alias of `Edit`), `Delete`, `Publish`, `Unpublish`, `Archive`, `Unarchive`, `All`. **`script` additionally supports `Execute`**
 (the right to call a Script's `/execute`) — an action unique to Script. Under each action,
 **`Allow`** or **`Deny`** holds an array of **filter rules**.
@@ -326,6 +334,7 @@ Wire **`ServiceLogin.sys.defaultRole`** (or **`ServiceUser.roleOverride`**) to t
 - **Hard-coding a user id** in a role meant for “every member sees only their own rows” — use **`:self`** instead.
 - **Omitting `contentType`** when only one ContentType should be private — without it, the action may apply to **all** Content types that pass the `createdBy` filter.
 - **Confusing `SpaceRole` with `ServiceUserRole`** — Weegloo Users vs Service Users use different role resources and tokens; see **`weegloo-api-endpoints`** and **`weegloo-service-architecture`**.
+- **Putting `Publish` / `Archive` / `Save` — or any `contentType` action other than `Read` — on a `ServiceUserRole`** — the save is rejected with **`WGL400076`**, naming the offending action and the map. Those belong on a `SpaceRole`.
 - **Expecting `:self` on a shared DeliveryAccessToken** to mean “each anonymous visitor sees their own data” — anonymous CDA has **no** per-visitor identity; per-user private delivery for members belongs on **ACDA** + **ServiceUserRole**, not public CDA.
 - **Using `:self` on ACDA / CDA without `publishWithAuthor: true`** — silently matches nothing on delivery (see the `:self` note above).
 
