@@ -39,6 +39,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 const FIXTURE_DIR = path.join(__dirname, 'fixtures', 'routing');
 
+/**
+ * Below this, a reply cannot be a real answer to any fixture — it is a refusal, a crash or
+ * a mangled prompt. Such a run is reported as an ERROR, never scored.
+ */
+const MIN_RESPONSE_CHARS = 200;
+
 /** Appended to every fixture prompt so a run never mutates a real Weegloo Space. */
 const PLAN_ONLY_SUFFIX = `
 
@@ -118,15 +124,26 @@ function corpusProvenance() {
   };
 }
 
-/** Runs one prompt through the agent CLI and returns its stdout. */
+/**
+ * Runs one prompt through the agent CLI and returns its stdout.
+ *
+ * The prompt goes in on STDIN, never as an argv element. Windows needs `shell: true` to
+ * resolve the `claude` .cmd shim, and a shell re-parses the command line — a multi-line
+ * prompt full of quotes and backticks arrives mangled (observed: the whole prompt collapsed
+ * to the single character "I", and the agent dutifully answered that). Keeping user text
+ * off the command line removes the failure mode entirely rather than escaping around it.
+ */
 function runAgent(agentCmd, prompt, timeoutMs = 600_000) {
   return new Promise((resolve, reject) => {
     const [cmd, ...baseArgs] = agentCmd;
-    const child = spawn(cmd, [...baseArgs, prompt], {
+    const child = spawn(cmd, baseArgs, {
       cwd: REPO_ROOT,
       shell: process.platform === 'win32',
       env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
+    child.stdin.on('error', () => {}); // a fast-exiting agent closes stdin before we finish writing
+    child.stdin.end(prompt, 'utf-8');
     let stdout = '', stderr = '';
     const timer = setTimeout(() => { child.kill(); reject(new Error(`agent timed out after ${timeoutMs}ms`)); }, timeoutMs);
     child.stdout.on('data', (d) => { stdout += d; });
@@ -185,6 +202,13 @@ async function main() {
   const results = await mapLimit(fixtures, args.concurrency, async (fx) => {
     try {
       const response = await runAgent(agentCmd, fx.prompt + PLAN_ONLY_SUFFIX);
+      // A truncated or refused run must NOT be scored. Scoring it silently turns a broken
+      // harness into "the agent regressed" — which is the exact confusion this tool exists
+      // to prevent. (Seen for real: a shell-mangled prompt produced an 84-char reply that
+      // still scored 1/2 on its must_not_match asserts.)
+      if (response.trim().length < MIN_RESPONSE_CHARS) {
+        throw new Error(`response too short (${response.trim().length} chars) — agent did not answer: ${JSON.stringify(response.slice(0, 120))}`);
+      }
       const r = evaluate(fx, response);
       if (args.verbose) r.response = response;
       const mark = r.passed === r.total ? 'PASS' : 'FAIL';
