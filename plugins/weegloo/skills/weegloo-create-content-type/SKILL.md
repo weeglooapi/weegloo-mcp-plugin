@@ -1,6 +1,6 @@
 ---
 name: weegloo-create-content-type
-description: Creates or designs a ContentType in Weegloo — content modeling, schema and field design, choosing a field's type. Covers localized vs localized-false fields, ShortText vs LongText vs RichText (search semantics), FieldValidation, publishWithAuthor, displayField (the console label), and Refer relationships, plus soft guidance. Use when modeling content for a new app, defining fields/schema, deciding ShortText/LongText/RichText for a field (e.g. a note/post body), or before proposing or finalizing ANY ContentType. English only.
+description: Creates or designs a ContentType in Weegloo — content modeling, schema and field design, choosing a field's type. Covers localized vs localized-false fields, ShortText vs LongText vs RichText (search semantics), FieldValidation, publishWithAuthor, displayField (the console label), and Refer relationships, plus soft guidance. Also carries the platform hard limits — 80 fields per ContentType, and max value lengths of 64 (ShortText) / 5,120 (LongText) / 204,800 (RichText) / 5,120 (Json) characters and 64 Array items — so use it when asked how long a field value may be or how many fields/items are allowed. Use when modeling content for a new app, defining fields/schema, deciding ShortText/LongText/RichText for a field (e.g. a note/post body), or before proposing or finalizing ANY ContentType. English only.
 ---
 
 # Weegloo Create ContentType
@@ -47,11 +47,42 @@ without need burns API capacity and forces re-migration.
 
 ---
 
+## Hard limits — field count and value length (platform-enforced)
+
+These are **platform-enforced bounds, not style advice**: a `ContentType` or `Content` write that
+exceeds one is **rejected**. Every number below counts **characters (string length), not bytes** —
+Hangul and other CJK characters count as **one** each. A value limit applies **per value**, i.e. to
+**each locale bucket** of a `localized: true` field, not to the sum across locales.
+
+| Limit | Max | What it bounds |
+|---|---|---|
+| **Fields per ContentType** | **80** | Field definitions a single `ContentType` may declare. |
+| **`ShortText`** value | **64** | Longer copy is **not** a ShortText with a looser validation — it must be **`LongText`** or **`RichText`**. |
+| **`LongText`** value | **5,120** | The only text type that is **full-text searchable** (via Advanced Search). |
+| **`RichText`** value | **204,800** | The largest text type — and it **supports no search of any kind**. |
+| **`Json`** value | **5,120** | Measured on the **serialized** JSON, not on key or entry count. |
+| **`Array`** items | **64** | Element count, whatever the element type (including `Refer`). |
+
+**What this forces on the design**
+
+- **Picking a text type is two questions, not one** — search semantics (*ShortText vs LongText vs
+  RichText* below) **and** whether the copy fits. Copy that can exceed **5,120** characters cannot be
+  `LongText` however badly the product wants full-text search on it: it becomes **`RichText`** (and
+  is then unsearchable), or it gets split across fields or entries.
+- **A `size` validation can only tighten these, never raise them.** `{"size": {"max": 500}}` on a
+  ShortText is a valid narrowing; `{"max": 5000}` does **not** buy a 5,000-character ShortText.
+- **80 fields is a modeling ceiling, and a type nearing it is usually several types.** Split it and
+  link the parts with **`Refer`** (see *Model relationships as Refer*).
+- **A list that can grow past 64 items is not an `Array`.** Model those as separate `Content` entries
+  that point back with a **`Refer`**, not as an ever-longer array on one entry.
+
+---
+
 ## Core workflow
 
 1. Before any `Content`, create the `ContentType`.
 2. For **each field**, decide **`localized: true` vs `false`** (see **`localized` flag** section next)-before types and validations.
-3. **Assign `ShortText` / `LongText` / `RichText` using the search-semantics section below** - not by gut feel from the words “short”, “long”, or “rich”.
+3. **Assign `ShortText` / `LongText` / `RichText` using the search-semantics section below** - not by gut feel from the words “short”, “long”, or “rich”. Then check the value against **Hard limits** above — a `ShortText` stops at **64** characters.
 4. **Design fields → add `validations` only where it clearly helps** (see soft guidance below + `FieldValidation` reference).
 5. **Set `displayField`** to the `apiName` of a `ShortText` field (see the section below) - do not leave it out when the type has one.
 6. `cma_CreateContentType` / `cma_UpdateOneContentType` / `cma_PatchOneContentType` all **auto-publish on success** — no separate `cma_PublishOneContentType` call needed in the standard create/edit flow. Call `cma_PublishOneContentType` directly only when the ContentType is in a non-Published state — typically after an explicit `Unpublish`, or to recover a Draft left over from a create/edit whose chained publish step failed.
@@ -120,7 +151,7 @@ Authoritative shape: **OpenAPI `FieldValidation`** for **`CreateContentType`** (
 |-----|---------|---------------------------|
 | **`regexp`** | Value must match a regex (**ShortText / LongText** only) | `{ "pattern": "..." (required, ≤ 256 chars), "flags": "..." (subset of `imus` only) }` |
 | **`prohibitRegexp`** | Value must **not** match (**ShortText / LongText** only) | Same as `regexp` |
-| **`size`** | Length **or element count** — String char length (**ShortText / LongText / RichText**), **Array** element count, or **Json** (not text-only) | `{ "min": int64, "max": int64 }` (Long; bounded to the JS safe-integer range ±9007199254740991) |
+| **`size`** | Length **or element count** — String char length (**ShortText / LongText / RichText**), **Array** element count, or **Json** (not text-only). Can only **narrow** the type’s own maximum (see **Hard limits**), never raise it | `{ "min": int64, "max": int64 }` (Long; bounded to the JS safe-integer range ±9007199254740991) |
 | **`in`** | Allow-list of permitted values (**ShortText / LongText / Long / Number** — includes **numeric** allow-lists, not just text) | JSON array of allowed values (strings for text fields, numbers for Long / Number) |
 | **`range`** | Numeric bounds | `{ "min": number, "max": number }` - for **Number** / **Long** |
 | **`dateRange`** | Instant bounds | `{ "min", "max", "after", "before" }` as **date-time** strings - for **Date** |
@@ -237,16 +268,16 @@ Fields support **`validations`**; the CMA accepts the kinds summarized in **`Fie
 
 ## Field types (reminder)
 
-- **Array**: Stores multiple values in an array format.
+- **Array**: Stores multiple values in an array format. **Max 64 items.**
 - **Boolean**: Stored values can be used for search.
 - **Date**: Stored values can be used for search.
 - **Long**: Stored values can be used for search.
 - **Number**: Stored values can be used for search; supports decimal numbers.
 - **Refer**: Stored values can be used for search.
-- **Json**: Stored values are **not indexed** and cannot be searched.
-- **ShortText**: **Exact and prefix** search in CDA. Use for short identifiers, labels, codes-when that query style matches the product. See **ShortText vs LongText vs RichText** above-not every non-search field should default here if **`RichText`** fits better.
-- **LongText**: **Full-text search** in CDA. Use **only** when the product **requires** full-text search on this field via the API; otherwise use **`RichText`**. Do not use **`LongText`** “because the copy is long.”
-- **RichText**: **Not** full-text indexed; **not searchable** via Weegloo full-text. Use for long (or structured) body copy **without** CDA full-text search-**not** synonymous with Markdown/markup as a type rule.
+- **Json**: Stored values are **not indexed** and cannot be searched. **Max 5,120 chars serialized.**
+- **ShortText** (**max 64 chars**): **Exact and prefix** search in CDA. Use for short identifiers, labels, codes-when that query style matches the product. See **ShortText vs LongText vs RichText** above-not every non-search field should default here if **`RichText`** fits better.
+- **LongText** (**max 5,120 chars**): **Full-text search** in CDA. Use **only** when the product **requires** full-text search on this field via the API; otherwise use **`RichText`**. Do not use **`LongText`** “because the copy is long.”
+- **RichText** (**max 204,800 chars**): **Not** full-text indexed; **not searchable** via Weegloo full-text. Use for long (or structured) body copy **without** CDA full-text search-**not** synonymous with Markdown/markup as a type rule.
 - **Location**: Stored values support geographic searches such as `near` or `within`; suitable for storing latitude and longitude coordinates.
 
 **Mapping types → `validations` (each validation has its own allowed types):** For **Array**, define element type under **`items`**; per-element rules go in **`items.validations`**. Use: **`dateRange`** on **Date**; **`range`** on **Number / Long**; **`regexp` / `prohibitRegexp`** on **ShortText / LongText**; **`size`** on **ShortText / LongText / RichText / Array / Json**; **`in`** on **ShortText / LongText / Long / Number**; **`unique`** on **ShortText / Long / Number / Date**; on **Refer** use **`referContentType`** (→ Content) or **`mediaMimetypeGroup` / `mediaFileSize` / `mediaImageDimensions`** (→ Media). See **`FieldValidation`** above and **`weegloo-api-endpoints`** for CMA schema links.
