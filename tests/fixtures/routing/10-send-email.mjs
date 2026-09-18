@@ -1,0 +1,20 @@
+/**
+ * The email credential IS a blocking input (unlike a PG key), so the correct behavior is
+ * to ask for exactly two values and stop — not to ask which vendor, and not to ship an
+ * inert email feature. Both wrong directions fail silently.
+ */
+export default {
+  id: 'send-email',
+  lang: 'ko',
+  prompt: '문의 폼으로 들어온 내용을 우리 회사 메일로 받아보고 싶어. Weegloo 에서 메일 보내는 것도 되나?',
+  asserts: [
+    { id: 'gmail-default', kind: 'must_match', pattern: /Gmail|구글|Google/i,
+      why: '사용자가 메일 서비스를 지정하지 않으면 Google/Gmail SMTP 가 기본' },
+    { id: 'app-password', kind: 'must_match', pattern: /앱\s*비밀번호|App\s*Password/i,
+      why: '계정 비밀번호가 아니라 앱 비밀번호를 요청해야 한다' },
+    { id: 'no-vendor-question', kind: 'must_not_match', pattern: /(어떤|어느)\s*(메일|이메일|SMTP)\s*(서비스|벤더|업체)[\s\S]{0,30}(쓰|사용|원하)/i,
+      why: '"어떤 메일 서비스를 쓸까요?" 는 금지된 질문' },
+    { id: 'emailaccount-resource', kind: 'must_match', pattern: /EmailAccount/i,
+      why: 'SMTP 발신자는 Space 에 EmailAccount 로 등록된다' },
+  ],
+};
