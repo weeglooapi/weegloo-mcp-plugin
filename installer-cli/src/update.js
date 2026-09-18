@@ -45,6 +45,7 @@ import {
 import {
   SAFE_ID,
   writeContentFile,
+  writeSkillFiles,
   removeSkillDirs,
   removeRuleFiles,
   listWeeglooSkillDirs,
@@ -136,14 +137,13 @@ function detectSharerRefs(agent, scope, sharedWith) {
   return sharers;
 }
 
-/** Writes one skill: clean-sync (drop the old dir first so upstream-removed files don't linger). */
+/**
+ * Writes one skill. Clean-sync plus manifest-key validation now live in `io.writeSkillFiles`,
+ * which every install path shares — this stays as a named wrapper so the call sites below
+ * keep reading the way they did.
+ */
 function writeSkill(skillsDir, skill) {
-  if (!SAFE_ID.test(skill.id)) return;
-  const destDir = path.join(skillsDir, skill.id);
-  fs.rmSync(destDir, { recursive: true, force: true });
-  for (const [fileName, content] of Object.entries(skill.files)) {
-    writeContentFile(path.join(destDir, fileName), content);
-  }
+  writeSkillFiles(skillsDir, skill);
 }
 
 /**

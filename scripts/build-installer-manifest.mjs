@@ -13,6 +13,9 @@ import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// The installer owns the authoritative definition of a safe skill file key; importing it
+// keeps the build-time and install-time checks from drifting apart.
+import { SAFE_REL_PATH } from '../installer-cli/src/io.js';
 
 const SCHEMA_VERSION = 1;
 const DEFAULT_MCP_URL = 'https://ai.weegloo.com/mcp';
@@ -32,7 +35,13 @@ function readEmbeddableText(filePath) {
   if (Buffer.byteLength(text, 'utf-8') !== buf.length) {
     throw new Error(`non-UTF-8 file cannot be embedded in manifest: ${filePath}`);
   }
-  return text;
+  // Normalize CRLF → LF before embedding. `.gitattributes` gives the working tree CRLF on
+  // Windows while CI checks out LF, so without this the "pure function of repo content"
+  // contract in the header is false across platforms: a local regeneration rewrites every
+  // embedded string AND moves the content version hash, purely because of line endings.
+  // CI already produces LF, so this changes nothing for installed users — it only stops a
+  // Windows regeneration from producing a spurious whole-file diff.
+  return text.replace(/\r\n/g, '\n');
 }
 
 function listDirsSorted(dir) {
@@ -43,16 +52,46 @@ function listDirsSorted(dir) {
     .sort(byteCompare);
 }
 
+/**
+ * Every file under a skill directory, as POSIX-relative keys (`references/deep.md`).
+ *
+ * This walk is RECURSIVE on purpose. It used to be a flat `readdirSync(...).filter(isFile)`,
+ * which dropped any subdirectory WITHOUT WARNING: a skill split into `SKILL.md` +
+ * `references/*.md` produced a byte-identical manifest, a green CI, and an install in which
+ * the spine pointed at files that were never written to the user's disk. Nothing failed
+ * loudly anywhere along that path — which is why `manifest.test.js` also asserts that a
+ * skill with a subdirectory yields nested keys.
+ *
+ * Keys always use `/`, never the platform separator, so a manifest built on Windows installs
+ * identically to one built in CI.
+ */
+function listSkillFilesSorted(skillDir) {
+  const out = [];
+  const walk = (dir, prefix) => {
+    const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => byteCompare(a.name, b.name));
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      const key = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(full, key);
+      else if (entry.isFile()) out.push({ key, full });
+      // Anything that is neither (a symlink, a socket) is skipped: it has no embeddable text.
+    }
+  };
+  walk(skillDir, '');
+  return out.sort((a, b) => byteCompare(a.key, b.key));
+}
+
 function buildSkills(skillsDir) {
   return listDirsSorted(skillsDir).map((id) => {
     const skillDir = path.join(skillsDir, id);
     const files = {};
-    const names = readdirSync(skillDir, { withFileTypes: true })
-      .filter((e) => e.isFile())
-      .map((e) => e.name)
-      .sort(byteCompare);
-    for (const name of names) {
-      files[name] = readEmbeddableText(path.join(skillDir, name));
+    for (const { key, full } of listSkillFilesSorted(skillDir)) {
+      // Defense in depth: the installer re-validates every key before it becomes a path,
+      // but a manifest that could escape its skill directory must never be committed either.
+      if (!SAFE_REL_PATH.test(key)) {
+        throw new Error(`skill file key is not a safe relative path: '${key}' (in ${skillDir})`);
+      }
+      files[key] = readEmbeddableText(full);
     }
     // Mirror the installer's strict invariants: a manifest the consumer would reject
     // must fail the build here, not get committed and brick every install on this branch.

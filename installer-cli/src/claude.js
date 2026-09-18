@@ -4,7 +4,7 @@ import os from 'os';
 import ora from 'ora';
 import chalk from 'chalk';
 import { REPO } from './github.js';
-import { writeContentFile, uploadServerCommand, removeSkillDirs, removeRuleFiles } from './io.js';
+import { writeContentFile, writeSkillFiles, uploadServerCommand, removeSkillDirs, removeRuleFiles } from './io.js';
 import { applySelfUpdateTemplate, syncInstalledRecord } from './self-update.js';
 
 function ensureDir(dirPath) {
@@ -127,10 +127,7 @@ export async function installClaude({
       for (let i = 0; i < skills.length; i++) {
         const skill = skills[i];
         skillsSpinner.text = `  Installing skills (${i + 1}/${skills.length}) ${chalk.dim(skill.id)}`;
-        const destDir = path.join(skillsDir, skill.id);
-        for (const [fileName, content] of Object.entries(skill.files)) {
-          writeContentFile(path.join(destDir, fileName), content);
-        }
+        writeSkillFiles(skillsDir, skill);
       }
       skillsSpinner.succeed(
         `  Skills installed   ${chalk.dim(`(${skills.length})  → ${skillsDir}`)}`

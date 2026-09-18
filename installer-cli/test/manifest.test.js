@@ -177,3 +177,63 @@ test('loadResources returns null when mcp URLs are missing (defaults belong to t
     globalThis.fetch = realFetch;
   }
 });
+
+// ── Nested skill files (spine + references/) ────────────────────────────────────────────
+//
+// The manifest builder used to list a skill directory NON-recursively, so a `references/`
+// subdirectory was dropped with no warning: byte-identical manifest, green CI, and an
+// install whose SKILL.md pointed at files that were never written to disk. These tests are
+// the tripwire — without them a regression to a flat walk passes everything else.
+
+test('buildManifest walks skill subdirectories and emits slash-joined keys', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'weegloo-nested-'));
+  try {
+    const skillDir = path.join(root, 'plugins', 'weegloo', 'skills', 'demo');
+    mkdirSync(path.join(skillDir, 'references'), { recursive: true });
+    writeFileSync(path.join(skillDir, 'SKILL.md'), 'spine');
+    writeFileSync(path.join(skillDir, 'references', 'deep.md'), 'page');
+    writeFileSync(path.join(skillDir, 'references', 'other.md'), 'page2');
+
+    const manifest = buildManifest({ rootDir: root });
+    const files = manifest.skills.find((s) => s.id === 'demo').files;
+
+    assert.deepEqual(Object.keys(files).sort(), ['SKILL.md', 'references/deep.md', 'references/other.md']);
+    assert.equal(files['references/deep.md'], 'page');
+    // Keys must be POSIX even when built on Windows, or a Windows-built manifest installs
+    // to different paths than a CI-built one.
+    const BACKSLASH = String.fromCharCode(92);
+    assert.ok(!Object.keys(files).some((k) => k.includes(BACKSLASH)), 'keys must not contain backslashes');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('buildManifest normalizes CRLF so output does not depend on the checkout platform', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'weegloo-crlf-'));
+  try {
+    const skillDir = path.join(root, 'plugins', 'weegloo', 'skills', 'demo');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(path.join(skillDir, 'SKILL.md'), 'line one\r\nline two\r\n');
+
+    const files = buildManifest({ rootDir: root }).skills[0].files;
+    assert.equal(files['SKILL.md'], 'line one\nline two\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('buildManifest rejects a skill file key that is not a safe relative path', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'weegloo-unsafe-'));
+  try {
+    const skillDir = path.join(root, 'plugins', 'weegloo', 'skills', 'demo');
+    // A directory literally named `..` cannot be created, so the build-time guard is
+    // exercised through a segment the pattern rejects for the same reason: it is not a
+    // plain name + optional extension.
+    mkdirSync(path.join(skillDir, 'refs dir'), { recursive: true });
+    writeFileSync(path.join(skillDir, 'SKILL.md'), 'spine');
+    writeFileSync(path.join(skillDir, 'refs dir', 'page.md'), 'page');
+    assert.throws(() => buildManifest({ rootDir: root }), /not a safe relative path/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

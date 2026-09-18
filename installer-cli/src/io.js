@@ -9,11 +9,70 @@ import path from 'node:path';
  */
 export const SAFE_ID = /^[A-Za-z0-9_-]+$/;
 
+/**
+ * A syntactically valid skill FILE key — the manifest's `skill.files` key, which becomes a
+ * path under the skill directory (`SKILL.md`, `references/deep.md`).
+ *
+ * `SAFE_ID` guards the skill id only; the file keys went straight into `path.join` unchecked.
+ * That was harmless while every key was a bare filename, but the moment the manifest builder
+ * started emitting nested keys, an id like `../../.bashrc` in a hostile or corrupted manifest
+ * would have written outside the skills directory. Segments are `SAFE_ID` plus an optional
+ * single dot-extension, joined by `/` — so `..`, absolute paths, backslashes, drive letters
+ * and empty segments are all rejected by construction rather than by blacklist.
+ */
+export const SAFE_REL_PATH = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)?(\/[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)?)*$/;
+
+/**
+ * Throws unless `key` is a safe relative path. Call this before a manifest-supplied key
+ * becomes part of a filesystem path.
+ *
+ * @param {string} key
+ * @param {string} skillId  for the error message
+ */
+export function assertSafeRelPath(key, skillId) {
+  if (typeof key !== 'string' || !SAFE_REL_PATH.test(key)) {
+    throw new Error(`skill '${skillId}': unsafe file path in manifest: ${JSON.stringify(key)}`);
+  }
+}
+
 /** Writes file content to localPath, creating parent directories as needed. */
 export function writeContentFile(localPath, content) {
   const dir = path.dirname(localPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(localPath, content, 'utf-8');
+}
+
+/**
+ * Writes one skill's files under `skillsDir/<id>/`, and is the ONLY place that does so.
+ *
+ * Six call sites used to inline this loop (claude, cursor, codex, antigravity, androidstudio,
+ * update), which meant two divergences: only `update` dropped the old directory first, and
+ * NONE of them validated the manifest's file keys before handing them to `path.join`. That
+ * was harmless while every key was a bare filename; once the manifest builder emits nested
+ * keys (`references/deep.md`), an unvalidated key is a path-traversal write.
+ *
+ * Clean-sync (rm the directory first) is the behaviour worth keeping from `update`: without
+ * it, a file removed upstream lingers forever on an existing install. That matters most
+ * exactly when a skill is reorganised — a monolithic `SKILL.md` split into a spine plus
+ * `references/` would otherwise leave the superseded files behind, and the agent would read
+ * both.
+ *
+ * An unsafe id is skipped (it names no skill we shipped). An unsafe FILE key throws: that is
+ * a corrupt or hostile manifest, and continuing would write outside the skills directory.
+ *
+ * @param {string} skillsDir
+ * @param {{id: string, files: Record<string,string>}} skill
+ * @returns {boolean} whether the skill was written
+ */
+export function writeSkillFiles(skillsDir, skill) {
+  if (!skill || typeof skill.id !== 'string' || !SAFE_ID.test(skill.id)) return false;
+  const destDir = path.join(skillsDir, skill.id);
+  rmSync(destDir, { recursive: true, force: true });
+  for (const [fileKey, content] of Object.entries(skill.files ?? {})) {
+    assertSafeRelPath(fileKey, skill.id);
+    writeContentFile(path.join(destDir, fileKey), content);
+  }
+  return true;
 }
 
 /**
