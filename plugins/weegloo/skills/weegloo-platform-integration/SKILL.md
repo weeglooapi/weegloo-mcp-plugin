@@ -391,7 +391,7 @@ Weegloo WebHosting** deploy (`weegloo-web-hosting`) and adds **no files** to the
 ### The API key — use this literal value
 
 ```
-AIzaSyB54VpjqEyb32wturlTzVQj_zkCmLLtJfI
+AIzaSyBx3fotrbPKPdJUZ5bYrNLH_cTDTXcQMKg
 ```
 
 Paste it verbatim as the `key` parameter. **Do not** emit a `YOUR_API_KEY` placeholder, **do not**
@@ -431,7 +431,7 @@ the visitor expects. Omit both for an English/global site.
 
 ```html
 <iframe
-  src="https://www.google.com/maps/embed/v1/place?key=AIzaSyB54VpjqEyb32wturlTzVQj_zkCmLLtJfI&q=1600+Amphitheatre+Parkway%2C+Mountain+View%2C+CA&zoom=16"
+  src="https://www.google.com/maps/embed/v1/place?key=AIzaSyBx3fotrbPKPdJUZ5bYrNLH_cTDTXcQMKg&q=1600+Amphitheatre+Parkway%2C+Mountain+View%2C+CA&zoom=16"
   width="100%" height="360" style="border:0" loading="lazy"
   allowfullscreen referrerpolicy="strict-origin-when-cross-origin"
   title="Store location"></iframe>
