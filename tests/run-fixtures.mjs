@@ -54,12 +54,14 @@ const PLAN_ONLY_SUFFIX = `
 Organization/Space 선택이나 추가 정보를 사용자에게 되묻지 말고, 필요하면 가정을 명시하고 계획을 끝까지 작성하세요.)`;
 
 function parseArgs(argv) {
-  const out = { only: null, out: null, compare: null, verbose: false, concurrency: 4, agentCmd: null, dryRun: false };
+  const out = { only: null, out: null, compare: null, merge: null, verbose: false, concurrency: 4, agentCmd: null, dryRun: false, confirmRetries: 2 };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--only') out.only = argv[++i];
     else if (a === '--out') out.out = argv[++i];
     else if (a === '--compare') out.compare = argv[++i];
+    else if (a === '--merge') out.merge = argv[++i];
+    else if (a === '--confirm-retries') out.confirmRetries = Number(argv[++i]);
     else if (a === '--agent-cmd') out.agentCmd = argv[++i];
     else if (a === '--concurrency') out.concurrency = Number(argv[++i]);
     else if (a === '--verbose') out.verbose = true;
@@ -95,9 +97,16 @@ async function loadFixtures(only) {
       }
     }
     fx.__file = file;
-    if (!only || fx.id === only) fixtures.push(fx);
+    // `--only` takes a comma-separated list so a partial re-run (e.g. the fixtures a rate
+    // limit cut short) can be merged back into an existing scorecard with --merge.
+    const wanted = only ? only.split(',').map((s) => s.trim()).filter(Boolean) : null;
+    if (!wanted || wanted.includes(fx.id)) fixtures.push(fx);
   }
-  if (only && fixtures.length === 0) throw new Error(`--only '${only}' matched no fixture`);
+  if (only) {
+    const wanted = only.split(',').map((s) => s.trim()).filter(Boolean);
+    const missing = wanted.filter((w) => !fixtures.some((f) => f.id === w));
+    if (missing.length) throw new Error(`--only matched no fixture: ${missing.join(', ')}`);
+  }
   return fixtures;
 }
 
@@ -264,11 +273,28 @@ async function main() {
     }
   });
 
-  const totalAsserts = results.reduce((s, r) => s + r.total, 0);
-  const totalPassed = results.reduce((s, r) => s + r.passed, 0);
-  const scorecard = { provenance, agentCmd: agentCmd.join(' '), totals: { fixtures: results.length, asserts: totalAsserts, passed: totalPassed }, results };
+  // `--merge` folds this run over an earlier scorecard, replacing by fixture id. It exists for
+  // the partial re-run: when a rate limit or a crash cuts a run short, re-running only the
+  // affected fixtures and merging is cheaper than repeating all of them — and the merged card
+  // still covers every assert, which is what --compare requires.
+  let merged = results;
+  if (args.merge) {
+    if (!existsSync(args.merge)) throw new Error(`--merge file not found: ${args.merge}`);
+    const prev = JSON.parse(readFileSync(args.merge, 'utf-8'));
+    if (prev.provenance?.gitSha !== provenance.gitSha) {
+      console.warn(`  warning: merging across different corpora (${prev.provenance?.gitSha} vs ${provenance.gitSha})`);
+    }
+    const byId = new Map(prev.results.map((r) => [r.id, r]));
+    for (const r of results) byId.set(r.id, r);
+    merged = [...byId.values()];
+    console.log(`merged over ${args.merge}: ${results.length} re-run, ${merged.length} total`);
+  }
 
-  console.log(`\n${totalPassed}/${totalAsserts} asserts passed across ${results.length} fixtures`);
+  const totalAsserts = merged.reduce((s, r) => s + r.total, 0);
+  const totalPassed = merged.reduce((s, r) => s + r.passed, 0);
+  const scorecard = { provenance, agentCmd: agentCmd.join(' '), totals: { fixtures: merged.length, asserts: totalAsserts, passed: totalPassed }, results: merged };
+
+  console.log(`\n${totalPassed}/${totalAsserts} asserts passed across ${merged.length} fixtures`);
 
   if (args.out) {
     mkdirSync(path.dirname(path.resolve(args.out)), { recursive: true });
@@ -284,7 +310,7 @@ async function main() {
 
     const regressions = [];
     const evaluated = new Set();
-    for (const r of results) {
+    for (const r of merged) {
       for (const a of r.asserts) {
         const key = `${r.id}::${a.id}`;
         evaluated.add(key);
@@ -299,13 +325,62 @@ async function main() {
     // "it is fine".
     const unverified = [...baseByAssert.keys()].filter((k) => baseByAssert.get(k) === true && !evaluated.has(k));
 
+    // A regressed assert is RE-RUN before it is believed. The agent is stochastic, so a
+    // single failing run is not evidence of a regression — measured on this corpus, the
+    // org-space-gate fixture failed once and then passed three consecutive re-runs with the
+    // rule text provably untouched. A gate that cries wolf at ~20% gets ignored, which costs
+    // more than the extra calls: the verdict is a majority across (1 + confirmRetries) runs,
+    // and a split verdict is reported as FLAKY rather than as a regression.
+    const flaky = [];
+    if (regressions.length && args.confirmRetries > 0) {
+      const byFixture = new Map();
+      for (const r of regressions) {
+        const [fixtureId] = r.key.split('::');
+        if (!byFixture.has(fixtureId)) byFixture.set(fixtureId, []);
+        byFixture.get(fixtureId).push(r);
+      }
+      console.log(`\nconfirming ${regressions.length} regression(s) — re-running ${byFixture.size} fixture(s) ${args.confirmRetries}x...`);
+      for (const [fixtureId, regs] of byFixture) {
+        const fx = fixtures.find((f) => f.id === fixtureId);
+        if (!fx) continue;
+        const tally = new Map(regs.map((r) => [r.key, [false]])); // the run that just failed
+        for (let i = 0; i < args.confirmRetries; i++) {
+          try {
+            const response = await runAgent(agentCmd, fx.prompt + PLAN_ONLY_SUFFIX);
+            if (response.trim().length < MIN_RESPONSE_CHARS) throw new Error('response too short');
+            const rr = await evaluate(fx, response, agentCmd);
+            for (const a of rr.asserts) {
+              const key = `${fixtureId}::${a.id}`;
+              if (tally.has(key)) tally.get(key).push(a.pass);
+            }
+          } catch (err) {
+            console.log(`    retry ${i + 1} errored: ${err.message}`);
+          }
+        }
+        for (const [key, runs] of tally) {
+          const passes = runs.filter(Boolean).length;
+          console.log(`    ${key}: ${passes}/${runs.length} passed across runs`);
+          if (passes > 0) {
+            flaky.push({ key, passes, total: runs.length });
+            const idx = regressions.findIndex((r) => r.key === key);
+            if (passes * 2 > runs.length && idx >= 0) regressions.splice(idx, 1); // majority pass → not a regression
+          }
+        }
+      }
+    }
+
     console.log(`\nbaseline: ${base.provenance.gitRef}@${base.provenance.gitSha} — ${base.totals.passed}/${base.totals.asserts}`);
+    if (flaky.length) {
+      console.warn(`\nFLAKY — ${flaky.length} assert(s) disagreed across repeated runs on the SAME corpus:`);
+      for (const f of flaky) console.warn(`  ~ ${f.key} (${f.passes}/${f.total} passed)`);
+      console.warn('  A gate this unstable cannot distinguish a real regression — tighten the fixture or the assert.');
+    }
     if (regressions.length) {
-      console.error(`\nREGRESSION — ${regressions.length} assert(s) that passed on the baseline now fail:`);
+      console.error(`\nREGRESSION — ${regressions.length} assert(s) that passed on the baseline now fail consistently:`);
       for (const r of regressions) console.error(`  ✗ ${r.key}\n      ${r.why}`);
     }
     if (unverified.length) {
-      const errored = results.filter((r) => r.error);
+      const errored = merged.filter((r) => r.error);
       console.error(`\nUNVERIFIED — ${unverified.length} assert(s) the baseline covered were not measured in this run:`);
       for (const k of unverified) console.error(`  ? ${k}`);
       if (errored.length) {

@@ -1,8 +1,8 @@
 {
   "provenance": {
     "gitRef": "refactor/skill-rule-tree",
-    "gitSha": "65dd275",
-    "gitDirty": false,
+    "gitSha": "114d10f",
+    "gitDirty": true,
     "ruleBytes": 112487,
     "skillBytes": 495748
   },
@@ -10,7 +10,7 @@
   "totals": {
     "fixtures": 20,
     "asserts": 59,
-    "passed": 47
+    "passed": 59
   },
   "results": [
     {
@@ -490,9 +490,32 @@
       "id": "org-space-gate",
       "lang": "ko",
       "file": "16-org-space-gate.mjs",
-      "error": "judge returned no verdict: \"You've hit your session limit · resets 10pm (Asia/Seoul)\"",
-      "asserts": [],
-      "passed": 0,
+      "asserts": [
+        {
+          "id": "space-is-settled",
+          "kind": "judge",
+          "question": "Does the answer treat the target Organization/Space as something that must be explicitly settled before resources are created — by asking the user, listing their options, or stating it as an explicit assumption — rather than proceeding as though it were already known?",
+          "expect": "yes",
+          "why": "거의 모든 리소스는 특정 Space 안에 산다 — 암묵적으로 넘어가면 작업이 엉뚱한 워크스페이스에 흩어진다",
+          "pass": true
+        },
+        {
+          "id": "no-auto-pick-first",
+          "kind": "judge",
+          "question": "Does the answer silently pick an Organization or Space for the user — for example by taking the first item of a list — without their choice?",
+          "expect": "no",
+          "why": "목록의 첫 항목을 자동으로 고르면 작업이 엉뚱한 워크스페이스에 흩어진다",
+          "pass": true
+        },
+        {
+          "id": "routes-to-modeling",
+          "kind": "must_match",
+          "pattern": "/ContentType|콘텐츠\\s*타입|모델링/i",
+          "why": "광범위 요청은 라우터를 거쳐 구체 스킬로 가야 한다 — 바로 스캐폴딩하면 안 된다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
       "total": 3
     },
     {
@@ -524,27 +547,95 @@
       "id": "external-api",
       "lang": "ko",
       "file": "18-external-api.mjs",
-      "error": "judge returned no verdict: \"You've hit your session limit · resets 10pm (Asia/Seoul)\"",
-      "asserts": [],
-      "passed": 0,
+      "asserts": [
+        {
+          "id": "script",
+          "kind": "must_match",
+          "pattern": "/Script/",
+          "why": "자체 백엔드 없이 외부 API 를 호출하고 결과를 쓰는 것은 Script 의 용도다",
+          "pass": true
+        },
+        {
+          "id": "no-browser-key",
+          "kind": "judge",
+          "question": "Does the answer put the third-party API key in client-side code (browser fetch, inlined constant, or a build-time public env var), so a visitor could read it?",
+          "expect": "no",
+          "why": "브라우저에 API 키를 두면 devtools 를 여는 누구에게나 유출된다",
+          "pass": true
+        },
+        {
+          "id": "secret-server-side",
+          "kind": "judge",
+          "question": "Does the answer keep the external API key server-side (inside the Weegloo Script) rather than exposing it to the client?",
+          "expect": "yes",
+          "why": "외부 API 키는 서버 권위가 있는 곳에만 둔다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
       "total": 3
     },
     {
       "id": "media-readiness",
       "lang": "ko",
       "file": "19-media-readiness.mjs",
-      "error": "judge returned no verdict: \"You've hit your session limit · resets 10pm (Asia/Seoul)\"",
-      "asserts": [],
-      "passed": 0,
+      "asserts": [
+        {
+          "id": "wait-for-readiness",
+          "kind": "judge",
+          "question": "Does the answer wait for the Media to become ready — polling until sys.status is Published and the file processing state for the needed locale has settled — BEFORE referencing it from Content?",
+          "expect": "yes",
+          "why": "처리 중인 Media 를 참조하면 영원히 로드되지 않는 이미지가 된다 — 에러는 없다",
+          "pass": true
+        },
+        {
+          "id": "file-state",
+          "kind": "must_match",
+          "pattern": "/PENDING|PROCESSING|FAILED/",
+          "why": "필요한 로케일의 file state 가 처리 중이면 아직 배포 가능한 자산이 아니다",
+          "pass": true
+        },
+        {
+          "id": "no-manual-publish-step",
+          "kind": "judge",
+          "question": "Does the answer present calling PublishOneMedia as the normal, required step right after upload — as opposed to noting that Weegloo publishes the Media itself once processing succeeds?",
+          "expect": "no",
+          "why": "Media 는 처리 성공 시 플랫폼이 스스로 Published 로 올린다 — 수동 publish 가 기본 절차가 아니다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
       "total": 3
     },
     {
       "id": "address-search",
       "lang": "ko",
       "file": "20-address-search.mjs",
-      "error": "response too short (56 chars) — agent did not answer: \"You've hit your session limit · resets 10pm (Asia/Seoul)\\n\"",
-      "asserts": [],
-      "passed": 0,
+      "asserts": [
+        {
+          "id": "kakao-postcode",
+          "kind": "must_match",
+          "pattern": "/(다음|Daum|카카오|Kakao)[\\s\\S]{0,40}(우편번호|postcode)|postcode\\.map\\.kakao\\.com/i",
+          "why": "국내 주소/우편번호 검색의 답은 항상 카카오(다음) 우편번호 위젯이다",
+          "pass": true
+        },
+        {
+          "id": "zonecode-not-postcode",
+          "kind": "must_match",
+          "pattern": "/zonecode/i",
+          "why": "data.postcode 는 2020년부터 빈 값이다 — data.zonecode 를 읽어야 한다",
+          "pass": true
+        },
+        {
+          "id": "no-key-question",
+          "kind": "judge",
+          "question": "Does the answer ask the user to obtain, supply or register a Kakao API key for the postcode widget? Stating that no key is needed does NOT count.",
+          "expect": "no",
+          "why": "우편번호 위젯은 키도 등록도 필요 없다 — 묻는 것 자체가 불필요한 차단",
+          "pass": true
+        }
+      ],
+      "passed": 3,
       "total": 3
     }
   ]
