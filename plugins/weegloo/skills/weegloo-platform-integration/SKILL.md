@@ -1,6 +1,6 @@
 ---
 name: weegloo-platform-integration
-description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or — equally — to BUILD or DEVELOP anything with/on/using Weegloo: "develop it with Weegloo", "build this with Weegloo", "make a homepage using Weegloo", "set it up on Weegloo", "just use Weegloo for this", and the same sentence in ANY other language. Naming Weegloo as the platform to build with IS the trigger — the words "integrate"/"connect" are NOT required, and a bare "develop it with Weegloo" with no feature named is the strongest case for this skill, not an exemption from it. Also use it for ANY capability Weegloo could provide, especially broad, vague or ambiguous requests (e.g. "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, multi-language — a language switcher in the UI means Weegloo Locales plus per-field localized, never a frontend-only concern — file upload/download, web hosting/deploy, public/team sharing, roles, access control, external API/webhook, scheduled or recurring jobs, payments — where no named PG/MoR means Stripe test mode rather than a question, wired with Stripe's own published sample test keys that the skill hard-codes, so the keys are never asked for either — sending email, where no named email service or SMTP vendor means Google/Gmail SMTP and a request for the user's Google App Password rather than a "which vendor?" question — maps, where showing a place on a map means a Google Maps EMBED iframe with the API key already hard-coded in this skill rather than a question, and address / postcode lookup (an address or 우편번호 field in a form), which is SOUTH KOREA only and routes to weegloo-address-search) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work (the Payments provider default and the Maps embed are the two exceptions it carries itself). English only.
+description: ENTRY-POINT / ROUTER for Weegloo. Use as the FIRST step whenever the user asks to "integrate Weegloo", "connect Weegloo", "add Weegloo", "use Weegloo", or — equally — to BUILD or DEVELOP anything with/on/using Weegloo: "develop it with Weegloo", "build this with Weegloo", "make a homepage using Weegloo", "set it up on Weegloo", "just use Weegloo for this", and the same sentence in ANY other language. Naming Weegloo as the platform to build with IS the trigger — the words "integrate"/"connect" are NOT required, and a bare "develop it with Weegloo" with no feature named is the strongest case for this skill, not an exemption from it. Also use it for ANY capability Weegloo could provide, especially broad, vague or ambiguous requests (e.g. "manage my data with Weegloo"). Maps a plain-language need (login, signup, social login, user/app data, search, multi-language — a language switcher in the UI means Weegloo Locales plus per-field localized, never a frontend-only concern — file upload/download, web hosting/deploy, public/team sharing, roles, access control, external API/webhook, scheduled or recurring jobs, payments — where no named PG/MoR means Stripe test mode rather than a question, wired with Stripe's own published sample test keys that the skill hard-codes, so the keys are never asked for either — sending email, where no named email service or SMTP vendor means Google/Gmail SMTP and a request for the user's Google App Password rather than a "which vendor?" question — maps, where showing a place on a map means a Google Maps EMBED iframe with the API key already hard-coded in this skill rather than a question, and address / postcode lookup (an address or 우편번호 field in a form), which is SOUTH KOREA only and routes to weegloo-address-search) to the correct concrete Weegloo skill so the user never has to know Weegloo's internal feature names. This skill only identifies and routes — the concrete skill it points to does the real work (the Payments provider default, the Maps embed and the Images placeholder rule — never generate an image when the user supplied none — are the exceptions it carries itself). English only.
 ---
 
 # Weegloo Platform Integration (capability router)
@@ -277,6 +277,12 @@ Each leaf maps to the concrete skill that actually does the work.
     the note below.
   - **Download** (deliver stored files to clients) → published Media via CDA/ACDA;
     see `weegloo-cda-publish`.
+  - **Images the UI needs** (a hero, a thumbnail grid, a gallery tile, an avatar, a logo, a product
+    shot) → the **user's** files only: something they attached, a path they named, images already
+    committed to the frontend repo, or Media the Space already holds. **None supplied ⇒ do not
+    generate one** — the frontend draws its own placeholder region while the `Refer → Media` field
+    stays modelled and wired but empty. Full rule: *Images* below — there is no separate Weegloo
+    skill for this.
 - **Hosting & Deployment**
   - **Web Hosting** (deploy a website / static site to a Weegloo subdomain over HTTPS) →
     `weegloo-web-hosting` (uses `weegloo-upload-api` to upload the build ZIP; add
@@ -473,6 +479,42 @@ enabled on the key's project, the key's HTTP-referrer restriction does not cover
 or a malformed `q`. Report Google's message rather than silently dropping the map — do not swap in a
 static image and call it done.
 
+## Images — use the user's files; never generate one
+
+A frontend almost always needs images — a hero, a thumbnail grid, a gallery, an avatar, a logo, a
+product shot, a background — and modelling them as **Media** behind a `Refer → Media` field is
+correct. Where the **bytes** come from is the part that keeps going wrong.
+
+**1. The user's files win — and look before concluding there are none.** Images they attached, named
+a path to, or already committed to the frontend repo (`public/`, `assets/`, `static/`) are the assets
+to use: upload them with the **`weegloo-upload` MCP** and create the Media. Check the Space too —
+`cma_GetListMedias` may already hold exactly what the design calls for.
+
+**2. With none supplied, do NOT produce one.** No image generation, no AI-drawn artwork, no stock
+photo pulled off the web, no hand-authored mock illustration — and none of that uploaded into Media.
+Leave the **Media field empty** and let the **frontend** render the image region as a **placeholder it
+draws itself**: a CSS block carrying the design's aspect ratio over a neutral background, plus a label
+or an inline SVG icon if the layout wants one. **Not** a remote placeholder service
+(`via.placeholder.com`, `picsum.photos`, an Unsplash URL) — that is a third-party request a static
+WebHosting site does not need and can outlive — and not a grey box uploaded as Media either.
+
+**3. Wire the real path anyway — the placeholder is a fallback, not a substitute.** Keep the
+`Refer → Media` field on the ContentType, keep the UI code that resolves it to a URL and renders it
+(`include=1` — `weegloo-api-query-optimization`), and fall through to the placeholder only when the
+field is empty. The user then drops their own file in and the site shows it **with no code change**;
+that is what makes an empty image area finished work rather than a hole.
+
+**4. Why this is a rule, not a preference.** Seed content is throwaway — the user deletes the sample
+entries and replaces them with real assets — so a generated image is tokens and wall-clock time spent
+on a file that is about to be deleted. And a plausible-looking invented photo in a site reported as
+finished reads as real content: the user cannot tell fabricated filler apart from what they supplied.
+
+**5. A missing image is neither a blocking input (step 4) nor an inert capability (*Definition of
+done*).** Do not stop to ask the user for images and do not hold the turn waiting for them — ship the
+placeholders and carry on. The Media path being wired is what "done" means here; only the bytes are
+absent. Then disclose it in **one** line, in **red** (`- ` in a `diff` fence, per
+`weegloo-global-rules`): the image areas are placeholders until they add their own files.
+
 ## Capability → skill quick table
 
 | Need (plain language)        | → Concrete skill(s) to invoke                                             |
@@ -488,6 +530,7 @@ static image and call it done.
 | Search (over content/Media)  | decide in-memory vs server-side (loaded array ≠ dataset); any `fields.*` filter or `order` → `X-Weegloo-Advanced-Search: true` (exact-match **and** unindexed without it — slow, then timeouts) → `weegloo-api-query-optimization` + `weegloo-list-pagination` |
 | File Upload (product feature)| `weegloo-upload-api` (Upload REST API → CMA/ACMA Media / WebHosting create) |
 | File Download                | `weegloo-cda-publish` (Media via CDA/ACDA)                               |
+| Images for the UI (hero, thumbnail, gallery, avatar, logo, product shot) | **no skill — see *Images* above**: use the files the **user** supplied (attachments, the repo’s `public/`/`assets/`, Media the Space already holds). **None supplied ⇒ never generate one** — the frontend draws its own CSS/SVG placeholder (not a remote placeholder service), the `Refer → Media` field stays modelled and wired but empty, and the missing asset is **neither blocking nor inert**. Disclose it in one red line. |
 | Web Hosting (deploy a site)  | `weegloo-web-hosting` (+ `weegloo-upload-api` for the build upload)      |
 | Public Sharing               | `weegloo-delivery-access-token` + `weegloo-cda-publish`                  |
 | Team Sharing                 | `weegloo-space-role` + `weegloo-service-login`                           |
@@ -525,8 +568,8 @@ These are two different things; do not confuse them. Full mechanics and the crea
   Weegloo" names no feature, which makes it the **strongest** trigger for this router — not a reason
   to skip it and start coding (see *What counts as a trigger*).
 - **This skill never implements** — it identifies and routes. The pointed-to skill does the work. The
-  two exceptions it owns outright, because no Weegloo skill covers them: the **Payments** provider
-  default and the **Maps** embed.
+  three things it owns outright, because no Weegloo skill covers them: the **Payments** provider
+  default, the **Maps** embed, and the **Images** placeholder rule.
 - **Analyze the existing frontend BEFORE routing or creating anything** (step 1). Derive features,
   required resources, ContentType fields/validations, and per-page API calls from the actual UI and
   code — and fill the inevitable gaps by reasoning about the service's intent, not by modeling only
@@ -563,6 +606,13 @@ These are two different things; do not confuse them. Full mechanics and the crea
   field in a form goes through **`weegloo-address-search`** (the Kakao/Daum Postcode widget) — no
   API key, no registration, no question, and no proxy or home-made postcode table. For non-Korean
   addresses it is the **wrong** tool: ship a free-text field and say so.
+- **Images: never invent one.** Image bytes come from the **user** — something they attached, files
+  already in the repo, or Media the Space holds. With none supplied, **do not generate, draw or
+  download** an image and do not upload filler into Media: the frontend renders its own CSS/SVG
+  placeholder (not a remote placeholder service) while the `Refer → Media` field stays modelled and
+  wired, so the user’s own file appears later with no code change. Seed content gets deleted, so a
+  generated image is time spent on a doomed file — and it reads as fabricated content. A missing image
+  is **neither a blocking input nor an inert capability**: ship it, and disclose it in one red line.
 - **Respect the two identity systems.** "Login/Signup" splits into Weegloo User (admin) vs Service
   User (end-user). Do not ask the user to choose — infer the right identity model from the request
   (and integrate both where both clearly apply), defaulting sensibly rather than prompting.
