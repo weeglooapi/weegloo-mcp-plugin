@@ -54,7 +54,7 @@ const PLAN_ONLY_SUFFIX = `
 Organization/Space 선택이나 추가 정보를 사용자에게 되묻지 말고, 필요하면 가정을 명시하고 계획을 끝까지 작성하세요.)`;
 
 function parseArgs(argv) {
-  const out = { only: null, out: null, compare: null, merge: null, verbose: false, concurrency: 4, agentCmd: null, dryRun: false, confirmRetries: 2 };
+  const out = { only: null, out: null, compare: null, merge: null, verbose: false, concurrency: 4, agentCmd: null, dryRun: false, confirmRetries: 4 };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--only') out.only = argv[++i];

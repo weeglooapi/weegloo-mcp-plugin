@@ -1,0 +1,748 @@
+{
+  "provenance": {
+    "gitRef": "refactor/skill-rule-tree",
+    "gitSha": "3cf4312",
+    "gitDirty": false,
+    "installedRef": "refactor/skill-rule-tree",
+    "installedVersion": "f5790316f36b",
+    "ruleBytes": 113986,
+    "skillBytes": 483724
+  },
+  "agentCmd": "claude -p",
+  "totals": {
+    "fixtures": 23,
+    "asserts": 69,
+    "passed": 66
+  },
+  "results": [
+    {
+      "id": "members-only-site",
+      "lang": "ko",
+      "file": "01-members-only-site.mjs",
+      "asserts": [
+        {
+          "id": "service-login",
+          "kind": "must_match",
+          "pattern": "/ServiceLogin/i",
+          "why": "오픈 가입 end-user 는 Weegloo 플랫폼 계정이 아니라 ServiceLogin(Service User) 이어야 한다",
+          "pass": true
+        },
+        {
+          "id": "createdby-self",
+          "kind": "must_match",
+          "pattern": "/createdBy[\\s\\S]{0,120}:self|\":self\"|':self'/",
+          "why": "이 필터가 없으면 모든 회원이 남의 글을 읽고 수정하고 삭제한다 — 에러 없이 조용히",
+          "pass": true
+        },
+        {
+          "id": "acma-not-cma",
+          "kind": "must_match",
+          "pattern": "/\\bACMA\\b/",
+          "why": "Service User 토큰은 CMA/CDA 에 절대 가지 않는다; 멤버 쓰기는 ACMA",
+          "pass": true
+        },
+        {
+          "id": "no-cma-for-members",
+          "kind": "judge",
+          "question": "Does the answer propose that signed-in members (Service Users) call the CMA or CDA API with their ServiceLogin token?",
+          "expect": "no",
+          "why": "Service User 토큰을 CMA/CDA 로 보내는 설계는 토큰 경계 위반이다",
+          "pass": true
+        }
+      ],
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "id": "search-feature",
+      "lang": "ko",
+      "file": "02-search-feature.mjs",
+      "asserts": [
+        {
+          "id": "advanced-search-header",
+          "kind": "must_match",
+          "pattern": "/X-Weegloo-Advanced-Search/i",
+          "why": "이 헤더가 없으면 fields.* 필터는 에러가 아니라 빈 배열을 돌려주고, 에이전트는 \"결과 없음\"이라 보고한다",
+          "pass": true
+        },
+        {
+          "id": "server-side-search",
+          "kind": "judge",
+          "question": "Does the answer perform the search on the server (a filtered list request to the Weegloo API), rather than fetching the collection and filtering it in browser memory?",
+          "expect": "yes",
+          "why": "페이지네이션된 컬렉션을 클라이언트에서 필터링하면 로드된 행만 검색하고 나머지를 조용히 놓친다",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "id": "cda-read-shape",
+      "lang": "en",
+      "file": "03-cda-read-shape.mjs",
+      "asserts": [
+        {
+          "id": "flattened-on-delivery",
+          "kind": "judge",
+          "question": "Does the answer state that a default CDA/ACDA read returns each field FLATTENED (fields.title is the value itself), as opposed to a per-locale bucket?",
+          "expect": "yes",
+          "why": "CDA 기본 읽기는 fields.title 자체가 값이다",
+          "pass": true
+        },
+        {
+          "id": "no-blind-locale-index",
+          "kind": "judge",
+          "question": "Does the answer instruct the reader to index a locale key on a default CDA/ACDA response — e.g. accessing fields.title[\"en-US\"] — as the way to read the value?",
+          "expect": "no",
+          "why": "CDA 응답에 [locale] 인덱싱하면 undefined 가 나온다. 단, 두 plane 의 차이를 설명하며 대비로 보여주는 것은 올바른 행동이다",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "id": "delivery-token-role",
+      "lang": "ko",
+      "file": "04-delivery-token-role.mjs",
+      "asserts": [
+        {
+          "id": "least-privilege",
+          "kind": "must_match",
+          "pattern": "/읽기\\s*전용|read-?only|최소\\s*권한|least[- ]privilege/i",
+          "why": "브라우저 노출 토큰은 필요한 ContentType 에 대한 읽기 전용 역할이어야 한다",
+          "pass": true
+        },
+        {
+          "id": "no-administrator",
+          "kind": "judge",
+          "question": "Does the answer bind, choose or recommend the Administrator SpaceRole for this browser-exposed DeliveryAccessToken?",
+          "expect": "no",
+          "why": "Administrator 를 브라우저 토큰에 바인딩하면 번들을 읽는 누구나 Space 를 장악한다",
+          "pass": true
+        },
+        {
+          "id": "no-first-item",
+          "kind": "judge",
+          "question": "Does the answer pick the SpaceRole by taking the first entry of a role list (e.g. roles[0]) rather than deliberately selecting or creating a least-privilege role?",
+          "expect": "no",
+          "why": "목록의 첫 항목을 고르는 것은 금지 — 무엇이 걸릴지 알 수 없다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "scheduler-version-header",
+      "lang": "en",
+      "file": "05-scheduler-version-header.mjs",
+      "asserts": [
+        {
+          "id": "no-version-header",
+          "kind": "judge",
+          "question": "Does the answer state that updating a Scheduler does NOT take an X-Weegloo-Version header (because a Scheduler is not a versioned resource)?",
+          "expect": "yes",
+          "why": "Scheduler 는 버전이 없어서 X-Weegloo-Version 을 받지 않는다 — global-rules 의 \"모든 리소스\" 주장이 틀렸다",
+          "pass": true
+        },
+        {
+          "id": "no-spurious-version",
+          "kind": "judge",
+          "question": "Does the answer tell the reader to send an X-Weegloo-Version header on the Scheduler update request?",
+          "expect": "no",
+          "why": "Scheduler 업데이트에 버전 헤더를 보내면 거부된다",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "id": "map-embed",
+      "lang": "ko",
+      "file": "06-map-embed.mjs",
+      "asserts": [
+        {
+          "id": "embed-iframe",
+          "kind": "must_match",
+          "pattern": "/iframe|Embed\\s*API/i",
+          "why": "정적 호스팅에는 Maps Embed API iframe 을 쓴다 (JavaScript API 아님)",
+          "pass": true
+        },
+        {
+          "id": "no-key-question",
+          "kind": "judge",
+          "question": "Does the answer ask the user to supply, obtain or configure a Google Maps API key?",
+          "expect": "no",
+          "why": "Maps 키는 스킬에 하드코딩돼 있다 — 사용자에게 묻는 것은 불필요한 차단",
+          "pass": false
+        },
+        {
+          "id": "no-placeholder",
+          "kind": "judge",
+          "question": "Does the code in the answer leave the Maps API key as a placeholder or an environment-variable read (e.g. YOUR_API_KEY, process.env.MAPS_KEY) that the user would have to fill in?",
+          "expect": "no",
+          "why": "정적 빌드에는 env 주입 경로가 없다 — placeholder 는 동작하지 않는 코드",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 3
+    },
+    {
+      "id": "webhosting-deploy",
+      "lang": "ko",
+      "file": "07-webhosting-deploy.mjs",
+      "asserts": [
+        {
+          "id": "static-export",
+          "kind": "must_match",
+          "pattern": "/정적|static|export|SSR\\s*(불가|안|없|미지원)/i",
+          "why": "WebHosting 에는 서버 런타임이 없다 — 정적 export 만 배포된다",
+          "pass": true
+        },
+        {
+          "id": "index-at-root",
+          "kind": "must_match",
+          "pattern": "/index\\.html[\\s\\S]{0,60}(루트|root|최상)/i",
+          "why": "ZIP 루트에 index.html 이 없으면 사이트가 뜨지 않는다",
+          "pass": true
+        },
+        {
+          "id": "file-cap",
+          "kind": "must_match",
+          "pattern": "/\\b(300|100)\\b[\\s\\S]{0,40}(파일|files|개)/i",
+          "why": "배포 ZIP 의 엔트리 상한을 넘기면 업로드가 거부된다",
+          "pass": false
+        },
+        {
+          "id": "no-subdomain-question",
+          "kind": "judge",
+          "question": "Does the answer ask the user to choose or provide the subdomain, rather than picking one itself and telling the user afterwards?",
+          "expect": "no",
+          "why": "서브도메인은 에이전트가 고르고 사후 통지한다 — 물어보지 않는다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 4
+    },
+    {
+      "id": "space-teardown",
+      "lang": "ko",
+      "file": "08-space-teardown.mjs",
+      "asserts": [
+        {
+          "id": "confirm-first",
+          "kind": "judge",
+          "question": "Does the answer stop to confirm with the user before deleting, making clear that the deletion is irreversible and naming what will be lost?",
+          "expect": "yes",
+          "why": "사용자가 지목하지 않은 것을 지우기 전에 반드시 확인한다 — 삭제는 복구 불가",
+          "pass": true
+        },
+        {
+          "id": "bottom-up-order",
+          "kind": "judge",
+          "question": "Does the answer delete children before the parent — i.e. remove the Content, Media and ContentTypes first and the Space last — rather than attempting to delete the Space directly?",
+          "expect": "yes",
+          "why": "Space 는 ContentType/Content/Media/WebHosting 이 남아 있으면 거부된다 (WGL422024)",
+          "pass": true
+        },
+        {
+          "id": "unpublish-first",
+          "kind": "must_match",
+          "pattern": "/unpublish|게시\\s*해제|발행\\s*취소|Draft|Archived/i",
+          "why": "Published/Changed 상태는 삭제되지 않는다 — 먼저 unpublish 해야 한다 (WGL422009)",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "payment-default",
+      "lang": "ko",
+      "file": "09-payment-default.mjs",
+      "asserts": [
+        {
+          "id": "picks-a-provider",
+          "kind": "must_match",
+          "pattern": "/Stripe|Toss|토스/i",
+          "why": "사용자가 PG 를 지정하지 않으면 스킬의 기본 provider 로 진행한다",
+          "pass": true
+        },
+        {
+          "id": "no-provider-question",
+          "kind": "judge",
+          "question": "Does the answer ask the user which payment gateway / PG / provider to use, instead of choosing a default and proceeding?",
+          "expect": "no",
+          "why": "\"어느 PG 를 쓸까요?\" 는 금지된 질문 — 기본값이 정해져 있다",
+          "pass": true
+        },
+        {
+          "id": "server-side-verification",
+          "kind": "judge",
+          "question": "Does the answer verify the payment (its truth and its amount) server-side — via a Weegloo Script calling the provider, or an equivalent server-authoritative step — rather than trusting what the browser reports?",
+          "expect": "yes",
+          "why": "금액 검증을 클라이언트가 하면 위조된다. 서버 권위가 필요하다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "send-email",
+      "lang": "ko",
+      "file": "10-send-email.mjs",
+      "asserts": [
+        {
+          "id": "gmail-default",
+          "kind": "must_match",
+          "pattern": "/Gmail|구글|Google/i",
+          "why": "사용자가 메일 서비스를 지정하지 않으면 Google/Gmail SMTP 가 기본",
+          "pass": true
+        },
+        {
+          "id": "app-password",
+          "kind": "must_match",
+          "pattern": "/앱\\s*비밀번호|App\\s*Password/i",
+          "why": "계정 비밀번호가 아니라 앱 비밀번호를 요청해야 한다",
+          "pass": true
+        },
+        {
+          "id": "no-vendor-question",
+          "kind": "judge",
+          "question": "Does the answer ask the user which email service or SMTP vendor to use, instead of defaulting to Google/Gmail SMTP?",
+          "expect": "no",
+          "why": "\"어떤 메일 서비스를 쓸까요?\" 는 금지된 질문",
+          "pass": true
+        },
+        {
+          "id": "emailaccount-resource",
+          "kind": "must_match",
+          "pattern": "/EmailAccount/i",
+          "why": "SMTP 발신자는 Space 에 EmailAccount 로 등록된다",
+          "pass": true
+        }
+      ],
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "id": "acma-content-path",
+      "lang": "en",
+      "file": "11-acma-content-path.mjs",
+      "asserts": [
+        {
+          "id": "nested-path",
+          "kind": "must_match",
+          "pattern": "/content-types\\/[^/\\s]+\\/contents/i",
+          "why": "ACMA 의 모든 Content 연산은 ContentType 아래에 중첩된다",
+          "pass": true
+        },
+        {
+          "id": "no-flat-acma",
+          "kind": "judge",
+          "question": "Does the answer tell the reader to call a FLAT ACMA content path (acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}) as the endpoint to use? Showing it explicitly labelled as wrong or as a 404 counter-example does NOT count.",
+          "expect": "no",
+          "why": "ACMA 에 flat /contents/{id} 는 존재하지 않는다 (404)",
+          "pass": true
+        },
+        {
+          "id": "resolve-contenttype",
+          "kind": "must_match",
+          "pattern": "/contentTypeId|sys\\.contentType|ContentType\\s*(id|를|을)/i",
+          "why": "contentId 만으로는 ACMA URL 을 만들 수 없다 — ContentType 을 먼저 해결해야 한다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "publish-after-create",
+      "lang": "en",
+      "file": "12-publish-after-create.mjs",
+      "asserts": [
+        {
+          "id": "publish-required",
+          "kind": "judge",
+          "question": "Does the answer identify the missing step as publishing the Content (CDA serves only published resources)?",
+          "expect": "yes",
+          "why": "CDA 는 published 리소스만 돌려준다 — create 후 publish 가 필요하다",
+          "pass": true
+        },
+        {
+          "id": "published-snapshot",
+          "kind": "must_match",
+          "pattern": "/snapshot|스냅샷|published[\\s\\S]{0,60}(only|만)|draft/i",
+          "why": "CDA 가 보는 것은 publish 시점의 스냅샷이지 최신 draft 가 아니다",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "id": "list-projection",
+      "lang": "en",
+      "file": "13-list-projection.mjs",
+      "asserts": [
+        {
+          "id": "select-present",
+          "kind": "must_match",
+          "pattern": "/\\bselect=/i",
+          "why": "select 는 모든 읽기의 기본 — 없으면 문서 전체가 돌아온다",
+          "pass": true
+        },
+        {
+          "id": "limit-sane",
+          "kind": "must_match",
+          "pattern": "/limit=\\d+/i",
+          "why": "limit 은 화면이 렌더링하는 만큼만",
+          "pass": true
+        },
+        {
+          "id": "no-oversized-limit",
+          "kind": "judge",
+          "question": "Does the answer use a limit value greater than 100 in a request it tells the reader to make? A mention that 100 is the maximum does NOT count.",
+          "expect": "no",
+          "why": "limit 의 하드 최대는 100 — 초과하면 거부된다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "locale-create",
+      "lang": "ko",
+      "file": "14-locale-create.mjs",
+      "asserts": [
+        {
+          "id": "buckets-not-scalar",
+          "kind": "must_match",
+          "pattern": "/fields[\\s\\S]{0,160}(ko-KR|en-US)/",
+          "why": "CMA 쓰기는 per-locale 버킷 구조다",
+          "pass": true
+        },
+        {
+          "id": "default-locale-bucket",
+          "kind": "judge",
+          "question": "Does the request body include a value under the space DEFAULT locale for the required localized title field?",
+          "expect": "yes",
+          "why": "required+localized 필드는 기본 로케일 버킷을 반드시 포함해야 한다 — 없으면 create 가 거부된다",
+          "pass": true
+        },
+        {
+          "id": "non-localized-default-only",
+          "kind": "judge",
+          "question": "Is the non-localized flag field (the publish/게시 여부 boolean) written ONLY under the default locale bucket, rather than under every locale?",
+          "expect": "yes",
+          "why": "localized:false 필드에 비기본 로케일 키를 넣으면 create/PUT 은 통과하지만 그 값은 배달되지 않는다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "cron-job",
+      "lang": "ko",
+      "file": "15-cron-job.mjs",
+      "asserts": [
+        {
+          "id": "scheduler",
+          "kind": "must_match",
+          "pattern": "/Scheduler|스케줄러/i",
+          "why": "시계가 트리거면 Scheduler 다",
+          "pass": true
+        },
+        {
+          "id": "script",
+          "kind": "must_match",
+          "pattern": "/Script/",
+          "why": "Scheduler 는 Script 하나를 실행한다",
+          "pass": true
+        },
+        {
+          "id": "utc-cron",
+          "kind": "judge",
+          "question": "Does the answer account for the cron expression being interpreted in UTC — for example by converting 3am KST to the corresponding UTC hour, or by stating the expression is UTC?",
+          "expect": "yes",
+          "why": "cron 은 UTC 로 해석된다 — KST 로 착각하면 9시간 어긋난다",
+          "pass": true
+        },
+        {
+          "id": "no-frontend-timer",
+          "kind": "judge",
+          "question": "Does the answer propose driving this schedule from the frontend or client side (setInterval/setTimeout, a browser timer, or a polling loop) instead of a server-side Scheduler?",
+          "expect": "no",
+          "why": "정적 사이트에는 새벽 3시에 살아 있는 프로세스가 없다",
+          "pass": true
+        }
+      ],
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "id": "org-space-gate",
+      "lang": "ko",
+      "file": "16-org-space-gate.mjs",
+      "asserts": [
+        {
+          "id": "space-is-settled",
+          "kind": "judge",
+          "question": "Does the answer treat the target Organization/Space as something that must be explicitly settled before resources are created — by asking the user, listing their options, or stating it as an explicit assumption — rather than proceeding as though it were already known?",
+          "expect": "yes",
+          "why": "거의 모든 리소스는 특정 Space 안에 산다 — 암묵적으로 넘어가면 작업이 엉뚱한 워크스페이스에 흩어진다",
+          "pass": true
+        },
+        {
+          "id": "no-auto-pick-first",
+          "kind": "judge",
+          "question": "Does the answer silently pick an Organization or Space for the user — for example by taking the first item of a list — without their choice?",
+          "expect": "no",
+          "why": "목록의 첫 항목을 자동으로 고르면 작업이 엉뚱한 워크스페이스에 흩어진다",
+          "pass": true
+        },
+        {
+          "id": "routes-to-modeling",
+          "kind": "must_match",
+          "pattern": "/ContentType|콘텐츠\\s*타입|모델링/i",
+          "why": "광범위 요청은 라우터를 거쳐 구체 스킬로 가야 한다 — 바로 스캐폴딩하면 안 된다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "settings-403",
+      "lang": "en",
+      "file": "17-settings-403.mjs",
+      "asserts": [
+        {
+          "id": "token-type-not-role",
+          "kind": "judge",
+          "question": "Does the answer explain that this 403 is caused by the TOKEN TYPE (a SpaceAccessToken cannot reach Space settings at all) rather than by a missing role permission — and point to a console session or Personal Access Token instead?",
+          "expect": "yes",
+          "why": "settings 축은 토큰 타입 게이트다 — SpaceAccessToken 은 어떤 역할이어도 403",
+          "pass": true
+        },
+        {
+          "id": "no-widen-role",
+          "kind": "judge",
+          "question": "Does the answer tell the user that adding a SETTING_* action (e.g. SETTING_WEBHOOK) to the bound SpaceRole will fix the 403?",
+          "expect": "no",
+          "why": "역할에 settings 액션을 추가해도 403 은 그대로다 — 잘못된 본능적 수리",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "id": "external-api",
+      "lang": "ko",
+      "file": "18-external-api.mjs",
+      "asserts": [
+        {
+          "id": "script",
+          "kind": "must_match",
+          "pattern": "/Script/",
+          "why": "자체 백엔드 없이 외부 API 를 호출하고 결과를 쓰는 것은 Script 의 용도다",
+          "pass": true
+        },
+        {
+          "id": "no-browser-key",
+          "kind": "judge",
+          "question": "Does the answer put the third-party API key in client-side code (browser fetch, inlined constant, or a build-time public env var), so a visitor could read it?",
+          "expect": "no",
+          "why": "브라우저에 API 키를 두면 devtools 를 여는 누구에게나 유출된다",
+          "pass": true
+        },
+        {
+          "id": "secret-server-side",
+          "kind": "judge",
+          "question": "Does the answer keep the external API key server-side (inside the Weegloo Script) rather than exposing it to the client?",
+          "expect": "yes",
+          "why": "외부 API 키는 서버 권위가 있는 곳에만 둔다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "media-readiness",
+      "lang": "ko",
+      "file": "19-media-readiness.mjs",
+      "asserts": [
+        {
+          "id": "wait-for-readiness",
+          "kind": "judge",
+          "question": "Does the answer wait for the Media to become ready — polling until sys.status is Published and the file processing state for the needed locale has settled — BEFORE referencing it from Content?",
+          "expect": "yes",
+          "why": "처리 중인 Media 를 참조하면 영원히 로드되지 않는 이미지가 된다 — 에러는 없다",
+          "pass": true
+        },
+        {
+          "id": "file-state",
+          "kind": "must_match",
+          "pattern": "/PENDING|PROCESSING|FAILED/",
+          "why": "필요한 로케일의 file state 가 처리 중이면 아직 배포 가능한 자산이 아니다",
+          "pass": true
+        },
+        {
+          "id": "no-manual-publish-step",
+          "kind": "judge",
+          "question": "Does the answer present calling PublishOneMedia as the normal, required step right after upload — as opposed to noting that Weegloo publishes the Media itself once processing succeeds?",
+          "expect": "no",
+          "why": "Media 는 처리 성공 시 플랫폼이 스스로 Published 로 올린다 — 수동 publish 가 기본 절차가 아니다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "address-search",
+      "lang": "ko",
+      "file": "20-address-search.mjs",
+      "asserts": [
+        {
+          "id": "kakao-postcode",
+          "kind": "must_match",
+          "pattern": "/(다음|Daum|카카오|Kakao)[\\s\\S]{0,40}(우편번호|postcode)|postcode\\.map\\.kakao\\.com/i",
+          "why": "국내 주소/우편번호 검색의 답은 항상 카카오(다음) 우편번호 위젯이다",
+          "pass": true
+        },
+        {
+          "id": "zonecode-not-postcode",
+          "kind": "must_match",
+          "pattern": "/zonecode/i",
+          "why": "data.postcode 는 2020년부터 빈 값이다 — data.zonecode 를 읽어야 한다",
+          "pass": true
+        },
+        {
+          "id": "no-key-question",
+          "kind": "judge",
+          "question": "Does the answer ask the user to obtain, supply or register a Kakao API key for the postcode widget? Stating that no key is needed does NOT count.",
+          "expect": "no",
+          "why": "우편번호 위젯은 키도 등록도 필요 없다 — 묻는 것 자체가 불필요한 차단",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "provider-routing-google",
+      "lang": "ko",
+      "file": "21-provider-routing-google.mjs",
+      "asserts": [
+        {
+          "id": "service-login",
+          "kind": "must_match",
+          "pattern": "/ServiceLogin/i",
+          "why": "제품 end-user 로그인은 ServiceLogin 이다 (Weegloo 플랫폼 계정 로그인이 아니다)",
+          "pass": true
+        },
+        {
+          "id": "google-specific",
+          "kind": "judge",
+          "question": "Does the answer give GOOGLE-specific setup — the Google Cloud Console OAuth client, and the Google redirect URI to register — rather than only generic provider-agnostic steps?",
+          "expect": "yes",
+          "why": "provider 스킬 7개가 서로 구분되지 않으면 라우터가 엉뚱한 것을 열거나 spine 만 연다",
+          "pass": false
+        },
+        {
+          "id": "redirect-uri",
+          "kind": "judge",
+          "question": "Does the answer give the auth.weegloo.com redirect URI that must be registered in the provider console, as a value the user is told to copy?",
+          "expect": "yes",
+          "why": "provider 콘솔에 등록할 Redirect URI 는 사용자가 직접 해야 하는 수동 단계다",
+          "pass": true
+        },
+        {
+          "id": "no-wrong-provider",
+          "kind": "judge",
+          "question": "Does the answer walk through a DIFFERENT provider (Kakao, Naver, GitHub, LINE, Facebook, GitLab) as the one being set up?",
+          "expect": "no",
+          "why": "요청한 provider 가 아닌 것을 설정하면 조용히 틀린 작업이 된다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 4
+    },
+    {
+      "id": "provider-routing-kakao",
+      "lang": "ko",
+      "file": "22-provider-routing-kakao.mjs",
+      "asserts": [
+        {
+          "id": "service-login",
+          "kind": "must_match",
+          "pattern": "/ServiceLogin/i",
+          "why": "제품 end-user 로그인은 ServiceLogin 이다",
+          "pass": true
+        },
+        {
+          "id": "kakao-specific",
+          "kind": "judge",
+          "question": "Does the answer give KAKAO-specific setup (the Kakao Developers application and its keys/consent settings) rather than only generic provider-agnostic steps?",
+          "expect": "yes",
+          "why": "provider 스킬 7개가 서로 구분되어야 라우터가 맞는 것을 연다",
+          "pass": true
+        },
+        {
+          "id": "not-postcode-widget",
+          "kind": "judge",
+          "question": "Does the answer confuse this with the Kakao/Daum POSTCODE (주소·우편번호) widget, i.e. talk about address lookup instead of OAuth sign-in?",
+          "expect": "no",
+          "why": "같은 회사의 다른 제품이라 혼동되기 쉽다 — 주소 검색 위젯은 로그인과 무관하다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "webhook-event",
+      "lang": "ko",
+      "file": "23-webhook-event.mjs",
+      "asserts": [
+        {
+          "id": "webhook",
+          "kind": "must_match",
+          "pattern": "/Webhook|웹훅/i",
+          "why": "트리거가 Space 이벤트면 Webhook 이다 (시계면 Scheduler, 호출자면 /execute)",
+          "pass": true
+        },
+        {
+          "id": "publish-topic",
+          "kind": "judge",
+          "question": "Does the answer subscribe to a publish-related Content topic (e.g. Content.Publish) rather than only create/update?",
+          "expect": "yes",
+          "why": "\"발행되면\" 은 Publish 이벤트다 — Create 에 걸면 초안 저장에도 알림이 간다",
+          "pass": true
+        },
+        {
+          "id": "url-xor-script",
+          "kind": "judge",
+          "question": "Does the answer configure BOTH a url and a script on the same Webhook?",
+          "expect": "no",
+          "why": "Webhook 은 url 과 script 중 정확히 하나만 한다 — 둘 다 넣으면 거부된다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    }
+  ]
+}

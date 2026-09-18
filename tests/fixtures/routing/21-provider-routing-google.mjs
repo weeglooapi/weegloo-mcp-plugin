@@ -14,8 +14,12 @@ export default {
   asserts: [
     { id: 'service-login', kind: 'must_match', pattern: /ServiceLogin/i,
       why: '제품 end-user 로그인은 ServiceLogin 이다 (Weegloo 플랫폼 계정 로그인이 아니다)' },
+    // Measured 5/7 on an unchanged corpus with the earlier two-part wording ("...AND the
+    // redirect URI..."): every run, including the failures, named the Google Cloud Console — the
+    // second clause duplicated the `redirect-uri` assert below and made the verdict turn on a
+    // detail this assert is not about. One question, one fact.
     { id: 'google-specific', kind: 'judge', expect: 'yes',
-      question: 'Does the answer give GOOGLE-specific setup — the Google Cloud Console OAuth client, and the Google redirect URI to register — rather than only generic provider-agnostic steps?',
+      question: "Does the answer name Google's own developer console (Google Cloud Console) as where the OAuth client is created for this sign-in?",
       why: 'provider 스킬 7개가 서로 구분되지 않으면 라우터가 엉뚱한 것을 열거나 spine 만 연다' },
     { id: 'redirect-uri', kind: 'judge', expect: 'yes',
       question: 'Does the answer give the auth.weegloo.com redirect URI that must be registered in the provider console, as a value the user is told to copy?',
