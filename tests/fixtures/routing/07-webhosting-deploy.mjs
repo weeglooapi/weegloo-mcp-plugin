@@ -1,7 +1,7 @@
 /**
- * WebHosting has four constraints that each produce a DIFFERENT failure: SSR builds fail
- * at deploy, >300 entries fail at upload, a nested index.html fails silently as a 404,
- * and asking the user to pick a subdomain stalls a task that should not stall.
+ * WebHosting has four constraints that each produce a DIFFERENT failure: an SSR build fails
+ * at deploy, >300 entries fail at upload, a nested index.html fails silently as a 404, and
+ * asking the user to pick a subdomain stalls a task that should not stall.
  */
 export default {
   id: 'webhosting-deploy',
@@ -14,7 +14,8 @@ export default {
       why: 'ZIP 루트에 index.html 이 없으면 사이트가 뜨지 않는다' },
     { id: 'file-cap', kind: 'must_match', pattern: /\b(300|100)\b[\s\S]{0,40}(파일|files|개)/i,
       why: '배포 ZIP 의 엔트리 상한을 넘기면 업로드가 거부된다' },
-    { id: 'no-subdomain-question', kind: 'must_not_match', pattern: /서브도메인[\s\S]{0,60}(뭐로|무엇으로|어떤\s*걸|알려주세요|정해주세요)/i,
+    { id: 'no-subdomain-question', kind: 'judge', expect: 'no',
+      question: 'Does the answer ask the user to choose or provide the subdomain, rather than picking one itself and telling the user afterwards?',
       why: '서브도메인은 에이전트가 고르고 사후 통지한다 — 물어보지 않는다' },
   ],
 };

@@ -8,11 +8,11 @@ export default {
   lang: 'en',
   prompt: 'I have a static site that fetches published articles from the Weegloo CDA and renders the title and body. Show me how to read the fields out of the CDA response correctly, and explain the field shape.',
   asserts: [
-    { id: 'flattened-on-delivery', kind: 'must_match', pattern: /flat|평탄|scalar|fields\.\w+(?!\s*\[)/i,
+    { id: 'flattened-on-delivery', kind: 'judge', expect: 'yes',
+      question: 'Does the answer state that a default CDA/ACDA read returns each field FLATTENED (fields.title is the value itself), as opposed to a per-locale bucket?',
       why: 'CDA 기본 읽기는 fields.title 자체가 값이다' },
-    { id: 'bucket-vs-flat-contrast', kind: 'must_match', pattern: /(CMA|management)[\s\S]{0,300}(bucket|locale)|locale[\s\S]{0,300}(CDA|delivery)/i,
-      why: '두 plane 의 shape 차이를 알아야 [locale] 인덱싱 버그를 피한다' },
-    { id: 'no-blind-locale-index', kind: 'must_not_match', pattern: /fields\.\w+\[\s*['"`]?(en-US|ko-KR|locale)['"`]?\s*\][\s\S]{0,80}(CDA|delivery)/i,
-      why: 'CDA 응답에 [locale] 인덱싱하면 undefined 가 나온다' },
+    { id: 'no-blind-locale-index', kind: 'judge', expect: 'no',
+      question: 'Does the answer instruct the reader to index a locale key on a default CDA/ACDA response — e.g. accessing fields.title["en-US"] — as the way to read the value?',
+      why: 'CDA 응답에 [locale] 인덱싱하면 undefined 가 나온다. 단, 두 plane 의 차이를 설명하며 대비로 보여주는 것은 올바른 행동이다' },
   ],
 };

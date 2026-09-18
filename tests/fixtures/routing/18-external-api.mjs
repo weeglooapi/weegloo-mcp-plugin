@@ -1,7 +1,7 @@
 /**
- * Routing gate with a security edge: calling a third-party API needs a secret, and a
- * secret cannot live in a static frontend. The wrong answer (fetch from the browser with
- * the key inlined) works in the demo and leaks the key to everyone who opens devtools.
+ * Routing gate with a security edge: calling a third-party API needs a secret, and a secret
+ * cannot live in a static frontend. The wrong answer (fetch from the browser with the key
+ * inlined) works in the demo and leaks the key to everyone who opens devtools.
  */
 export default {
   id: 'external-api',
@@ -10,9 +10,11 @@ export default {
   asserts: [
     { id: 'script', kind: 'must_match', pattern: /Script/,
       why: '자체 백엔드 없이 외부 API 를 호출하고 결과를 쓰는 것은 Script 의 용도다' },
-    { id: 'secret-server-side', kind: 'must_match', pattern: /(키|key|secret|시크릿)[\s\S]{0,80}(서버|Script|노출하지|숨기|클라이언트에\s*두지)/i,
-      why: '외부 API 키는 클라이언트에 절대 두지 않는다' },
-    { id: 'no-browser-key', kind: 'must_not_match', pattern: /(브라우저|프론트엔드|클라이언트)[\s\S]{0,60}(API\s*키|apiKey|Authorization)[\s\S]{0,40}(넣|포함|하드코딩)/i,
-      why: '브라우저에 API 키를 인라인하면 devtools 를 여는 누구에게나 유출된다' },
+    { id: 'no-browser-key', kind: 'judge', expect: 'no',
+      question: 'Does the answer put the third-party API key in client-side code (browser fetch, inlined constant, or a build-time public env var), so a visitor could read it?',
+      why: '브라우저에 API 키를 두면 devtools 를 여는 누구에게나 유출된다' },
+    { id: 'secret-server-side', kind: 'judge', expect: 'yes',
+      question: 'Does the answer keep the external API key server-side (inside the Weegloo Script) rather than exposing it to the client?',
+      why: '외부 API 키는 서버 권위가 있는 곳에만 둔다' },
   ],
 };

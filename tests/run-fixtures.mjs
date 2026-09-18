@@ -84,9 +84,15 @@ async function loadFixtures(only) {
     }
     if (!Array.isArray(fx.asserts) || fx.asserts.length === 0) throw new Error(`${file}: 'asserts' must be a non-empty array`);
     for (const a of fx.asserts) {
-      if (!a.id || !a.kind || !a.pattern || !a.why) throw new Error(`${file}: assert needs id/kind/pattern/why`);
-      if (!['must_match', 'must_not_match'].includes(a.kind)) throw new Error(`${file}: bad assert kind '${a.kind}'`);
-      if (!(a.pattern instanceof RegExp)) throw new Error(`${file}: assert '${a.id}' pattern must be a RegExp literal`);
+      if (!a.id || !a.kind || !a.why) throw new Error(`${file}: assert needs id/kind/why`);
+      if (!['must_match', 'must_not_match', 'judge'].includes(a.kind)) throw new Error(`${file}: bad assert kind '${a.kind}'`);
+      if (a.kind === 'judge') {
+        if (!a.question || !['yes', 'no'].includes(a.expect)) {
+          throw new Error(`${file}: judge assert '${a.id}' needs 'question' and expect: 'yes'|'no'`);
+        }
+      } else if (!(a.pattern instanceof RegExp)) {
+        throw new Error(`${file}: assert '${a.id}' pattern must be a RegExp literal`);
+      }
     }
     fx.__file = file;
     if (!only || fx.id === only) fixtures.push(fx);
@@ -157,12 +163,49 @@ function runAgent(agentCmd, prompt, timeoutMs = 600_000) {
   });
 }
 
-function evaluate(fixture, response) {
-  const results = fixture.asserts.map((a) => {
-    const hit = a.pattern.test(response);
-    const pass = a.kind === 'must_match' ? hit : !hit;
-    return { id: a.id, kind: a.kind, pattern: String(a.pattern), why: a.why, pass };
-  });
+/**
+ * Asks a second agent whether the response satisfies a rubric question. Answers YES/NO only.
+ *
+ * Regex cannot express "did the agent RECOMMEND this", only "does this string occur", and the
+ * two come apart in exactly the case that matters. Measured on the first baseline: an assert
+ * forbidding `/Administrator.*(바인딩|사용)/` failed on the sentence
+ * "Administrator 바인딩은 어떤 경우에도 하지 않습니다" — the agent doing precisely the right
+ * thing, scored as a violation. 9 of 61 asserts failed that way. An instrument with a ~15%
+ * false-positive rate cannot support the claim this whole project rests on ("the agent did not
+ * get worse"), so prose judgements are judged and only structural facts stay regex.
+ */
+async function runJudge(agentCmd, response, question) {
+  const prompt = `You are grading one answer against one criterion. Reply with exactly one word: YES or NO.
+
+CRITERION: ${question}
+
+Judge only what the ANSWER below actually says. Warning against a practice, or explicitly
+ruling it out, is NOT doing or recommending it — that is the opposite, and must be graded as
+such. If the answer neither does nor recommends the thing in the criterion, the criterion is
+not met.
+
+--- ANSWER BEGINS ---
+${response}
+--- ANSWER ENDS ---
+
+One word. YES or NO.`;
+  const raw = (await runAgent(agentCmd, prompt, 300_000)).trim();
+  const m = raw.toUpperCase().match(/\b(YES|NO)\b/);
+  if (!m) throw new Error(`judge returned no verdict: ${JSON.stringify(raw.slice(0, 160))}`);
+  return m[1] === 'YES';
+}
+
+async function evaluate(fixture, response, agentCmd) {
+  const results = [];
+  for (const a of fixture.asserts) {
+    if (a.kind === 'judge') {
+      const verdict = await runJudge(agentCmd, response, a.question);
+      results.push({ id: a.id, kind: a.kind, question: a.question, expect: a.expect, why: a.why, pass: verdict === (a.expect === 'yes') });
+    } else {
+      const hit = a.pattern.test(response);
+      results.push({ id: a.id, kind: a.kind, pattern: String(a.pattern), why: a.why, pass: a.kind === 'must_match' ? hit : !hit });
+    }
+  }
   return { id: fixture.id, lang: fixture.lang, file: fixture.__file, asserts: results, passed: results.filter((r) => r.pass).length, total: results.length };
 }
 
@@ -209,7 +252,7 @@ async function main() {
       if (response.trim().length < MIN_RESPONSE_CHARS) {
         throw new Error(`response too short (${response.trim().length} chars) — agent did not answer: ${JSON.stringify(response.slice(0, 120))}`);
       }
-      const r = evaluate(fx, response);
+      const r = await evaluate(fx, response, agentCmd);
       if (args.verbose) r.response = response;
       const mark = r.passed === r.total ? 'PASS' : 'FAIL';
       console.log(`  ${mark}  ${fx.id}  ${r.passed}/${r.total}`);

@@ -1,8 +1,8 @@
 /**
  * Silent-failure class A: a ServiceUserRole without the `createdBy :self` filter lets
  * EVERY member read, edit and DELETE every other member's rows, with no error anywhere.
- * Nothing in the product surface reveals it. This is the single highest-consequence
- * gate in the corpus, so it is fixture #1.
+ * Nothing in the product surface reveals it. This is the single highest-consequence gate
+ * in the corpus, so it is fixture #1.
  */
 export default {
   id: 'members-only-site',
@@ -15,7 +15,8 @@ export default {
       why: '이 필터가 없으면 모든 회원이 남의 글을 읽고 수정하고 삭제한다 — 에러 없이 조용히' },
     { id: 'acma-not-cma', kind: 'must_match', pattern: /\bACMA\b/,
       why: 'Service User 토큰은 CMA/CDA 에 절대 가지 않는다; 멤버 쓰기는 ACMA' },
-    { id: 'no-cma-for-members', kind: 'must_not_match', pattern: /Service\s*User[\s\S]{0,200}\bCMA\b(?!\s*\/?\s*CDA\s*(에|에는)?\s*(가지|사용하지|쓰지))/i,
-      why: 'Service User 토큰을 CMA 에 보내는 설계는 토큰 경계 위반' },
+    { id: 'no-cma-for-members', kind: 'judge', expect: 'no',
+      question: 'Does the answer propose that signed-in members (Service Users) call the CMA or CDA API with their ServiceLogin token?',
+      why: 'Service User 토큰을 CMA/CDA 로 보내는 설계는 토큰 경계 위반이다' },
   ],
 };

@@ -1,0 +1,624 @@
+{
+  "provenance": {
+    "gitRef": "refactor/skill-rule-tree",
+    "gitSha": "e8f3823",
+    "gitDirty": false,
+    "ruleBytes": 115213,
+    "skillBytes": 495792
+  },
+  "agentCmd": "claude -p",
+  "totals": {
+    "fixtures": 20,
+    "asserts": 61,
+    "passed": 52
+  },
+  "results": [
+    {
+      "id": "members-only-site",
+      "lang": "ko",
+      "file": "01-members-only-site.mjs",
+      "asserts": [
+        {
+          "id": "service-login",
+          "kind": "must_match",
+          "pattern": "/ServiceLogin/i",
+          "why": "오픈 가입 end-user 는 Weegloo 플랫폼 계정이 아니라 ServiceLogin(Service User) 이어야 한다",
+          "pass": true
+        },
+        {
+          "id": "createdby-self",
+          "kind": "must_match",
+          "pattern": "/createdBy[\\s\\S]{0,120}:self|\":self\"|':self'/",
+          "why": "이 필터가 없으면 모든 회원이 남의 글을 읽고 수정하고 삭제한다 — 에러 없이 조용히",
+          "pass": true
+        },
+        {
+          "id": "acma-not-cma",
+          "kind": "must_match",
+          "pattern": "/\\bACMA\\b/",
+          "why": "Service User 토큰은 CMA/CDA 에 절대 가지 않는다; 멤버 쓰기는 ACMA",
+          "pass": true
+        },
+        {
+          "id": "no-cma-for-members",
+          "kind": "must_not_match",
+          "pattern": "/Service\\s*User[\\s\\S]{0,200}\\bCMA\\b(?!\\s*\\/?\\s*CDA\\s*(에|에는)?\\s*(가지|사용하지|쓰지))/i",
+          "why": "Service User 토큰을 CMA 에 보내는 설계는 토큰 경계 위반",
+          "pass": false
+        }
+      ],
+      "passed": 3,
+      "total": 4
+    },
+    {
+      "id": "search-feature",
+      "lang": "ko",
+      "file": "02-search-feature.mjs",
+      "asserts": [
+        {
+          "id": "advanced-search-header",
+          "kind": "must_match",
+          "pattern": "/X-Weegloo-Advanced-Search/i",
+          "why": "이 헤더가 없으면 fields.* 필터는 에러가 아니라 빈 배열을 돌려주고, 에이전트는 \"결과 없음\"이라 보고한다",
+          "pass": true
+        },
+        {
+          "id": "server-side",
+          "kind": "must_match",
+          "pattern": "/서버|server-?side|filter|쿼리|query/i",
+          "why": "페이지네이션된 컬렉션을 클라이언트에서 Array.filter 하면 로드된 행만 검색하고 나머지를 조용히 놓친다",
+          "pass": true
+        },
+        {
+          "id": "no-memory-filter-only",
+          "kind": "must_not_match",
+          "pattern": "/(전부|모두|all)\\s*(불러|가져|fetch|로드)[\\s\\S]{0,60}(filter|필터)/i",
+          "why": "전체를 받아서 메모리 필터링하는 설계는 데이터가 커지면 틀린 결과를 낸다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "cda-read-shape",
+      "lang": "en",
+      "file": "03-cda-read-shape.mjs",
+      "asserts": [
+        {
+          "id": "flattened-on-delivery",
+          "kind": "must_match",
+          "pattern": "/flat|평탄|scalar|fields\\.\\w+(?!\\s*\\[)/i",
+          "why": "CDA 기본 읽기는 fields.title 자체가 값이다",
+          "pass": true
+        },
+        {
+          "id": "bucket-vs-flat-contrast",
+          "kind": "must_match",
+          "pattern": "/(CMA|management)[\\s\\S]{0,300}(bucket|locale)|locale[\\s\\S]{0,300}(CDA|delivery)/i",
+          "why": "두 plane 의 shape 차이를 알아야 [locale] 인덱싱 버그를 피한다",
+          "pass": true
+        },
+        {
+          "id": "no-blind-locale-index",
+          "kind": "must_not_match",
+          "pattern": "/fields\\.\\w+\\[\\s*['\"`]?(en-US|ko-KR|locale)['\"`]?\\s*\\][\\s\\S]{0,80}(CDA|delivery)/i",
+          "why": "CDA 응답에 [locale] 인덱싱하면 undefined 가 나온다",
+          "pass": false
+        }
+      ],
+      "passed": 2,
+      "total": 3
+    },
+    {
+      "id": "delivery-token-role",
+      "lang": "ko",
+      "file": "04-delivery-token-role.mjs",
+      "asserts": [
+        {
+          "id": "least-privilege",
+          "kind": "must_match",
+          "pattern": "/읽기\\s*전용|read-?only|최소\\s*권한|least[- ]privilege/i",
+          "why": "브라우저 노출 토큰은 필요한 ContentType 에 대한 읽기 전용 역할이어야 한다",
+          "pass": true
+        },
+        {
+          "id": "no-administrator",
+          "kind": "must_not_match",
+          "pattern": "/Administrator\\s*(역할)?\\s*(를|을)?\\s*(바인딩|binding|사용|선택|지정)/i",
+          "why": "Administrator 를 브라우저 토큰에 바인딩하면 번들을 읽는 누구나 Space 를 장악한다",
+          "pass": false
+        },
+        {
+          "id": "no-first-item",
+          "kind": "must_not_match",
+          "pattern": "/(roles?|목록)\\s*\\[\\s*0\\s*\\]|첫\\s*번째\\s*(역할|role)\\s*(를|을)\\s*(사용|선택)/i",
+          "why": "목록의 첫 항목을 고르는 것은 금지 — 무엇이 걸릴지 알 수 없다",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 3
+    },
+    {
+      "id": "scheduler-version-header",
+      "lang": "en",
+      "file": "05-scheduler-version-header.mjs",
+      "asserts": [
+        {
+          "id": "no-version-header",
+          "kind": "must_match",
+          "pattern": "/no\\s+(X-Weegloo-)?[Vv]ersion|version[^.]{0,40}(not\\s+(required|needed)|없)|버전\\s*헤더\\s*(는|가)?\\s*(없|불필요|받지)/i",
+          "why": "Scheduler 는 버전이 없어서 X-Weegloo-Version 을 받지 않는다 — global-rules 의 \"모든 리소스\" 주장이 틀렸다",
+          "pass": true
+        },
+        {
+          "id": "no-spurious-version",
+          "kind": "must_not_match",
+          "pattern": "/(반드시|must|always|required)[\\s\\S]{0,60}X-Weegloo-Version[\\s\\S]{0,40}(Scheduler|스케줄러)/i",
+          "why": "Scheduler 업데이트에 버전 헤더를 요구하면 호출이 거부된다",
+          "pass": false
+        }
+      ],
+      "passed": 1,
+      "total": 2
+    },
+    {
+      "id": "map-embed",
+      "lang": "ko",
+      "file": "06-map-embed.mjs",
+      "asserts": [
+        {
+          "id": "embed-iframe",
+          "kind": "must_match",
+          "pattern": "/iframe|Embed\\s*API/i",
+          "why": "정적 호스팅에는 Maps Embed API iframe 을 쓴다 (JavaScript API 아님)",
+          "pass": true
+        },
+        {
+          "id": "no-key-question",
+          "kind": "must_not_match",
+          "pattern": "/(API\\s*키|api[_ ]?key)[\\s\\S]{0,80}(알려|주세요|필요합니다|발급|제공해)/i",
+          "why": "Maps 키는 스킬에 하드코딩돼 있다 — 사용자에게 묻는 것은 불필요한 차단",
+          "pass": true
+        },
+        {
+          "id": "no-placeholder",
+          "kind": "must_not_match",
+          "pattern": "/YOUR_API_KEY|process\\.env\\.[A-Z_]*MAPS|<YOUR_KEY>/",
+          "why": "정적 빌드에는 env 주입 경로가 없다 — placeholder 는 동작하지 않는 코드",
+          "pass": false
+        }
+      ],
+      "passed": 2,
+      "total": 3
+    },
+    {
+      "id": "webhosting-deploy",
+      "lang": "ko",
+      "file": "07-webhosting-deploy.mjs",
+      "asserts": [
+        {
+          "id": "static-export",
+          "kind": "must_match",
+          "pattern": "/정적|static|export|SSR\\s*(불가|안|없|미지원)/i",
+          "why": "WebHosting 에는 서버 런타임이 없다 — 정적 export 만 배포된다",
+          "pass": true
+        },
+        {
+          "id": "index-at-root",
+          "kind": "must_match",
+          "pattern": "/index\\.html[\\s\\S]{0,60}(루트|root|최상)/i",
+          "why": "ZIP 루트에 index.html 이 없으면 사이트가 뜨지 않는다",
+          "pass": true
+        },
+        {
+          "id": "file-cap",
+          "kind": "must_match",
+          "pattern": "/\\b(300|100)\\b[\\s\\S]{0,40}(파일|files|개)/i",
+          "why": "배포 ZIP 의 엔트리 상한을 넘기면 업로드가 거부된다",
+          "pass": true
+        },
+        {
+          "id": "no-subdomain-question",
+          "kind": "must_not_match",
+          "pattern": "/서브도메인[\\s\\S]{0,60}(뭐로|무엇으로|어떤\\s*걸|알려주세요|정해주세요)/i",
+          "why": "서브도메인은 에이전트가 고르고 사후 통지한다 — 물어보지 않는다",
+          "pass": true
+        }
+      ],
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "id": "space-teardown",
+      "lang": "ko",
+      "file": "08-space-teardown.mjs",
+      "asserts": [
+        {
+          "id": "confirm-first",
+          "kind": "must_match",
+          "pattern": "/확인|confirm|되돌릴\\s*수\\s*없|irreversible|정말/i",
+          "why": "사용자가 지목하지 않은 것을 지우기 전에 반드시 확인한다 — 삭제는 복구 불가",
+          "pass": true
+        },
+        {
+          "id": "bottom-up-order",
+          "kind": "must_match",
+          "pattern": "/(Content[\\s\\S]{0,120}ContentType[\\s\\S]{0,120}Space)|(자식|하위|안쪽)[\\s\\S]{0,60}(먼저|부터)/i",
+          "why": "Space 는 ContentType/Content/Media/WebHosting 이 남아 있으면 거부된다 — 아래부터 지운다",
+          "pass": false
+        },
+        {
+          "id": "unpublish-first",
+          "kind": "must_match",
+          "pattern": "/unpublish|게시\\s*해제|Draft|Archived/i",
+          "why": "Published/Changed 상태는 삭제되지 않는다 — 먼저 unpublish 해야 한다",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 3
+    },
+    {
+      "id": "payment-default",
+      "lang": "ko",
+      "file": "09-payment-default.mjs",
+      "asserts": [
+        {
+          "id": "picks-a-provider",
+          "kind": "must_match",
+          "pattern": "/Stripe|Toss|토스/i",
+          "why": "사용자가 PG 를 지정하지 않으면 스킬의 기본 provider 로 진행한다",
+          "pass": true
+        },
+        {
+          "id": "no-provider-question",
+          "kind": "must_not_match",
+          "pattern": "/(어떤|어느|무슨)\\s*(PG|결제|provider|사|업체)[\\s\\S]{0,40}(쓰|사용|원하|선택)[\\s\\S]{0,20}(세요|시겠|나요|\\?)/i",
+          "why": "\"어느 PG 를 쓸까요?\" 는 금지된 질문 — 기본값이 정해져 있다",
+          "pass": true
+        },
+        {
+          "id": "server-side-verification",
+          "kind": "must_match",
+          "pattern": "/Script|서버|검증|verify|금액\\s*확인/i",
+          "why": "금액 검증은 클라이언트가 아니라 서버(Script) 권위로 해야 한다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "send-email",
+      "lang": "ko",
+      "file": "10-send-email.mjs",
+      "asserts": [
+        {
+          "id": "gmail-default",
+          "kind": "must_match",
+          "pattern": "/Gmail|구글|Google/i",
+          "why": "사용자가 메일 서비스를 지정하지 않으면 Google/Gmail SMTP 가 기본",
+          "pass": true
+        },
+        {
+          "id": "app-password",
+          "kind": "must_match",
+          "pattern": "/앱\\s*비밀번호|App\\s*Password/i",
+          "why": "계정 비밀번호가 아니라 앱 비밀번호를 요청해야 한다",
+          "pass": true
+        },
+        {
+          "id": "no-vendor-question",
+          "kind": "must_not_match",
+          "pattern": "/(어떤|어느)\\s*(메일|이메일|SMTP)\\s*(서비스|벤더|업체)[\\s\\S]{0,30}(쓰|사용|원하)/i",
+          "why": "\"어떤 메일 서비스를 쓸까요?\" 는 금지된 질문",
+          "pass": true
+        },
+        {
+          "id": "emailaccount-resource",
+          "kind": "must_match",
+          "pattern": "/EmailAccount/i",
+          "why": "SMTP 발신자는 Space 에 EmailAccount 로 등록된다",
+          "pass": true
+        }
+      ],
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "id": "acma-content-path",
+      "lang": "en",
+      "file": "11-acma-content-path.mjs",
+      "asserts": [
+        {
+          "id": "nested-path",
+          "kind": "must_match",
+          "pattern": "/content-types\\/[^/\\s]+\\/contents/i",
+          "why": "ACMA 의 모든 Content 연산은 ContentType 아래에 중첩된다",
+          "pass": true
+        },
+        {
+          "id": "no-flat-acma",
+          "kind": "must_not_match",
+          "pattern": "/acma\\.weegloo\\.com\\/v1\\/spaces\\/[^/\\s]+\\/contents\\//i",
+          "why": "ACMA 에 flat /contents/{id} 는 존재하지 않는다 (404)",
+          "pass": false
+        },
+        {
+          "id": "resolve-contenttype",
+          "kind": "must_match",
+          "pattern": "/contentTypeId|sys\\.contentType|ContentType\\s*(id|를|을)/i",
+          "why": "contentId 만으로는 ACMA URL 을 만들 수 없다 — ContentType 을 먼저 해결해야 한다",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 3
+    },
+    {
+      "id": "publish-after-create",
+      "lang": "en",
+      "file": "12-publish-after-create.mjs",
+      "asserts": [
+        {
+          "id": "publish-required",
+          "kind": "must_match",
+          "pattern": "/publish/i",
+          "why": "CDA 는 published 리소스만 돌려준다 — create 후 publish 가 필요하다",
+          "pass": true
+        },
+        {
+          "id": "published-snapshot",
+          "kind": "must_match",
+          "pattern": "/snapshot|published[\\s\\S]{0,60}(only|만)|draft/i",
+          "why": "CDA 가 보는 것은 publish 시점의 스냅샷이지 최신 draft 가 아니다",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "id": "list-projection",
+      "lang": "en",
+      "file": "13-list-projection.mjs",
+      "asserts": [
+        {
+          "id": "select-present",
+          "kind": "must_match",
+          "pattern": "/\\bselect=/i",
+          "why": "select 는 모든 읽기의 기본 — 없으면 문서 전체가 돌아온다",
+          "pass": true
+        },
+        {
+          "id": "limit-sane",
+          "kind": "must_match",
+          "pattern": "/limit=\\d+/i",
+          "why": "limit 은 화면이 렌더링하는 만큼만",
+          "pass": true
+        },
+        {
+          "id": "no-oversized-limit",
+          "kind": "must_not_match",
+          "pattern": "/limit=(1\\d\\d|[2-9]\\d\\d|\\d{4,})/",
+          "why": "limit 의 하드 최대는 100 — 초과하면 거부된다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "locale-create",
+      "lang": "ko",
+      "file": "14-locale-create.mjs",
+      "asserts": [
+        {
+          "id": "default-locale-bucket",
+          "kind": "must_match",
+          "pattern": "/기본\\s*로케일|default\\s*locale|ko-KR|en-US/i",
+          "why": "required+localized 필드는 기본 로케일 버킷을 반드시 포함해야 한다",
+          "pass": true
+        },
+        {
+          "id": "non-localized-default-only",
+          "kind": "must_match",
+          "pattern": "/localized[\\s\\S]{0,40}false|언어와?\\s*무관|비\\s*지역화/i",
+          "why": "localized:false 필드는 기본 로케일 버킷에만 값을 넣는다",
+          "pass": true
+        },
+        {
+          "id": "buckets-not-scalar",
+          "kind": "must_match",
+          "pattern": "/fields[\\s\\S]{0,160}(ko-KR|en-US)/",
+          "why": "CMA 쓰기는 per-locale 버킷 구조다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "cron-job",
+      "lang": "ko",
+      "file": "15-cron-job.mjs",
+      "asserts": [
+        {
+          "id": "scheduler",
+          "kind": "must_match",
+          "pattern": "/Scheduler|스케줄러/i",
+          "why": "시계가 트리거면 Scheduler 다",
+          "pass": true
+        },
+        {
+          "id": "script",
+          "kind": "must_match",
+          "pattern": "/Script/",
+          "why": "Scheduler 는 Script 하나를 실행한다",
+          "pass": true
+        },
+        {
+          "id": "utc-cron",
+          "kind": "must_match",
+          "pattern": "/UTC/i",
+          "why": "cron 표현식은 UTC 로 해석된다 — KST 로 착각하면 9시간 어긋난다",
+          "pass": true
+        },
+        {
+          "id": "no-frontend-timer",
+          "kind": "must_not_match",
+          "pattern": "/setInterval|setTimeout|프론트엔드?\\s*(에서)?\\s*타이머/i",
+          "why": "프론트엔드 타이머로 스케줄을 흉내내면 안 된다",
+          "pass": false
+        }
+      ],
+      "passed": 3,
+      "total": 4
+    },
+    {
+      "id": "org-space-gate",
+      "lang": "ko",
+      "file": "16-org-space-gate.mjs",
+      "asserts": [
+        {
+          "id": "space-is-settled",
+          "kind": "must_match",
+          "pattern": "/Space|스페이스/i",
+          "why": "거의 모든 리소스는 특정 Space 안에 산다 — 먼저 정해야 한다",
+          "pass": true
+        },
+        {
+          "id": "no-auto-pick-first",
+          "kind": "must_not_match",
+          "pattern": "/(첫\\s*번째|first)\\s*(Space|스페이스|Organization|조직)[\\s\\S]{0,40}(사용|선택|쓰겠)/i",
+          "why": "목록의 첫 항목을 자동으로 고르면 작업이 엉뚱한 워크스페이스에 흩어진다",
+          "pass": true
+        },
+        {
+          "id": "reads-frontend-first",
+          "kind": "must_match",
+          "pattern": "/ContentType|콘텐츠\\s*타입|모델링|기존\\s*(프론트|코드|페이지)/i",
+          "why": "광범위 요청은 라우터를 거쳐 구체 스킬로 가야 한다 — 바로 스캐폴딩하면 안 된다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "settings-403",
+      "lang": "en",
+      "file": "17-settings-403.mjs",
+      "asserts": [
+        {
+          "id": "token-type-not-role",
+          "kind": "must_match",
+          "pattern": "/token\\s*type|PAT|Personal\\s*Access\\s*Token|console|토큰\\s*(종류|타입)/i",
+          "why": "settings 축은 토큰 타입 게이트다 — SpaceAccessToken 은 어떤 역할이어도 403",
+          "pass": true
+        },
+        {
+          "id": "no-widen-role",
+          "kind": "must_not_match",
+          "pattern": "/(add|추가|grant|부여)[\\s\\S]{0,60}SETTING_WEBHOOK[\\s\\S]{0,80}(role|역할)[\\s\\S]{0,40}(fix|해결|되면|하면)/i",
+          "why": "역할에 settings 액션을 추가해도 403 은 그대로다 — 잘못된 본능적 수리",
+          "pass": true
+        }
+      ],
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "id": "external-api",
+      "lang": "ko",
+      "file": "18-external-api.mjs",
+      "asserts": [
+        {
+          "id": "script",
+          "kind": "must_match",
+          "pattern": "/Script/",
+          "why": "자체 백엔드 없이 외부 API 를 호출하고 결과를 쓰는 것은 Script 의 용도다",
+          "pass": true
+        },
+        {
+          "id": "secret-server-side",
+          "kind": "must_match",
+          "pattern": "/(키|key|secret|시크릿)[\\s\\S]{0,80}(서버|Script|노출하지|숨기|클라이언트에\\s*두지)/i",
+          "why": "외부 API 키는 클라이언트에 절대 두지 않는다",
+          "pass": true
+        },
+        {
+          "id": "no-browser-key",
+          "kind": "must_not_match",
+          "pattern": "/(브라우저|프론트엔드|클라이언트)[\\s\\S]{0,60}(API\\s*키|apiKey|Authorization)[\\s\\S]{0,40}(넣|포함|하드코딩)/i",
+          "why": "브라우저에 API 키를 인라인하면 devtools 를 여는 누구에게나 유출된다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "media-readiness",
+      "lang": "ko",
+      "file": "19-media-readiness.mjs",
+      "asserts": [
+        {
+          "id": "wait-published",
+          "kind": "must_match",
+          "pattern": "/Published|처리\\s*(완료|끝)|대기|기다/i",
+          "why": "Content 에서 참조하기 전에 sys.status 가 Published 가 될 때까지 기다려야 한다",
+          "pass": true
+        },
+        {
+          "id": "file-state",
+          "kind": "must_match",
+          "pattern": "/PENDING|PROCESSING|FAILED|state/i",
+          "why": "필요한 로케일의 file state 가 처리 중이면 아직 배포 가능한 자산이 아니다",
+          "pass": true
+        },
+        {
+          "id": "no-manual-publish-step",
+          "kind": "must_not_match",
+          "pattern": "/업로드\\s*(후|다음)[\\s\\S]{0,40}(반드시|바로)\\s*(수동으로\\s*)?publish/i",
+          "why": "Media 는 처리 성공 시 플랫폼이 스스로 Published 로 올린다 — 수동 publish 가 기본 절차가 아니다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "address-search",
+      "lang": "ko",
+      "file": "20-address-search.mjs",
+      "asserts": [
+        {
+          "id": "kakao-postcode",
+          "kind": "must_match",
+          "pattern": "/(다음|Daum|카카오|Kakao)[\\s\\S]{0,40}(우편번호|postcode)|postcode\\.map\\.kakao\\.com/i",
+          "why": "국내 주소/우편번호 검색의 답은 항상 카카오(다음) 우편번호 위젯이다",
+          "pass": true
+        },
+        {
+          "id": "zonecode-not-postcode",
+          "kind": "must_match",
+          "pattern": "/zonecode/i",
+          "why": "data.postcode 는 2020년부터 빈 값이다 — data.zonecode 를 읽어야 한다",
+          "pass": true
+        },
+        {
+          "id": "no-key-question",
+          "kind": "must_not_match",
+          "pattern": "/(카카오|Kakao)[\\s\\S]{0,40}(API\\s*)?키[\\s\\S]{0,60}(알려|주세요|필요|발급)/i",
+          "why": "우편번호 위젯은 키도 등록도 필요 없다 — 묻는 것 자체가 불필요한 차단",
+          "pass": false
+        }
+      ],
+      "passed": 2,
+      "total": 3
+    }
+  ]
+}

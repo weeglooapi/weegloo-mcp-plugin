@@ -1,8 +1,12 @@
 /**
  * Silent-failure class A: binding Administrator (or `roles[0]`) to a browser-exposed
- * DeliveryAccessToken produces a token that WORKS PERFECTLY in testing and hands full
- * Space control to anyone who reads the JS bundle. Nothing fails; the blast radius is
- * invisible until it is used.
+ * DeliveryAccessToken produces a token that WORKS PERFECTLY in testing and hands full Space
+ * control to anyone who reads the JS bundle. Nothing fails; the blast radius is invisible
+ * until it is used.
+ *
+ * Both negatives are judged, not matched. On the first baseline the regex version failed on
+ * "Administrator 바인딩은 어떤 경우에도 하지 않습니다" — the correct warning, scored as a
+ * violation.
  */
 export default {
   id: 'delivery-token-role',
@@ -11,9 +15,11 @@ export default {
   asserts: [
     { id: 'least-privilege', kind: 'must_match', pattern: /읽기\s*전용|read-?only|최소\s*권한|least[- ]privilege/i,
       why: '브라우저 노출 토큰은 필요한 ContentType 에 대한 읽기 전용 역할이어야 한다' },
-    { id: 'no-administrator', kind: 'must_not_match', pattern: /Administrator\s*(역할)?\s*(를|을)?\s*(바인딩|binding|사용|선택|지정)/i,
+    { id: 'no-administrator', kind: 'judge', expect: 'no',
+      question: 'Does the answer bind, choose or recommend the Administrator SpaceRole for this browser-exposed DeliveryAccessToken?',
       why: 'Administrator 를 브라우저 토큰에 바인딩하면 번들을 읽는 누구나 Space 를 장악한다' },
-    { id: 'no-first-item', kind: 'must_not_match', pattern: /(roles?|목록)\s*\[\s*0\s*\]|첫\s*번째\s*(역할|role)\s*(를|을)\s*(사용|선택)/i,
+    { id: 'no-first-item', kind: 'judge', expect: 'no',
+      question: 'Does the answer pick the SpaceRole by taking the first entry of a role list (e.g. roles[0]) rather than deliberately selecting or creating a least-privilege role?',
       why: '목록의 첫 항목을 고르는 것은 금지 — 무엇이 걸릴지 알 수 없다' },
   ],
 };
