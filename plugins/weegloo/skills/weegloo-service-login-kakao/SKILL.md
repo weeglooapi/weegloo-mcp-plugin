@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-kakao
-description: Provider-specific setup for Weegloo ServiceLogin with **Kakao** (Kakao Login) OAuth 2.0 — the exact Kakao Developers steps to create an app and obtain the `clientId` / `clientSecret`, the Kakao Redirect URI to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/kakao`), the REST-API-key-is-the-clientId gotcha, the Client Secret generate-and-enable gotcha, the consent-item / Business-app requirement for email, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is Kakao. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-client`; for the conceptual model see `weegloo-service-login`. Do not use this for Google, GitHub, Facebook, GitLab, LINE, or Naver.
+description: Kakao / 카카오 (Kakao Login) OAuth 2.0 setup for a Weegloo ServiceLogin: the Kakao Developers steps producing `clientId`/`clientSecret` — the REST API key IS the clientId, the Client Secret must be generated AND enabled — the Kakao Redirect URI to register on auth.weegloo.com, switching Kakao Login on, the email consent item and its Business-app gate (no email, no sign-in), and the walkthrough for asking those blocking credentials. Use ONLY when the chosen provider is Kakao — never for Google, GitHub, Facebook, GitLab, LINE or Naver. Spine: `weegloo-service-login-client`. 카카오 로그인, 카카오톡 로그인.
 ---
 
 # Weegloo ServiceLogin — Kakao provider setup

@@ -1,6 +1,6 @@
 ---
 name: weegloo-webhook
-description: Weegloo Webhook — fire an action when a Space event happens. A Webhook subscribes to topics (e.g. Content.Create, Content.Publish) with optional filters, then does EXACTLY ONE of two things — POST to an external URL (shaped by a Transformation, with secret headers / basic auth) OR run a Script you created in the Space (the `script` field). To call an external API and write the result back into Content/Media, use a Script (`weegloo-script`). Covers topics/filters, url-XOR-script, headers/secrets, Transformation, and runAs (HookOwner|EventUser, attribution only). Use when the product must react to content events — notify an external system, or trigger server-side automation on create/update/publish.
+description: Weegloo Webhook: fire an action when a Space event happens. Subscribes to topics (Content.Create, Content.Publish, ...) with optional filters, then does EXACTLY ONE of two things - POST to an external URL, or run a Script in the Space. To call an external API and write the result back into Content/Media, use a Script (weegloo-script). Covers topics/filters, url-XOR-script, headers/secrets, basic auth, Transformation, runAs (HookOwner|EventUser, attribution only). Use when the product must react to content events: notify an external system, or trigger server-side automation on create/update/publish. 웹훅, 콘텐츠 이벤트 알림, 발행 시 자동 실행, 이벤트 자동화.
 ---
 
 # Weegloo — Webhook (event → URL or Script)

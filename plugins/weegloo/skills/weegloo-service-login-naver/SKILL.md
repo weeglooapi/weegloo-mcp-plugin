@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-naver
-description: Provider-specific setup for Weegloo ServiceLogin with **Naver** (Naver Login) OAuth 2.0 — the exact Naver Developers steps to register an application and obtain the `clientId` / `clientSecret`, the Naver Callback URL to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/naver`), the "API to use = Naver Login" selection, the information-to-collect selection needed for email, and the development-status / review gotcha that limits sign-in to registered test members. Use ONLY when the chosen provider is Naver. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-client`; for the conceptual model see `weegloo-service-login`. Do not use this for Google, GitHub, Facebook, GitLab, LINE, or Kakao.
+description: Provider-specific console setup for Weegloo ServiceLogin with **Naver** (Naver Login) OAuth 2.0 — registering the Naver Developers application, getting clientId/clientSecret, the Callback URL https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/naver, the "API to use = Naver Login" and email information-to-collect selections, and the development-status/review gate limiting sign-in to registered test members. 네이버 로그인, 네이버 소셜 로그인 연동, 네이버 계정 회원가입. Use ONLY when the provider is Naver, never Google, GitHub, Facebook, GitLab, LINE or Kakao. Spine: weegloo-service-login-client; model: weegloo-service-login.
 ---
 
 # Weegloo ServiceLogin — Naver provider setup

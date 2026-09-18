@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-gitlab
-description: Provider-specific setup for Weegloo ServiceLogin with **GitLab** OAuth 2.0 — the exact GitLab steps to register an application and obtain the `clientId` / `clientSecret` (GitLab calls them **Application ID** / **Secret**), the GitLab Redirect URI to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/gitlab`), the scopes-are-mandatory-but-`read_user`-is-enough rule, why **Confidential** stays on, the secret-shown-once gotcha, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is GitLab. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-client`; for the conceptual model see `weegloo-service-login`. Do not use this for Google, GitHub, Facebook, LINE, Kakao, or Naver.
+description: GitLab OAuth 2.0 setup for a Weegloo ServiceLogin (self-hosted GitLab too): the steps to register an application and get `clientId`/`clientSecret` (GitLab's Application ID / Secret), the GitLab Redirect URI to register on auth.weegloo.com, scopes being mandatory while `read_user` alone suffices, keeping Confidential on, the Secret shown only once, and the walkthrough to hand the user when asking for those blocking credentials. Use ONLY when the chosen provider is GitLab — never for Google, GitHub, Facebook, LINE, Kakao or Naver. Spine: `weegloo-service-login-client`. 깃랩 로그인.
 ---
 
 # Weegloo ServiceLogin — GitLab provider setup

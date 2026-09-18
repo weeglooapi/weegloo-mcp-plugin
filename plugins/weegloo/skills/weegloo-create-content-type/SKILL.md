@@ -1,6 +1,6 @@
 ---
 name: weegloo-create-content-type
-description: Creates or designs a ContentType in Weegloo — content modeling, schema and field design, choosing a field's type. Covers localized vs localized-false fields, ShortText vs LongText vs RichText (search semantics), FieldValidation, publishWithAuthor, displayField (the console label), and Refer relationships, plus soft guidance. Also carries the platform hard limits — 80 fields per ContentType, and max value lengths of 64 (ShortText) / 5,120 (LongText) / 204,800 (RichText) / 5,120 (Json) characters and 64 Array items — so use it when asked how long a field value may be or how many fields/items are allowed. Use when modeling content for a new app, defining fields/schema, deciding ShortText/LongText/RichText for a field (e.g. a note/post body), or before proposing or finalizing ANY ContentType. English only.
+description: Create or design a Weegloo ContentType: content modeling, schema/field design, choosing a field's type. Covers localized vs non-localized fields, ShortText vs LongText vs RichText (search semantics), FieldValidation, publishWithAuthor, displayField (console label), Refer relationships, and the platform hard limits on field count and value length, so it also answers how long a field value may be or how many fields/array items are allowed. Use when modeling content for a new app, defining fields/schema, picking a type for a note/post body, or before finalizing ANY ContentType. 콘텐츠 타입, 스키마/필드 설계, 데이터 모델링, 필드 타입, 다국어 필드.
 ---
 
 # Weegloo Create ContentType

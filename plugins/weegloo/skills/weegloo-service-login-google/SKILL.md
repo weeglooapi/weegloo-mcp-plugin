@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-google
-description: Provider-specific setup for Weegloo ServiceLogin with **Google** OAuth 2.0 — the exact Google Cloud Console steps to create an OAuth client and obtain the `clientId` / `clientSecret`, the Google redirect URI to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google`), the OAuth consent screen / Test users gotcha, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is Google. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-client`; for the conceptual model see `weegloo-service-login`. Do not use this for another provider (GitHub, Facebook, GitLab, LINE, Kakao, or Naver).
+description: Google-provider setup for Weegloo ServiceLogin (OAuth 2.0): the Google Cloud Console steps that produce the clientId / clientSecret, the Google Authorized redirect URI to register (auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google), the OAuth consent screen / Test users gotcha, the Web application client type even for native apps, and the illustrated walkthrough to hand the user when asking for those blocking credentials. Use ONLY when the chosen provider is Google; GitHub, Facebook, GitLab, LINE, Kakao and Naver have their own skills. 구글 로그인, 구글 소셜 로그인, 구글 계정 로그인.
 ---
 
 # Weegloo ServiceLogin — Google provider setup

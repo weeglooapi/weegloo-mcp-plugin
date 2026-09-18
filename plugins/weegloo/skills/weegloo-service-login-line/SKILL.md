@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-line
-description: Provider-specific setup for Weegloo ServiceLogin with **LINE** (LINE Login) OAuth 2.0 — the exact LINE Developers steps to create a LINE Login channel and obtain the `clientId` / `clientSecret` (= Channel ID / Channel secret), the LINE Callback URL to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/line`), the LINE-"Provider"-is-not-Weegloo's-provider terminology trap, and the separate email-permission application gotcha. Use ONLY when the chosen provider is LINE. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-client`; for the conceptual model see `weegloo-service-login`. Do not use this for Google, GitHub, Facebook, GitLab, Kakao, or Naver.
+description: Provider-specific console setup for Weegloo ServiceLogin with **LINE** (LINE Login) OAuth 2.0 — creating a LINE Login channel, getting clientId/clientSecret (= Channel ID / Channel secret), the Callback URL https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/line, the LINE-"Provider"-is-not-Weegloo-{provider} terminology trap, and the separate OpenID Connect email-permission application. 라인 로그인, LINE 소셜 로그인 연동, 라인 계정 회원가입. Use ONLY when the provider is LINE, never for Google, GitHub, Facebook, GitLab, Kakao or Naver. Wire protocol/SDK: weegloo-service-login-client; model: weegloo-service-login.
 ---
 
 # Weegloo ServiceLogin — LINE provider setup

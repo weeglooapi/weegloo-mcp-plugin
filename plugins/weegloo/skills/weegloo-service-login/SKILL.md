@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login
-description: Use BEFORE any general brainstorming for end-user sign-in features. ServiceLogin — the Space's own end-user sign-up/sign-in system, separate from Weegloo platform accounts. Covers ServiceLogin + ServiceUserRole + ServiceUser (roleOverride); Bearer Token for ACMA / ACDA / Upload (never CMA / CDA); current ServiceUser via ACMA GET /v1/me. ALSO: a ServiceUser can only be deleted from the console, so account deletion / withdrawal is modelled as a request ContentType the member writes via ACMA and an admin fulfils in the console - which is the in-app deletion path the App Store and Play Store require.
+description: Use BEFORE any general brainstorming for end-user sign-in. ServiceLogin — the Space's own end-user sign-up/sign-in, separate from Weegloo platform accounts. Covers ServiceLogin + ServiceUserRole + ServiceUser (roleOverride); its Bearer authorizes ACMA / ACDA / Upload, never CMA / CDA; current member via ACMA GET /v1/me. Also account deletion / withdrawal — a ServiceUser is deletable only in the console, so it is modelled as a request the member writes, the in-app deletion path the App Store and Play Store require. 회원가입, 소셜 로그인, 간편 로그인, 로그인 붙이기, 회원 탈퇴.
 ---
 
 # Weegloo — ServiceLogin (end-user sign-up for the product)

@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-facebook
-description: Provider-specific setup for Weegloo ServiceLogin with **Facebook** (Facebook Login) OAuth 2.0 — the exact Meta app-console steps to create an app and obtain the `clientId` / `clientSecret` (Facebook calls them **App ID** / **App secret**), the Facebook Redirect URI to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/facebook`), the `email`-permission-is-opt-in gotcha, the App Review gate that keeps everyone but your own account out, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is Facebook. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-client`; for the conceptual model see `weegloo-service-login`. Do not use this for Google, GitHub, GitLab, LINE, Kakao, or Naver.
+description: Facebook (Facebook Login) OAuth 2.0 setup for a Weegloo ServiceLogin: the Meta app console steps that produce `clientId`/`clientSecret` (Facebook's App ID / App secret), the Facebook Redirect URI to register on auth.weegloo.com, the opt-in `email` permission, the App Review gate that blocks everyone but the creator's account, and the walkthrough to hand the user when asking for those blocking credentials. Use ONLY when the chosen provider is Facebook — never for Google, GitHub, GitLab, LINE, Kakao or Naver. Spine: `weegloo-service-login-client`. 페이스북 로그인, 메타 앱.
 ---
 
 # Weegloo ServiceLogin — Facebook provider setup

@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-github
-description: Provider-specific setup for Weegloo ServiceLogin with **GitHub** OAuth 2.0 — the exact GitHub steps to register an OAuth App and obtain the `clientId` / `clientSecret`, the GitHub Authorization callback URL to register (`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/github`), the single-callback-URL and generate-secret-shown-once gotchas, and the walkthrough to hand the user when asking for the blocking credentials. Use ONLY when the chosen provider is GitHub. For the provider-agnostic wire protocol / SDK / callback flow see `weegloo-service-login-client`; for the conceptual model see `weegloo-service-login`. Do not use this for another provider (Google, Facebook, GitLab, LINE, Kakao, or Naver).
+description: Provider-specific console setup for Weegloo ServiceLogin with **GitHub** OAuth 2.0 — registering a GitHub OAuth App, getting clientId/clientSecret, the Authorization callback URL https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/github, the one-callback-URL-only and secret-shown-once gotchas, and the private-email first-sign-in failure. 깃허브 로그인, 깃헙 소셜 로그인 연동, GitHub 계정 회원가입. Use ONLY when the provider is GitHub, never for Google, Facebook, GitLab, LINE, Kakao or Naver. Wire protocol/SDK: weegloo-service-login-client; model: weegloo-service-login.
 ---
 
 # Weegloo ServiceLogin — GitHub provider setup
