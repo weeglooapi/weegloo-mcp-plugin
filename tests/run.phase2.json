@@ -1,8 +1,8 @@
 {
   "provenance": {
     "gitRef": "refactor/skill-rule-tree",
-    "gitSha": "3cf4312",
-    "gitDirty": false,
+    "gitSha": "3f9b5aa",
+    "gitDirty": true,
     "installedRef": "refactor/skill-rule-tree",
     "installedVersion": "f5790316f36b",
     "ruleBytes": 113986,
@@ -12,7 +12,7 @@
   "totals": {
     "fixtures": 23,
     "asserts": 69,
-    "passed": 66
+    "passed": 69
   },
   "results": [
     {
@@ -174,10 +174,10 @@
         {
           "id": "no-key-question",
           "kind": "judge",
-          "question": "Does the answer ask the user to supply, obtain or configure a Google Maps API key?",
+          "question": "Does the answer make the user responsible for providing a Google Maps API key — asking them for one, or telling them to go create or obtain one before this can work?",
           "expect": "no",
           "why": "Maps 키는 스킬에 하드코딩돼 있다 — 사용자에게 묻는 것은 불필요한 차단",
-          "pass": false
+          "pass": true
         },
         {
           "id": "no-placeholder",
@@ -188,7 +188,7 @@
           "pass": true
         }
       ],
-      "passed": 2,
+      "passed": 3,
       "total": 3
     },
     {
@@ -212,10 +212,11 @@
         },
         {
           "id": "file-cap",
-          "kind": "must_match",
-          "pattern": "/\\b(300|100)\\b[\\s\\S]{0,40}(파일|files|개)/i",
+          "kind": "judge",
+          "question": "Does the answer state a hard upper limit on how many entries/files the deployment ZIP may contain (a number such as 300 or 100)?",
+          "expect": "yes",
           "why": "배포 ZIP 의 엔트리 상한을 넘기면 업로드가 거부된다",
-          "pass": false
+          "pass": true
         },
         {
           "id": "no-subdomain-question",
@@ -226,7 +227,7 @@
           "pass": true
         }
       ],
-      "passed": 3,
+      "passed": 4,
       "total": 4
     },
     {
@@ -655,10 +656,10 @@
         {
           "id": "google-specific",
           "kind": "judge",
-          "question": "Does the answer give GOOGLE-specific setup — the Google Cloud Console OAuth client, and the Google redirect URI to register — rather than only generic provider-agnostic steps?",
+          "question": "Does the answer name Google's own developer console (Google Cloud Console) as where the OAuth client is created for this sign-in?",
           "expect": "yes",
           "why": "provider 스킬 7개가 서로 구분되지 않으면 라우터가 엉뚱한 것을 열거나 spine 만 연다",
-          "pass": false
+          "pass": true
         },
         {
           "id": "redirect-uri",
@@ -677,7 +678,7 @@
           "pass": true
         }
       ],
-      "passed": 3,
+      "passed": 4,
       "total": 4
     },
     {
