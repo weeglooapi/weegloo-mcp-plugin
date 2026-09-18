@@ -67,7 +67,7 @@ This section assumes Mechanism B (browser, no backend).
 ### Platform context
 
 - The browser stores the **CMA access token** (typically in **`sessionStorage`**) after the console posts it back. On Weegloo WebHosting in particular, **there is no server** to hold secrets or exchange OAuth codes.
-- **Never** send **`Accept: application/json`** to Weegloo APIs — use vendor negotiation per **`weegloo-api-endpoints`** (omit `Accept` or use the documented vendor type) to avoid **406** and related issues.
+- **Omit `Accept`** on Weegloo API calls (or send the documented vendor type) so you receive the vendor JSON the API lists first — see **`weegloo-api-endpoints`**.
 
 ### 1. Register a `message` listener (once per page lifecycle)
 

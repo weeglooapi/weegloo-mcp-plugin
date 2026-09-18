@@ -15,12 +15,9 @@ description: >
 ---
 
 rules:
-  - section: AI Agent vs application code (mandatory)
+  - section: Who these base URLs are for (mandatory)
     items:
-      - **AI Agent (Cursor, Claude, etc.)** must **not** call these HTTP APIs directly. Use **Weegloo MCP tools** only.
-      - **Application / development code** (frontend, backend, scripts) may call the APIs using the base URLs and paths documented below.
-      - APIs are for **implementation in project code**; agents integrate via **MCP**, not raw REST calls.
-      - **Agent-side exceptions (exactly two):** two read-only, unauthenticated GETs the agent performs directly because neither has an MCP tool — (1) **`GET https://cma.weegloo.com/v1/policy/terms`** (the terms-consent gate, see **`weegloo-terms-consent`**) and (2) **`GET https://ai.weegloo.com/v1/version`** (the plugin update check, see **`weegloo-version`**). No other direct API call is allowed.
+      - **Everything below is for APPLICATION code** — frontend, backend, scripts. The **agent** reaches Weegloo through **MCP tools**, never by calling these URLs directly. The complete rule, including the two read-only GETs that are the only exceptions, is in **`weegloo-global-rules`** (*MCP Tool Usage*).
 
   - section: Two login models (read this before picking an API)
     items:
@@ -184,12 +181,8 @@ rules:
 
   - section: Common Mistakes to Avoid
     items:
-      - Do not infer or guess URLs. Use only the base URLs listed in this rule.
-      - Wrong: `https://cda-weegloo.com` (wrong host pattern), using CMA base URL for CDA traffic.
-      - Correct: For CDA content fetch, use `https://cda.weegloo.com/v1/spaces/{spaceId}/...`.
-      - Wrong: `Accept: application/json` on Weegloo API requests. Prefer **no** `Accept` header, or **`application/vnd.com.weegloo.v1+json;charset=UTF-8`** if `Accept` is required.
-      - Wrong (ACMA/ACDA): flat Content paths like `https://acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}` — these **do not exist** on ACMA. Use the nested `…/content-types/{contentTypeId}/contents/{contentId}` form (see *ACMA / ACDA — Content is addressed UNDER its ContentType*).
-      - Wrong (Script): executing a Script on the CMA host, `https://cma.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute`. **Script execution has its own host:** `https://script.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute` (and `…/execute/anonymous`). CMA is where a Script is authored, not run.
+      - Never infer or guess a URL — use only the base URLs in this rule. Wrong host pattern: `https://cda-weegloo.com`.
+      - Wrong: `Accept: application/json`. Wrong (ACMA): a flat `…/spaces/{spaceId}/contents/{contentId}`. Wrong (Script): executing on the CMA host — execution lives on `script.weegloo.com`; CMA is where a Script is **authored**, not run. Each is explained in its own section above.
 
   - section: Base URL quick reference
     items:

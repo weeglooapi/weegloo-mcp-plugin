@@ -32,8 +32,7 @@ rules:
   - section: When unsure, read the docs first (do not guess)
     items:
       - If you are **not certain** how any Weegloo feature works or behaves — a query/filter parameter, `select`/`include` response shape, locale rules, an error code, publish/version semantics, role/permission scope, or any concept — **look it up in the docs before acting**. Do **not** rely on assumptions or memory.
-      - **Where to look — discover the path, do not guess.** Read the general Weegloo docs at **`docs.weegloo.com`**. **First** fetch the index **`https://docs.weegloo.com/llms.txt`**, take the **exact** page path from it (or from a link inside a Weegloo Markdown page you already fetched), then fetch that path with **`.md`** appended. **You may not fetch a `.md` whose path you cannot point to in `llms.txt` (or a real in-doc link)** — do not hand-build, rename, pluralize, or "try" nearby paths; the **`.md`** suffix is not a way to discover paths.
-      - **Wrong-path signal:** if a docs fetch returns HTML, a SPA shell (`<!doctype html>` or a `<div id="root">` app root), a redirect to the app, or **403 / 404**, the **path is wrong or absent** — go back to `llms.txt` and re-derive it. Do **not** retry path variants or swap fetch tools to diagnose the same guessed path. Fuller flow and fetch hygiene live in **`weegloo-api-endpoints`**; exact schemas live in the **API Swagger specs**.
+      - **Where to look — discover the path, never guess it.** Fetch the index **`https://docs.weegloo.com/llms.txt`** first, take an **exact** path from it (or from a link inside a Weegloo Markdown page you already fetched), then fetch that path with **`.md`** appended. A fetch that returns HTML, a SPA shell or **403 / 404** means the **path is wrong** — re-derive it from `llms.txt`; do **not** retry variants or swap fetch tools. Full procedure and fetch hygiene: **`weegloo-api-endpoints`**; exact schemas: the **API Swagger specs**.
       - **Treat the docs as the source of truth** over guesses. After an unexpected error or empty result, re-check the relevant docs page before retrying.
 
   - section: Read the right skill BEFORE architecture / ContentType design (hard gate)
@@ -54,8 +53,7 @@ rules:
 
   - section: HTTP JSON media type (when calling Weegloo APIs from code)
     items:
-      - Weegloo APIs respond with **`application/vnd.com.weegloo.v1+json;charset=UTF-8`**, not plain `application/json`.
-      - Application code (**fetch**, axios, etc.) must **not** send **`Accept: application/json`**; **omit `Accept`** or use the vendor type (see `weegloo-api-endpoints`). Agents normally use **MCP**, not raw HTTP-this applies to **human-written** clients and scripts.
+      - Weegloo responds with **`application/vnd.com.weegloo.v1+json;charset=UTF-8`**, not plain `application/json`. Application code (`fetch`, axios) must **omit `Accept`** rather than sending `Accept: application/json` — including in shared client defaults. Full rule: **`weegloo-api-endpoints`**.
 
   - section: DeliveryAccessToken and SpaceRole (security)
     items:
@@ -104,13 +102,9 @@ rules:
       - Do NOT use /organizations for "my organizations"; use /me/organization-memberships instead.
       - **Response shape — the related resource is nested under `sys`, NOT at the item root.** On a `SpaceMembership` the Space id is at **`item.sys.space.sys.id`** (and on an `OrganizationMembership`, **`item.sys.organization.sys.id`**). Reading the flat path `item.space.sys.id` yields **`undefined`** — a common membership-gate bug where every real member is wrongly rejected. To gate "is this user a member of *this* Space?", match `SPACE_ID` against `item.sys.space.sys.id`. Detail + correct/wrong snippets: **`weegloo-user-login`** skill.
 
-  - section: ACMA Content paths are nested under ContentType (no flat /contents); ACDA has both
+  - section: ACMA Content paths are nested under ContentType (no flat /contents)
     items:
-      - On **ACMA**, every Content operation **MUST** address the Content **under its ContentType**: list/create at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents`**, and get/update/delete at **`/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`**.
-      - **The CMA/CDA-style flat Content paths do NOT exist on ACMA** — never call **`/v1/spaces/{spaceId}/contents`** or **`/v1/spaces/{spaceId}/contents/{contentId}`** on **ACMA** (they return **404**). **ACDA is different:** it exposes **both** the nested form **and** a flat read — `GET /v1/spaces/{spaceId}/contents` (list) and `GET /v1/spaces/{spaceId}/contents/{contentId}` (get one). Prefer nested on ACDA for parity, but the flat read is supported.
-      - **The `contentTypeId` requirement is ACMA-only.** On **ACMA**, if you hold only a `contentId`, resolve its ContentType first (from the resource you have, or by listing under the ContentType) — do **not** fall back to a flat path. On **ACDA** you *may* fetch one Content by `contentId` alone via the flat path.
-      - **Wrong (ACMA):** `https://acma.weegloo.com/v1/spaces/{spaceId}/contents/{contentId}` (404). **Correct (ACMA):** `https://acma.weegloo.com/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`.
-      - This is an **application-code** rule (ACMA/ACDA are called from product code, not by the agent over MCP). Base URLs and the full ACMA/ACDA contrast live in **`weegloo-api-endpoints`**.
+      - **On ACMA every Content operation is addressed UNDER its ContentType** — `/v1/spaces/{spaceId}/content-types/{contentTypeId}/contents[/{contentId}]`. The CMA/CDA-style flat `/contents` paths **do not exist on ACMA** and return **404**; holding only a `contentId`, resolve its ContentType rather than falling back to a flat path. (**ACDA** has both forms.) Full contrast and the ACDA flat read: **`weegloo-api-endpoints`**.
 
   - section: Resource Search
     items:
@@ -152,11 +146,10 @@ rules:
       - `links.next`: Full path for the next page (e.g., /v1/market/apps?limit=6&order=-sys.createdAt,sys.id&next=CURSOR). If absent, there are no more pages.
       - `links.prev`: Full path for the previous page. If absent, there is no previous page.
       - To fetch the next page, use the `next` query parameter value from `links.next` (extract from the URL) and pass it as the `next` param in your next request. Alternatively, call the full path in `links.next` directly.
-      - `skip` is a working offset but **capped at 100** — use the `next`/`prev` cursors for anything beyond the first pages, not offset paging.
 
   - section: Resource Updates
     items:
-      - When updating any resource, always include the `x-weegloo-version` header with the current resource's `sys.version`.
+      - When updating a **versioned** resource — **Content**, **Media**, **ContentType** — always include the `x-weegloo-version` header with the current `sys.version`. Not every resource is versioned: a **Scheduler** has no `sys.version` and its update takes **no** version header (see **`weegloo-scheduler`**), so read the resource's own skill rather than assuming.
       - **MCP update tools take the version via the parameter named `X-Weegloo-Version`** (matching the HTTP header, capitalized exactly) — NOT `version` or `xWeeglooVersion`. Guessing the wrong param name leaves the version stale and the update is rejected as a version conflict.
       - **Updates are FULL REPLACEMENT:** resend ALL fields, not just the changed ones. On a version conflict, GET the resource to read the current `sys.version`, then retry the update with that fresh version.
       - All resource updates must use the appropriate MCP tool; direct modifications outside MCP tools are not allowed.
@@ -170,7 +163,7 @@ rules:
       - **Applies only to Weegloo WebHosting** as the deploy target-not to apps self-hosted on other platforms.
       - **Static sites only:** no SSR or app server on the host-ship a **pre-built** static export (see `weegloo-web-hosting-rules`).
       - **Weegloo REST from a WebHosted site:** the **browser** must call Weegloo REST APIs such as **CDA** (**`fetch` / AJAX**); there is no server on Weegloo to do it per request. Elsewhere-hosted apps may use SSR or server-side clients as they choose.
-      - **At most 300 files** per deployment ZIP (production; 100 by default — a build kept ≤ 100 is always safe), counted as archive entries; prefer **web fonts** from CDNs (see `weegloo-web-hosting-rules`).
+      - **At most 300 archive entries** per deployment ZIP — details and the safe-by-default figure in **`weegloo-web-hosting-rules`**.
 
   - section: Filter Parameters (API List Endpoints)
     items:

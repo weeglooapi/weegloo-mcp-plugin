@@ -8,9 +8,14 @@ export default {
   lang: 'ko',
   prompt: 'Weegloo 로 포트폴리오 사이트 만들어줘.',
   asserts: [
+    // The runner's plan-only wrapper explicitly forbids asking the user follow-up questions,
+    // so "asks the user to choose" cannot be the criterion here — the first baseline failed
+    // this assert on an answer that named the gate correctly and then stated its assumption,
+    // which is the right behavior under that instruction. What the gate actually forbids is
+    // proceeding as if the Space were already known.
     { id: 'space-is-settled', kind: 'judge', expect: 'yes',
-      question: 'Does the answer establish which Organization/Space the work targets — by asking the user to choose, or by listing their options — before creating resources?',
-      why: '거의 모든 리소스는 특정 Space 안에 산다 — 먼저 정해야 한다' },
+      question: 'Does the answer treat the target Organization/Space as something that must be explicitly settled before resources are created — by asking the user, listing their options, or stating it as an explicit assumption — rather than proceeding as though it were already known?',
+      why: '거의 모든 리소스는 특정 Space 안에 산다 — 암묵적으로 넘어가면 작업이 엉뚱한 워크스페이스에 흩어진다' },
     { id: 'no-auto-pick-first', kind: 'judge', expect: 'no',
       question: 'Does the answer silently pick an Organization or Space for the user — for example by taking the first item of a list — without their choice?',
       why: '목록의 첫 항목을 자동으로 고르면 작업이 엉뚱한 워크스페이스에 흩어진다' },
