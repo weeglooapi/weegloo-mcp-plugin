@@ -283,19 +283,39 @@ async function main() {
     for (const r of base.results) for (const a of r.asserts) baseByAssert.set(`${r.id}::${a.id}`, a.pass);
 
     const regressions = [];
+    const evaluated = new Set();
     for (const r of results) {
       for (const a of r.asserts) {
         const key = `${r.id}::${a.id}`;
+        evaluated.add(key);
         if (baseByAssert.get(key) === true && a.pass === false) regressions.push({ key, why: a.why });
       }
     }
+    // An errored fixture returns NO asserts, so it drops out of the loop above entirely.
+    // Without this check a run in which every fixture errored — a rate limit, an expired
+    // login, a crashed CLI — reports "no regressions" and exits 0. That is the same false
+    // green this tool exists to prevent, so anything the baseline covered and this run did
+    // not is reported as UNVERIFIED and fails the run. "We could not measure it" is not
+    // "it is fine".
+    const unverified = [...baseByAssert.keys()].filter((k) => baseByAssert.get(k) === true && !evaluated.has(k));
+
     console.log(`\nbaseline: ${base.provenance.gitRef}@${base.provenance.gitSha} — ${base.totals.passed}/${base.totals.asserts}`);
     if (regressions.length) {
       console.error(`\nREGRESSION — ${regressions.length} assert(s) that passed on the baseline now fail:`);
       for (const r of regressions) console.error(`  ✗ ${r.key}\n      ${r.why}`);
-      return 1;
     }
-    console.log('no regressions.');
+    if (unverified.length) {
+      const errored = results.filter((r) => r.error);
+      console.error(`\nUNVERIFIED — ${unverified.length} assert(s) the baseline covered were not measured in this run:`);
+      for (const k of unverified) console.error(`  ? ${k}`);
+      if (errored.length) {
+        console.error(`\n  cause — ${errored.length} fixture(s) errored:`);
+        for (const r of errored) console.error(`    ${r.id}: ${r.error}`);
+      }
+      console.error('\n  This run cannot support a "no regression" claim. Re-run the missing fixtures.');
+    }
+    if (regressions.length || unverified.length) return 1;
+    console.log('no regressions — every baseline assert was measured.');
   }
 
   return 0;
