@@ -130,10 +130,28 @@ function corpusProvenance() {
     walk(d);
     return total;
   };
+  // The git fields describe the REPO. They are not what the agent read — the agent reads the
+  // INSTALLED corpus under the user's agent home, which only changes when the installer runs.
+  // Recording only the repo sha made a scorecard look precise while saying nothing about the
+  // corpus actually measured, so the installer's own stamp is recorded alongside it. When the
+  // two disagree (repo edited, not yet installed) that is expected, not an error — but it has
+  // to be visible, because a comparison is only meaningful between two runs of the same
+  // INSTALLED corpus.
+  let installed = null;
+  try {
+    const stamp = path.join(process.env.USERPROFILE || process.env.HOME || '', '.weegloo', 'claude', 'version-check.json');
+    if (existsSync(stamp)) {
+      const s = JSON.parse(readFileSync(stamp, 'utf-8'));
+      installed = { ref: s.ref ?? null, version: s.version ?? null };
+    }
+  } catch { /* the stamp is a convenience, never a requirement */ }
+
   return {
     gitRef: sh('git rev-parse --abbrev-ref HEAD'),
     gitSha: sh('git rev-parse --short HEAD'),
     gitDirty: sh('git status --porcelain') ? true : false,
+    installedRef: installed?.ref ?? null,
+    installedVersion: installed?.version ?? null,
     ruleBytes: bytes('plugins/weegloo/rules', (n) => n.endsWith('.mdc')),
     skillBytes: bytes('plugins/weegloo/skills', (n) => n.endsWith('.md')),
   };
@@ -281,8 +299,11 @@ async function main() {
   if (args.merge) {
     if (!existsSync(args.merge)) throw new Error(`--merge file not found: ${args.merge}`);
     const prev = JSON.parse(readFileSync(args.merge, 'utf-8'));
-    if (prev.provenance?.gitSha !== provenance.gitSha) {
-      console.warn(`  warning: merging across different corpora (${prev.provenance?.gitSha} vs ${provenance.gitSha})`);
+    // The INSTALLED version is what was measured; the repo sha is not. Warn on the one that
+    // actually invalidates a merge.
+    if (prev.provenance?.installedVersion && provenance.installedVersion
+        && prev.provenance.installedVersion !== provenance.installedVersion) {
+      console.warn(`  warning: merging across different INSTALLED corpora (${prev.provenance.installedVersion} vs ${provenance.installedVersion}) — the merged scorecard describes no single corpus`);
     }
     const byId = new Map(prev.results.map((r) => [r.id, r]));
     for (const r of results) byId.set(r.id, r);

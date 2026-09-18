@@ -1,16 +1,18 @@
 {
   "provenance": {
     "gitRef": "refactor/skill-rule-tree",
-    "gitSha": "9638bb8",
+    "gitSha": "c012118",
     "gitDirty": true,
-    "ruleBytes": 115213,
-    "skillBytes": 495792
+    "installedRef": "develop",
+    "installedVersion": "2b949e0ac300",
+    "ruleBytes": 112487,
+    "skillBytes": 495748
   },
   "agentCmd": "claude -p",
   "totals": {
-    "fixtures": 20,
-    "asserts": 59,
-    "passed": 59
+    "fixtures": 23,
+    "asserts": 69,
+    "passed": 69
   },
   "results": [
     {
@@ -632,6 +634,110 @@
           "question": "Does the answer ask the user to obtain, supply or register a Kakao API key for the postcode widget? Stating that no key is needed does NOT count.",
           "expect": "no",
           "why": "우편번호 위젯은 키도 등록도 필요 없다 — 묻는 것 자체가 불필요한 차단",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "provider-routing-google",
+      "lang": "ko",
+      "file": "21-provider-routing-google.mjs",
+      "asserts": [
+        {
+          "id": "service-login",
+          "kind": "must_match",
+          "pattern": "/ServiceLogin/i",
+          "why": "제품 end-user 로그인은 ServiceLogin 이다 (Weegloo 플랫폼 계정 로그인이 아니다)",
+          "pass": true
+        },
+        {
+          "id": "google-specific",
+          "kind": "judge",
+          "question": "Does the answer give GOOGLE-specific setup — the Google Cloud Console OAuth client, and the Google redirect URI to register — rather than only generic provider-agnostic steps?",
+          "expect": "yes",
+          "why": "provider 스킬 7개가 서로 구분되지 않으면 라우터가 엉뚱한 것을 열거나 spine 만 연다",
+          "pass": true
+        },
+        {
+          "id": "redirect-uri",
+          "kind": "judge",
+          "question": "Does the answer give the auth.weegloo.com redirect URI that must be registered in the provider console, as a value the user is told to copy?",
+          "expect": "yes",
+          "why": "provider 콘솔에 등록할 Redirect URI 는 사용자가 직접 해야 하는 수동 단계다",
+          "pass": true
+        },
+        {
+          "id": "no-wrong-provider",
+          "kind": "judge",
+          "question": "Does the answer walk through a DIFFERENT provider (Kakao, Naver, GitHub, LINE, Facebook, GitLab) as the one being set up?",
+          "expect": "no",
+          "why": "요청한 provider 가 아닌 것을 설정하면 조용히 틀린 작업이 된다",
+          "pass": true
+        }
+      ],
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "id": "provider-routing-kakao",
+      "lang": "ko",
+      "file": "22-provider-routing-kakao.mjs",
+      "asserts": [
+        {
+          "id": "service-login",
+          "kind": "must_match",
+          "pattern": "/ServiceLogin/i",
+          "why": "제품 end-user 로그인은 ServiceLogin 이다",
+          "pass": true
+        },
+        {
+          "id": "kakao-specific",
+          "kind": "judge",
+          "question": "Does the answer give KAKAO-specific setup (the Kakao Developers application and its keys/consent settings) rather than only generic provider-agnostic steps?",
+          "expect": "yes",
+          "why": "provider 스킬 7개가 서로 구분되어야 라우터가 맞는 것을 연다",
+          "pass": true
+        },
+        {
+          "id": "not-postcode-widget",
+          "kind": "judge",
+          "question": "Does the answer confuse this with the Kakao/Daum POSTCODE (주소·우편번호) widget, i.e. talk about address lookup instead of OAuth sign-in?",
+          "expect": "no",
+          "why": "같은 회사의 다른 제품이라 혼동되기 쉽다 — 주소 검색 위젯은 로그인과 무관하다",
+          "pass": true
+        }
+      ],
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "id": "webhook-event",
+      "lang": "ko",
+      "file": "23-webhook-event.mjs",
+      "asserts": [
+        {
+          "id": "webhook",
+          "kind": "must_match",
+          "pattern": "/Webhook|웹훅/i",
+          "why": "트리거가 Space 이벤트면 Webhook 이다 (시계면 Scheduler, 호출자면 /execute)",
+          "pass": true
+        },
+        {
+          "id": "publish-topic",
+          "kind": "judge",
+          "question": "Does the answer subscribe to a publish-related Content topic (e.g. Content.Publish) rather than only create/update?",
+          "expect": "yes",
+          "why": "\"발행되면\" 은 Publish 이벤트다 — Create 에 걸면 초안 저장에도 알림이 간다",
+          "pass": true
+        },
+        {
+          "id": "url-xor-script",
+          "kind": "judge",
+          "question": "Does the answer configure BOTH a url and a script on the same Webhook?",
+          "expect": "no",
+          "why": "Webhook 은 url 과 script 중 정확히 하나만 한다 — 둘 다 넣으면 거부된다",
           "pass": true
         }
       ],
