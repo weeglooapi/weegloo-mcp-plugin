@@ -6,158 +6,44 @@ description: Weegloo Script — declarative backend endpoints in a Space, run by
 # Weegloo — Script (declarative backend endpoints)
 
 A **Script** is a named, saved sequence of **statements** stored in a Space. Your frontend (or a
-Webhook) invokes it by id; the platform runs it server-side and returns a result. It is Weegloo's
-way to run **backend logic without hosting a backend** — call external APIs, read/transform/write
-Content and Media, enforce credits/ownership, all in one place. A single Script can make an external
-`Http` call **and** write the result back with `ResourceCreate`/`ResourcePatch` (and Media ingest) —
-see *The external-API job pattern* below.
+Webhook) invokes it by id; the platform runs it server-side and returns a result — **backend logic
+without hosting a backend**. The everyday shape, documented end to end here, is: **`Http` an external
+API → write the answer into Content/Media → `Return` a summary.**
 
-## When to use
+**Use one** for a third-party HTTP API call with no backend worker; server-side compute/transform;
+ownership or credit enforcement that must not be client-trusted; a "create a job → poll" flow.
+**Not** for work needing none of the server's authority (summing, sorting, formatting over data the
+caller already holds) — that is client code, and every run spends the Organization's allowance.
 
-- The product must call a **third-party HTTP API** (LLM, image gen, moderation, search, payment)
-  **without** a dedicated backend worker.
-- Server-side **compute/transform**: read Content, derive values, write results, all atomically-ish.
-- **Ownership / credit** enforcement that must not be client-trusted (charge a wallet, gate by
-  `createdBy`, validate input) before doing work.
-- Any **"create a job → poll for the result"** flow.
+**Other shapes a Script is the right answer for** — read **`references/patterns.md`** when the task
+is one of these rather than an outbound API call: ordered **all-or-nothing** multi-step work with
+`Try`/`catch` compensation; **concurrency-safe** writes to a shared row (`version` optimistic
+locking); **privilege delegation** (a low-privilege caller performs ONE privileged operation);
+**secret-gated** edit/delete for anonymous callers (the anonymous-board password gate).
 
-**When NOT to use one.** A Script must earn its run: executions are a **monthly, Organization-wide
-allowance** shared with Webhook-run Scripts and Schedulers, and once it is spent every Script *and*
-Scheduler in the Organization stops. Work that needs none of the server's authority — summing,
-sorting, grouping, formatting, date math over data the caller already holds — belongs in the
-**client** (browser / app), not in a Script and not in a `summary` Content rewritten on every change.
-Ask "does this need a secret, an authorization decision, atomicity, concurrency safety, delegated
-privilege, or data the client must not hold?" — if no, it is client code. Rule: `weegloo-minimal-load`.
-
-> Base URLs, Accept/vendor-JSON, and OpenAPI/docs discovery live in `weegloo-api-endpoints`.
-> Role permission shapes (incl. Script `Execute`) live in `weegloo-space-role`.
-> Media readiness (`Published`, file `state`) lives in `weegloo-media-lifecycle`.
-
-## Mental model
+## Mental model — and which plane
 
 - A Script is a **resource** in a Space with a **`definition`**: `{ method, statements[] }`.
-- The frontend calls
-  **`POST https://script.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute`** with a JSON
-  **payload**; statements read it as **`{ /payload/... }`**.
+- **Authoring is CMA-only** — CRUD it with a **Weegloo User** Bearer on `https://cma.weegloo.com`
+  (`/v1/spaces/{spaceId}/scripts[/{scriptId}]`; PUT is full replacement and takes `X-Weegloo-Version`;
+  **delete is blocked while a Webhook or Scheduler references it**). There is **no ACMA authoring**.
+  Over MCP use the `cma_*` Script tools when present (they ship in the **`extra`** / **`all`** group).
+- **Execution has its own host** — **`https://script.weegloo.com`**, whatever identity calls it
+  (Weegloo User Bearer, **`SpaceAccessToken`**, or ServiceLogin Bearer); each needs **Script
+  `Execute`** on the role that identity resolves to.
+  - **`POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute`** — with a JSON **payload**, which
+    statements read as `{ /payload/... }`. **The request's HTTP method must match
+    `definition.method`.** The frontend calls this directly over REST; that is the runtime path, not
+    an agent-only action.
+  - **`POST …/scripts/{scriptId}/execute/anonymous`** — the same, with no token at all.
 - The run happens **on the request** and the response carries what `Return` produced (`200` by
-  default) — from the caller's side it is an ordinary API call. Nothing is queued and there is nothing
-  to poll, so **the time the Script can spend is a design constraint** (*Run budget and limits*).
-- A **Webhook** can run a Script instead of calling an external URL (event-driven trigger) — its
-  `script` field points at the Script. See `weegloo-webhook`.
-
-## Patterns — recognize when Script is the right tool
-
-Reach for a Script (rather than client-side orchestration, or a Webhook that only POSTs to a URL)
-whenever one of these fits. These are the situations an AI agent should map to Script:
-
-1. **Event → external call → follow-up work (Webhook + Script).** React to a Space event by calling a
-   third-party API and then *doing something with the result* — write a field, create a record,
-   ingest Media. Wire it by pointing a **Webhook's `script`** at the Script (runs automatically on
-   e.g. `Content.Publish`), or call `/execute` from the frontend. *Example:* on `Content.Publish`,
-   POST the item to a search-index API, then `ResourcePatch` an `indexedAt` value back onto it.
-   (`weegloo-webhook`.)
-2. **Ordered, all-or-nothing multi-step work.** Steps that must run **in a fixed order and never be
-   left half-done** belong in **one** Script, not a chain of separate client calls that can be
-   interrupted between steps. Statements run **sequentially, server-side**; wrap the risky middle in
-   **`Try`/`catch`/`finally`** to **compensate** (undo) on failure; the caller gets one answer for
-   the whole unit and can retry it as a unit. *Example:* *reserve
-   stock → charge → create order*, with `catch` releasing the reservation if a later step throws.
-3. **Concurrency-safe writes with `version` (optimistic locking).** To mutate a shared row without
-   **lost updates**, read it (`ResourceRead`/`ResourceFind`), then `ResourcePatch`/`ResourceUpdate`
-   passing **`version: "{ /<read>/sys/version }"`**. If another writer changed the row meanwhile the
-   version no longer matches and the write **fails with a conflict** — `catch` it and retry
-   (re-read → re-apply). *Example:* safely increment a shared counter / like-count / remaining
-   inventory under concurrent calls.
-
-   ```jsonc
-   { "type": "ResourceRead", "resource": "Content", "target": { "sys": { "id": "{ /payload/id }" } }, "name": "row" },
-   { "type": "Try",
-     "body": [ { "type": "ResourcePatch", "resource": "Content",
-       "target": { "sys": { "id": "{ /row/sys/id }" } },
-       "version": "{ /row/sys/version }",
-       "fields": { "count": { "en-US": { "$+": [ "{ /row/fields/count/en-US }", 1 ] } } } } ],
-     "catch": [ { "type": "Return", "value": { "ok": false, "retry": true }, "isError": true, "statusCode": 409 } ] }
-   ```
-4. **Controlled privilege delegation (act with the author's authority).** A Script runs its inner
-   Content/Media ops with the **Script author's** permissions, so it is a **safe, narrow privilege
-   grant**: expose a *single* privileged operation to callers who otherwise lack it. Give end users
-   only `script.Execute` (ideally pinned to that one Script via the **`self`** filter —
-   `weegloo-space-role`); they gain exactly that operation and nothing else. *Example:* end users
-   **cannot** write the `Log` (audit/activity) ContentType directly, but a Script `recordEvent`
-   **appends** a log entry on their behalf — so they can add entries only *through* the Script (which
-   fixes the shape and stamps the caller), yet still cannot read, edit, or delete arbitrary logs.
-   Same shape for: increment a protected counter, file a report into a moderation queue they can't
-   read, or grant a one-off write into an admin-only collection. (This is the positive side of the
-   *author gate* in **Secrets & auth** below — the author needs the real permission; the caller does
-   not.)
-5. **Secret-gated edit/delete — ownership by a shared secret, not identity.** When the caller has **no
-   usable identity** to gate on — anonymous / public callers, so `createdBy :self` means nothing —
-   prove ownership with a **caller-supplied secret** the Script checks **server-side** against a store
-   the caller **cannot read**. Canonical case: an **anonymous board** — a post is created with a
-   `password`, and a later **edit or delete** must re-supply it. Keep the password in a **separate
-   credential ContentType** (one row per post: the post id + its password) on which the public role
-   has **no `Read`**. The Script, running with its **author's** delegated authority (Pattern 4 +
-   *Secrets & auth*), `ResourceFind`s that credential, compares, and **`Return`s an error on
-   mismatch** — only a match proceeds to the `ResourcePatch` / delete. Because the comparison happens
-   *inside* the Script, the secret store never reaches the client: a caller holding nothing but
-   `script.Execute` can neither read another post's password nor skip the gate. (Anonymous callers
-   carry `script.Execute` via a **`SpaceAccessToken`** — the
-   Space-scoped token that, with a suitably narrow bound role, authorizes `/execute` for an
-   anonymous/public caller with no logged-in Weegloo User; see **`weegloo-space-access-token`**.)
-
-   ```jsonc
-   // Edit a post only if the supplied password matches the stored one.
-   // Public role holds script.Execute on THIS script only — NOT Read on ct_pw, NOT Edit on ct_post.
-   { "type": "ResourceFind", "resource": "Content", "contentType": { "sys": { "id": "ct_pw" } },
-     "where": { "fields.postId": { "eq": "{ /payload/postId }" } }, "name": "cred" },
-   { "type": "If", "condition": { "or": [
-       { "==": [ "{ /cred }", null ] },
-       { "!=": [ "{ /cred/fields/password/en-US }", "{ /payload/password }" ] } ] },
-     "then": [ { "type": "Return", "isError": true, "statusCode": 403,
-                 "value": { "ok": false, "error": "bad-password" } } ] },
-   { "type": "ResourcePatch", "resource": "Content", "target": { "sys": { "id": "{ /payload/postId }" } },
-     "fields": { "body": { "en-US": "{ /payload/fields/body }" } } },
-   { "type": "Return", "value": { "ok": true } }
-   ```
-
-   **Delete** reuses the same gate, then — `ResourceDelete` accepts **Draft/Archived only** —
-   `ResourceUnpublish` the post (read it first for its `sys.version`) **before** `ResourceDelete`.
-   Prefer to **store a client-hashed value, not the raw password** (the Script compares either the
-   same way), so the credential store never holds plaintext.
-
-## Authoring vs execution (which plane)
-
-- **Authoring is CMA-only** — create/read/update/delete a Script with a **Weegloo User** Bearer on
-  `https://cma.weegloo.com`. There is **no ACMA authoring**; Service Users do not create Scripts.
-- **Execution has its own host** — **`https://script.weegloo.com`**, whatever identity calls it: a
-  **Weegloo User** Bearer, a **`SpaceAccessToken`**, or a **Service User** (ServiceLogin) Bearer. Each
-  needs the **Script `Execute`** permission (below) on the role that identity resolves to.
-- **The platform also starts Scripts with no caller at all** — a **Webhook**'s linked action
-  (`weegloo-webhook`) and a **Scheduler**'s cron run (`weegloo-scheduler`). Neither goes through
-  `/execute`, so neither is affected by `directCallEnabled`, and neither hands the `Return` value to
-  anyone — a result that must be kept has to be written into Content/Media by the Script itself. A **Scheduler**
-  run additionally carries **no `payload` / `rawPayload` / `headers`** and is attributed to the
-  **Scheduler's creator** (so `:self` resolves to them) — a Script meant to be scheduled must find its
-  own work from `{ /now }` and `ResourceFind`.
-
-### Endpoints
-
-| Op | Method + path | Plane |
-|----|----------------|-------|
-| List | `GET /v1/spaces/{spaceId}/scripts` | CMA |
-| Create | `POST /v1/spaces/{spaceId}/scripts` | CMA |
-| Read | `GET /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
-| Update (full PUT, `X-Weegloo-Version`) | `PUT /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
-| Delete (no unpublish; **blocked while a Webhook or a Scheduler references it**) | `DELETE /v1/spaces/{spaceId}/scripts/{scriptId}` | CMA |
-| **Execute** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute` | **Script** — `script.weegloo.com` |
-| **Execute unauthenticated** | `POST /v1/spaces/{spaceId}/scripts/{scriptId}/execute/anonymous` | **Script** — `script.weegloo.com` |
-
-- The **execute request's HTTP method must match** the Script's **`definition.method`** (e.g. a
-  `Post` Script is executed with `POST`).
-- Confirm exact request/response schemas against the live OpenAPI (`weegloo-api-endpoints` → docs).
-  Authoring over MCP: use the Weegloo `cma_*` Script tools when present (they ship in the **`extra`**
-  or **`all`** MCP group — see `weegloo-webhook`/README for group setup). The product frontend calls
-  **`/execute`** directly over REST (that is the runtime path, not an agent-only action).
+  default) — from the caller's side an ordinary API call. Nothing is queued and there is nothing to
+  poll, so **the time the Script can spend is a design constraint**.
+- **The platform also starts Scripts with no caller:** a **Webhook**'s linked action and a
+  **Scheduler**'s cron run. Neither goes through `/execute` (so neither is affected by
+  `directCallEnabled`) and **neither hands the `Return` value to anyone** — a result that must be kept
+  has to be written into Content/Media by the Script. A Scheduler run carries **no `payload` /
+  `rawPayload` / `headers`** and is attributed to the **Scheduler's creator** (`:self` = them).
 
 ## The `definition`
 
@@ -174,368 +60,152 @@ whenever one of these fits. These are the situations an AI agent should map to S
 }
 ```
 
-### Who may invoke it — the two resource-level flags
-
-- **`directCallEnabled`** (default `true`) — when `false` the Script runs **only** as a Webhook's
-  linked action or a **Scheduler**'s scheduled run (`weegloo-scheduler`), and both execute endpoints
-  reject the call with **`WGL422062`**. That is the right setting for a Script only the platform starts.
-- **`anonymousCallEnabled`** (default `false`) — when `true` the Script may **also** be invoked with
-  **no token at all**, through **`/execute/anonymous`**. That is the path a third party which cannot
-  present a Weegloo token (a payment provider's callback, say) can reach. Leave it off unless you need
-  exactly that; the authenticated `/execute` keeps working either way.
-  - **It runs as the Script's author.** There is no caller to attribute to, so resource writes get the
-    **author** as `sys.createdBy`/`updatedBy`. A presented Bearer token is ignored — use `/execute` to
-    run as the caller.
-  - **No role permission is consulted.** The Script `Execute` grant gates `/execute`, not this path:
-    the flag *is* the authorization decision, made once by whoever saved the Script.
-  - One rule is enforced **when the Script is saved**: it may not use the **`:self`** filter
-    (**`WGL400061`** — under anonymity `:self` resolves to the *author*, so an ownership filter written
-    for an authenticated caller would silently widen to the author's own rows).
-  - ⚠️ **The Script itself is the only thing authenticating the request.** Verify something before
-    doing anything: a `Signature` over `{ /rawPayload }` is the usual answer (`weegloo-payment`).
-    Anonymous calls also consume the Organization's Script-execution quota, and nothing rate-limits
-    them — so an endpoint left open with nothing to verify is both a data risk and a cost risk.
+- **`directCallEnabled: false`** ⇒ the Script runs **only** as a Webhook's action or a Scheduler's
+  run; both execute endpoints reject the call with **`WGL422062`**.
+- **`anonymousCallEnabled: true`** ⇒ `/execute/anonymous` accepts a caller with **no token**. It runs
+  as the **author** (writes attributed to them), **no role permission is consulted** — the flag *is*
+  the authorization decision — and a `:self` filter is then rejected at save (**`WGL400061`**).
+  ⚠️ The Script itself is the only thing authenticating the request, and anonymous calls still spend
+  quota: read **`references/verify-callbacks.md`** before enabling it.
 
 ## Statements
 
-Every statement carries a **`type`** (the discriminator — **always include it**) and an optional
-**`name`** that binds its result into the context as `{ /<name>/… }` for later statements. On
-resource statements, **`resource`** is **`Content` | `Media`** — plus two kinds each accepted by one
-statement only. **`ServiceUser`** is read-only: the **read** statements (`ResourceRead`/`ResourceFind`/
-`ResourceForEach`) take it, no mutation does, and reading it requires the `SETTING_SERVICE_LOGIN`
-settings permission. **`ContentType`** is **countable only**: `ResourceCount` takes it, every other
-resource statement is **rejected at save** — a Script works on a Space's content, not on its schema,
-so the one thing it may ask about a ContentType is how many there are. Statements run top-to-bottom
-and stop at `Return`.
+Every statement carries a **`type`** (**always include it**) and an optional **`name`** binding its
+result as `{ /<name>/… }` for later statements. They run top-to-bottom and stop at `Return`. A
+binding `name` must match `^[a-zA-Z0-9_-]+$`, be unique, and not shadow a reserved root
+(`payload`/`rawPayload`/`headers`/`now`/`vars`/`error`).
+
+On resource statements **`resource`** is **`Content` | `Media`**, plus two narrow cases:
+**`ServiceUser`** is read-only (read statements only; needs the `SETTING_SERVICE_LOGIN` permission)
+and **`ContentType`** is **countable only** (`ResourceCount`; anything else is rejected at save).
 
 **A Content statement that does not address its target by id must name the ContentType it works
 within.** `ResourceCreate`, `ResourceFind`, `ResourceForEach` and `ResourceCount` each take
-**`contentType`** (`{ sys: { id } }`), and on `resource: "Content"` it is **required** — leaving it
-out is **rejected at save**, not an empty result at run time. There is no Space-wide Content search:
-Content is always read and written inside one ContentType. Media is space-flat and takes no scope,
-and the by-id statements (`ResourceRead`, `ResourceUpdate`, `ResourcePatch`, `ResourceDelete`, and
-the publish / archive family) carry a `target` instead, so they owe none.
+**`contentType`** (`{ sys: { id } }`), **required** on `resource: "Content"` — omitting it is
+**rejected at save**, not an empty result at run time. There is no Space-wide Content search. Media
+is space-flat; the by-id statements carry a `target` instead.
 
 ### Control flow
 
-- **`If`** — `condition` (JsonLogic → boolean), `then` (statements[]), **`else`** (statements[], optional).
-- **`Loop`** — one of **three modes** — `over` (array, foreach) / `while` (JsonLogic) / `for`
-  (`{ from, to, step? }`, inclusive) — plus **`name`** (binds the element, the 0-based counter, or the
-  counter value, read as `{ /<name> }`), `body`, and `maxIterations` (**optional**; omitted ⇒ platform
-  cap **10,000**, declaring above it is rejected at save).
-  **External calls ARE allowed in `body`** (`Http`, Media ingest). The time budget is priced
-  `body × maxIterations`, so a big loop gets cut off mid-run, not rejected.
-  **Declare a realistic `maxIterations`.** Omitting it prices the loop at the 10,000-iteration default,
-  which truncates immediately; and because the run dies on budget rather than a statement failure, the
-  writes already done stay done — **make the body idempotent / resumable** rather than relying on
-  `Try`/`catch` compensation.
-- **`Parallel`** — `branches: [[…],[…]]`; branches run **concurrently** and **cannot reference each
-  other's** results.
-- **`Try`** — `body` (statements[]); **`catch`** (optional, runs on failure — `/error` exposes
-  `{ message }` only, read as `{ /error/message }`); **`finally`** (optional, **always runs**). Wrap risky HTTP/writes here.
-- **`Return`** — `value` (optional value expression), `isError` (bool, default `false`; when `true`
-  the value is delivered as the response **`error`** instead of `return`), `statusCode` (default
-  `200`). **Terminates** the Script.
+- **`If`** — `condition` (JsonLogic → boolean), `then` (statements[]), `else` (optional).
+- **`Loop`** — `over` (array) / `while` (JsonLogic) / `for` (`{ from, to, step? }`, inclusive), plus
+  `name` (binds the element for `over`, the **0-based counter** for `while`, the counter value for `for`), `body`, `maxIterations` (omitted ⇒ cap **10,000**). External
+  calls **are** allowed in `body`; the budget is priced `body × maxIterations`, so declare a realistic
+  `maxIterations` and keep the body **idempotent / resumable** — a run cut off on budget keeps the
+  writes it already made. Detail: `references/queries-and-iteration.md`.
+- **`Parallel`** — `branches: [[…],[…]]` run **concurrently** and **cannot reference each other's**
+  results.
+- **`Try`** — `body`; `catch` (optional, on failure — `/error` exposes `{ message }` only);
+  `finally` (optional, **always runs**). Wrap risky HTTP/writes here.
+- **`Return`** — `value` (optional), `isError` (default `false`; `true` delivers the value as the
+  response **`error`** instead of `return`), `statusCode` (default `200`). **Terminates.**
 
-### Variables, cache, parsing, HTTP & email
+### `Http` — call an external API
 
-- **`SetVar`** — `var` (variable name; read as `{ /vars/<var> }`), `value` (value expression; may
-  reference the variable itself to **accumulate**).
-- **`Cache`** — a short-lived key/value store **private to one Script**, there to make a Script faster
-  by not redoing work it already did. Ordinary cache semantics: `action` is **`Set`** (write) /
-  **`Get`** (read) / **`Delete`** (drop); `key` is the cache key; `value` is what to store (`Set`
-  only); `ttl` is how long it lives in seconds (**1–30**, default **5**); `defaultValue` is what `Get`
-  binds when nothing is there. **`Get` requires `name`** — the value it reads has nowhere else to go.
-  The point is latency: park an expensive `Http` result (an access token, an exchange rate, a search
-  response) for a few seconds so repeat calls inside that window skip the round trip. **A miss and an
-  expired entry are the same thing** — both hand you `defaultValue`.
-  - `key` is a **literal, not a value expression**. A caller-chosen key would let one caller read what
-    another caller's run had cached.
-  - Scoped to **one Script** — another Script using the same key sees nothing, and editing or deleting
-    the Script drops its data. It does no external I/O, so it does not count against the external-call
-    limit.
-  - At most **5 per definition**, and **not allowed inside `Loop`/`ResourceForEach`** (a repetition
-    would write one entry per lap, which no per-definition cap can bound).
-- **`Http`** — `method` (GET/POST/PUT/PATCH/DELETE), `url` (value expression), `headers`
-  (`[{ key, value, secret?: bool }]` — **`secret: true`** ⇒ stored **encrypted**, never exposed to
-  ServiceUsers, CMA-only), `body` (value expression / JSON), `timeoutMs` (per-call; omitted ⇒ **30s** default, hard cap **60s**),
-  `retry` (default `0`; retries only when the response **status ≥ 400**; capped at 2),
-  `ignoreStatusCode` (default `false`), `responseType` (**`json`** default | `text`).
-  **A `Content-Type` header decides how `body` is serialized** (there is no separate field for it, and the
-  comparison ignores case and `;charset=…`): none ⇒ **`application/json`**;
-  **`application/x-www-form-urlencoded`** ⇒ nested keys flattened into brackets —
-  `{ "user": { "name": "kim", "age": 42 } }` goes out as `user[name]=kim&user[age]=42`, arrays indexed
-  (`tags[0]=a`), `null` as an empty value (`memo=`), everything percent-encoded UTF-8 — which is what an
-  OAuth **token endpoint** wants; **`text/plain`** ⇒ the bare value with no JSON quotes. **A body the
-  declared type cannot carry is sent under one that can** — a scalar declared form-urlencoded goes out as
-  `text/plain;charset=UTF-8`, an object declared `text/plain` as `application/json` — so the header never
-  describes a body that is not there. Any other declared type keeps its header and sends JSON.
-  Binds **`{ status, body }`**. **`responseType` decides what `body` is:** `json` parses it, so you
-  address it with pointers (`{ /resp/body/items/0/id }`), and the statement **fails when the response is
-  not JSON**; `text` binds the raw string — what a plain-text / XML / CSV endpoint needs, and what you
-  want when you intend to parse it yourself with `ParseJson`. An empty body (e.g. `204`) binds `null`,
-  and a **status ≥ 400** body always comes back as-is for diagnostics whatever you declared.
-  **The response body is capped at 10 MiB** — a larger response **throws**, failing the statement (an enclosing `Try` catches it via
-  `{ /error/message }`, same as any `Http` failure; this size cap is about the body, independent of the
-  status code). So never pull large binaries (e.g. raw or base64 image bytes) back through `Http` — have
-  the provider return a **URL** and ingest it as Media with `encoding: "url"` (see the external-API job
-  pattern). By default a final response
-  **status ≥ 400** (after any retries) **fails the statement** — an enclosing `Try` catches it (uncaught
-  ⇒ the engine surfaces a **502**). Because a failed statement binds no result, read the failure via
-  `catch`'s **`{ /error/message }`** (it carries the status + a body snippet), **not** `{ /<name>/body }`.
-  Set **`ignoreStatusCode: true`** to bind `{ status, body }` as-is for **any** status and branch on
-  `{ /<name>/status }` yourself. Script `Http` draws on the Organization's **webhook
-  outbound-network quota** — if that feature is quota-suspended the call fails with a catchable
-  **`WGL403012`** (Forbidden), and request bytes are metered against it.
+`method`, `url` (value expression), `headers` (`[{ key, value, secret?: bool }]` — **`secret: true`**
+⇒ stored **encrypted**), `body`, `timeoutMs` (omitted ⇒ **30s**, cap **60s**), `retry` (default `0`,
+cap **2**; retries only on status ≥ 400), `ignoreStatusCode` (default `false`), `responseType`
+(**`json`** default | `text`). Binds **`{ status, body }`**.
+
+- **A `Content-Type` header decides how `body` is serialized** (no separate field; case- and
+  `;charset=`-insensitive). None ⇒ **JSON**. **`application/x-www-form-urlencoded`** ⇒ nested keys
+  flattened into brackets (`{"user":{"name":"kim"}}` → `user[name]=kim`), arrays indexed (`tags[0]=a`),
+  `null` empty (`memo=`), percent-encoded UTF-8 — what an OAuth **token endpoint** wants.
+  **`text/plain`** ⇒ the bare value, unquoted. **Any other declared type keeps its header and sends JSON.** A body the declared type cannot carry is sent under
+  one that can**, so the header never describes a body that is not there.
+- **`responseType` decides what `body` is:** `json` parses it (`{ /resp/body/items/0/id }`) and
+  **fails when the response is not JSON**; `text` binds the raw string (plain-text / XML / CSV, or
+  text you will `ParseJson` yourself). An empty body (`204`) binds `null`.
+- **A final status ≥ 400 fails the statement** (uncaught ⇒ the engine surfaces **502**). A failed
+  statement binds nothing, so read the failure in `catch` via **`{ /error/message }`** (it carries the
+  status + a body snippet), **not** `{ /<name>/body }`. `ignoreStatusCode: true` binds
+  `{ status, body }` for any status so you branch on `{ /<name>/status }` yourself.
+- **Response body cap 10 MiB** — larger **throws** (catchable). Never pull large binaries through
+  `Http`: have the provider return a **URL** and ingest it as Media with `encoding: "url"`.
+- `Http` draws on the Organization's **webhook outbound-network quota**; suspended ⇒ a catchable
+  **`WGL403012`**.
+
+### `ParseJson`, `SetVar`, `Cache`, `EmailSend`
+
 - **`ParseJson`** — turn a **JSON string into a value** you can address with pointers. `value` (the
-  text; a value expression), **`name` (required** — the parsed value is the only thing it produces).
-  Use it wherever JSON arrives *inside* a string instead of as the body: an LLM's structured output
-  (`{ /resp/body/choices/0/message/content }`), a JSON blob kept in a LongText field, or a body you
-  took as `responseType: "text"`. Read fields off the binding afterwards — `{ /answer/score }`.
-  - **Text that is not JSON fails** the statement — the "LLM answered in prose" case; catch it with
-    `Try`. Empty or blank text fails too; the literal `null` parses to `null`.
-  - A value that is **already** an object or array is bound unchanged, so it is safe to point at
-    something that may or may not still be a string.
-  - `value` is a **template** slot — the `$` operator rules do not apply to it.
-  - It does no I/O, so it costs the run nothing beyond the parse itself.
-- **`EmailSend`** — one email through a registered **`EmailAccount`**. `account`
-  (`{ "sys": { "id": … } }`), **`to` XOR `toServiceUser`** (exactly one — neither or both is rejected):
-  **`to` is a single address** (value expression), **`toServiceUser` is `{ "sys": { "id": … } }`**;
-  `cc?`/`bcc?` are **arrays of addresses**; `subject`, `body`, `replyTo?`, `timeoutMs?` (cap **30s**).
-  Recipients (`to` 1 + `cc` + `bcc`) cap at **50** — SMTP puts them all in `RCPT TO`, so that sum is
-  what the provider counts. The caller waits for the send, so keep `timeoutMs` tight.
-  - **The sender comes from the `EmailAccount`** (`fromAddress`/`fromName`), not the statement. The
-    account must exist first, and **creating one sends a real test email** — see
-    **`weegloo-send-email`**.
-  - **`body` is always `text/html`** — use `<br>`/`<p>`, not bare newlines. Interpolated values are
-    **HTML-escaped** (only the author's markup survives), `SetVar` values included.
-  - `subject`/`replyTo`/addresses **reject CR·LF** (header injection). `body` may contain newlines.
-  - **Binds nothing, takes no `name`.** Failure **throws with no retry** (email is not idempotent) —
-    catch with `Try`.
-  - ⚠️ **Never `Return` the SMTP error verbatim** — a rejection quotes the refused address, so on a
-    `toServiceUser` send that **leaks a member's email**.
+  text), **`name` required**. Use it wherever JSON arrives *inside* a string: an LLM's structured
+  output, a JSON blob in a LongText field, a `responseType: "text"` body. Then read
+  `{ /answer/score }`. **Text that is not JSON fails** the statement (the "LLM answered in prose"
+  case — catch with `Try`); blank text fails too; a value already an object/array binds unchanged.
+- **`SetVar`** — `var` (read as `{ /vars/<var> }`), `value` (may reference itself to **accumulate**).
+  Max **10**.
+- **`Cache`** — short-lived store **private to one Script**, to skip work it already did. `action`
+  `Set`/`Get`/`Delete`; `key` is a **literal, never a value expression** (a caller-chosen key would
+  read another caller's run); `ttl` **1–30**s (default 5); `defaultValue` is what `Get` binds on a
+  miss (a miss and an expiry are the same thing); **`Get` requires `name`**. Max **5**, and **not
+  allowed inside `Loop`/`ResourceForEach`**.
+- **`EmailSend`** — one email through a registered **`EmailAccount`** (`weegloo-send-email`).
+  `account` (`{ sys: { id } }`), **`to` XOR `toServiceUser`** (exactly one; `to` is a **single
+  address**, `toServiceUser` is `{ sys: { id } }`), `cc?`/`bcc?` (**arrays**), `subject`, `body`,
+  `replyTo?`, `timeoutMs?` (cap **30s**); recipients (`to`+`cc`+`bcc`) cap at **50**. The **sender
+  comes from the account**, not the statement. **`body` is always `text/html`** — use `<br>`/`<p>`,
+  and interpolated values are **HTML-escaped**. `subject`/`replyTo`/addresses **reject CR·LF**.
+  **Binds nothing, takes no `name`**; failure **throws with no retry** — catch with `Try`.
+  ⚠️ **Never `Return` the SMTP error verbatim** — it quotes the refused address, which on a
+  `toServiceUser` send **leaks a member's email**.
 
-### Verification & text — `Signature`, `Hash`, `Regex`
+> **Receiving a signed request** — `Signature` (HMAC, constant-time), `Hash` (unkeyed digest) and
+> `Regex` (`Match`/`Capture`, the only way to cut text apart) live in
+> **`references/verify-callbacks.md`**. Read it when the Script *receives* a webhook (a payment
+> provider's callback) rather than calling out, or before enabling `anonymousCallEnabled`.
 
-All three are **pure computation and short-running**, so a Script that only verifies and writes answers
-its caller in milliseconds — which is what an inbound webhook receiver needs. They take a
-**required `name`**: the result is their only effect, so one with nothing bound does nothing.
+### Resource reads (`requiredAction: Read`)
 
-- **`Signature`** — is the code the caller sent the one a keyed hash (HMAC) of the message produces?
-  Binds a **`Boolean`**. `algorithm` (`SHA1`|`SHA256`|`SHA384`|`SHA512`), `secret` (value expression),
-  `secretEncoding` (`Utf8` **default** |`Hex`|`Base64`), `value` (the message), `expected` (the code
-  received). Compared in **constant time**.
-  - **There is no output-encoding field, on purpose.** `algorithm` fixes the byte length, and for a
-    given length hex and base64 have different string lengths — so `expected` is accepted as **hex
-    (either case), base64, or base64url, padded or not**. Do not look for an `encoding` field.
-  - **`secretEncoding` is not optional guesswork** — a key issued hex- or base64-encoded is a
-    *different key* when used as text, and the code it produces looks valid but never matches.
-    Read how the provider issued the key from its own docs - a key handed over as hex or base64 is
-    common, and it is not inferable from the string.
-  - **Failure is split by who supplies the input.** A missing or mismatched `expected` is **`false`**,
-    not an error (so a missing header and a wrong one are one outcome); an empty message is
-    authenticated as the empty message; only a blank **`secret`** — your own authoring — is a `400`.
-  - Sign **`{ /rawPayload }`**, the body exactly as received. A re-serialized object has other bytes.
-- **`Hash`** — unkeyed digest, binds the **`String`**. `algorithm` (`MD5`|`SHA1`|`SHA256`|`SHA384`|
-  `SHA512` — `MD5` only to reproduce an older scheme), `value`, `encoding` (`Hex` **default**|
-  `HexUpper`|`Base64`|`Base64Url`). For schemes that hash a shared secret *with* the message
-  (`SHA256(fields… + sharedKey)`) — **there is no `secret` field**: write the
-  secret into `value` in whatever position that scheme puts it, which is the only form that expresses
-  every position. Compare with `$===`.
-- **`Regex`** — how text is taken apart, since the operator vocabulary can join (`cat`) and test
-  membership (`in`) but not cut. `mode`: **`Match`** → `Boolean`, **`Capture`** → a **list** (index `0`
-  the whole match, `1..n` the capture groups, a group that did not participate `null`) or `null` when
-  nothing matched. Read an element by pointer: **`{ /<name>/1 }`**.
-  - Both modes ask whether the pattern occurs **anywhere** — anchor with `^…$` for the whole text.
-  - **`pattern` is a literal, the one authored field that is NOT a value expression.** `{ /pointer }`
-    is not resolved in it. Flags go inline: `(?i)`, `(?s)`.
-  - Patterns are compiled **once per run** (a `Regex` in a `Loop` body is not recompiled per lap), and
-    an unusable pattern fails the run **before any statement executes** — including one in a branch
-    that would never have been taken.
+All reads take **`from`**: **`Current`** (live draft, what CMA/ACMA read; **default**) or
+**`Published`** (the snapshot CDA/ACDA serve).
 
-```jsonc
-// A header packing `t=<timestamp>,v1=<hex>`: unpack it, then verify over "{timestamp}.{body}"
-{ "type": "Regex", "name": "sig", "mode": "Capture",
-  "pattern": "^t=(\\d+),v1=([0-9a-f]{64})$", "value": "{ /headers/x-provider-signature }" },
-{ "type": "Signature", "name": "verified", "algorithm": "SHA256", "secret": "{ /vars/signingSecret }",
-  "value": "{ /sig/1 }.{ /rawPayload }", "expected": "{ /sig/2 }" },
-{ "type": "If", "condition": { "!": "{ /verified }" },
-  "then": [ { "type": "Return", "isError": true, "statusCode": 401, "value": "bad signature" } ] }
-```
+- **`ResourceRead`** — get one **by id**: `target` (`{ sys: { id } }`, a value expression), `from`.
+  Binds the **full resource** (`{ /name/fields/title/en-US }`); a **missing** one raises an error
+  `Try` can catch. It never searches — **if you hold the id, this is the read to use**.
+- **`ResourceFind`** — **first match or `null`**: `contentType` (**required** for Content), `where`
+  (`fields.<name> → { op: value }`, `:self` supported), `order` (decides which match is "first"),
+  `from`, `advanced`. Branch on existence with `{ "==": [ "{ /name }", null ] }` (find-then-upsert).
+- **`ResourceForEach`** (iterate every match via `onEach`; binds no result) and **`ResourceCount`**
+  (how many match — binds a number, **`0` not `null`** when none, and `ContentType` is countable):
+  **`references/queries-and-iteration.md`**, together with `advanced` / Advanced Search in full.
 
-Two pointers in one string already concatenate, so a signed message needs **no `$cat`** — reach for
-`$cat` only when a piece is a computed value rather than a pointer or literal. Full payment/callback
-guidance: **`weegloo-payment`**.
-
-### Resource reads (`requiredAction: Read`; no writes)
-
-All four take **`from`**: **`Current`** (live draft — what CMA/ACMA read; **default**) or
-**`Published`** (the published snapshot CDA/ACDA serve).
-
-The three **search** reads (`ResourceFind` / `ResourceForEach` / `ResourceCount`) additionally take
-**`advanced`** (bool, **default `true`** — leave it there unless the *Advanced Search* callout below
-says otherwise; on a `fields.*` search `false` is a timeout hazard, not a neutral choice). It does
-**not** apply to `ResourceRead` (get-one-by-id never searches), nor to Media reads, nor to a
-`ContentType` count.
-
-- **`ResourceRead`** — get one **by id**: `resource`, `target` (`{ sys: { id } }`; `sys.id` is a
-  value expression), `from`. Binds the **full resource** under `name` (`{ /name/fields/title/en-US }`);
-  a **missing** resource raises an error a `Try` can catch.
-- **`ResourceFind`** — **first match or `null`**: `resource`, `contentType` (**required** for Content;
-  Media is space-flat), `where` (filter `fields.<name> → { op: value }` — Weegloo list-filter operators,
-  `:self` supported; see the key-format note below), `order` (decides which match is "first"), `from`,
-  `advanced` (default `true`; see the callout below). Branch on existence with
-  `{ "==": [ "{ /name }", null ] }` (the find-then-upsert pattern).
-- **`ResourceForEach`** — **iterate every match**: `resource`, `contentType` (**required** for
-  Content), `where`, `order`, `from`,
-  `advanced`, `limit` (optional; omitted ⇒ platform cap **10,000**, declaring above it is rejected at
-  save), `name` (the **current item**), **`onEach`** (statements[] per item).
-  - **Binds no result** — a foreach, not a map. Accumulate in `onEach` with `SetVar` + `merge`.
-  - **The engine pages internally** — no cursor to handle. **External calls allowed** in `onEach`.
-  - **Two different ceilings.** The **item** cap: hitting it with matches left **fails the run** (no
-    silent truncation). The **time** budget is separate and *is* truncating — a long `onEach` can stop
-    partway through the items it was allowed. **Make `onEach` idempotent / resumable**; do not assume
-    all-or-nothing.
-  - **There is no cursor-paging read statement** — iterate with `ResourceForEach`, or fetch a single row
-    with `ResourceFind` / `ResourceRead`.
-- **`ResourceCount`** — **how many match**, as a number: `resource` (**`Content` | `ContentType`**
-  only), `contentType` (**required** when counting Content; ignored when counting ContentType, which
-  is space-flat), `where` (same filter shape and operators as `ResourceFind`, `:self` supported; omit it
-  to count everything), `from`, `advanced`, `name`. Binds a **number** — no resource enters the
-  context.
-  - **No match binds `0`, not `null`** (where `ResourceFind` binds `null`). Branch with a numeric
-    comparison — `{ ">": [ "{ /mine }", 0 ] }` — not a `null` check.
-  - **No `order` and no `limit`** — it is a total, not a page. Do not approximate a count by reading
-    one row with `ResourceFind`, and do not tally by iterating: `ResourceForEach` pays the item cap
-    and a per-item time budget for a number the store returns directly.
-  - **Counting `ContentType` is the one read with no locale defaulting** — a ContentType has no
-    localized `fields.*`, so a `where` key is used exactly as written (the automatic default-locale
-    suffix in the note below does not apply). `advanced` is ignored there too.
-
-```jsonc
-// how many posts this caller has written — then gate on it
-{ "type": "ResourceCount", "resource": "Content", "name": "mine",
-  "contentType": { "sys": { "id": "ct_post" } },
-  "where": { "createdBy": ":self" } }
-{ "type": "If", "condition": { ">=": [ "{ /mine }", 10 ] },
-  "then": [ { "type": "Return", "value": "daily post limit reached", "isError": true, "statusCode": 429 } ] }
-
-// how many ContentTypes the Space has
-{ "type": "ResourceCount", "resource": "ContentType", "name": "schemaCount" }
-```
-
-> **`where` / `order` field keys — a content field MUST be `fields.<apiName>`, never the bare name (the
-> #1 mistake).** Write **`fields.postId`**, not `postId` — a bare content-field name is not recognized and
-> fails with **`WEB400002` "'…' does not exist"**. The space **default locale is applied
-> automatically** to a `fields.<name>` key, so **do not hand-append a locale**: use
-> `fields.postId` (default locale) — `postId.ko-KR` and bare `postId` both fail. Only to target a
-> **non-default** locale do you write the full `fields.<name>.<locale>` (e.g. `fields.postId.en-US`).
-> **Exceptions (no `fields.` prefix):** **`sys.*`** fields (`sys.createdAt`, `sys.status`, …) and the
-> **`createdBy`** convenience (with `:self`) are used **as-is**. The same key rules apply to `order`
-> tokens — e.g. `order: "-fields.score"` or `"-sys.createdAt"`. **A `ContentType` count is outside
-> all of this** — it has no `fields.*` at all, so nothing is prefixed or locale-suffixed there.
->
-> ```jsonc
-> // ✅ correct                                  // ❌ wrong — WEB400002
-> "where": { "fields.postId": { "eq": "…" } }    "where": { "postId":          { "eq": "…" } }
->                                                 "where": { "postId.ko-KR":    { "eq": "…" } }
-> ```
-
-> **Advanced Search — `advanced` chooses which of two read paths a search runs on. It defaults to
-> `true`; keep it there unless the narrow exception below applies.**
->
-> **`advanced: true` is the indexed path.** It stays fast however the `where` / `order` is shaped, it
-> matches **`fields.*`** text by *containing* the term rather than only byte-for-byte, it sorts
-> dependably on content fields, and it is the only mode where the `regex` and geo `near` / `within`
-> operators work.
->
-> **`advanced: false` reads the store the writes land in, which is indexed on the *system* axes
-> only** — the `sys.*` facts every resource carries whatever it holds (its Space and ContentType,
-> owner, status, tags, references, recency) plus the `createdBy` convenience. A `where` / `order`
-> confined to those is served from an index and is fine. **What that store has no index for is
-> `fields.*` — your own content fields.** The moment a `where` or `order` touches one, the query
-> degrades into a scan: the run gets **very slow and then times out**. That failure scales with how
-> much content the Space holds, so it will **not** show up while testing against a handful of rows —
-> it arrives in production. A non-advanced `fields.*` match is also **exact-equality only**, which
-> under-matches silently (a count simply comes back low) rather than failing. Since real product
-> searches are mostly `fields.*` searches, `false` is a hazard to opt into deliberately, not a
-> neutral default.
->
-> **What `advanced: false` buys — the only reason to reach for it.** The indexed path catches up a
-> moment **after** a write (about a second), so a row written seconds ago may not be matched yet: a
-> `ResourceFind` can return `null`, a `ResourceCount` can come back one short, and a client's instant
-> re-query right after a write can look empty. The non-advanced path is exact as of this instant. So
-> use `advanced: false` **only** where a search must see a just-written row *and* the Script then
-> writes based on what it read.
->
-> **Even in that case, first try to restructure so it can stay `true`** — and usually you can:
-> - Fetch it **by id** with **`ResourceRead`**. That statement never takes the indexed path at all, so
->   it is both exact and unaffected by `advanced`. If you hold the `sys.id`, this is the answer.
-> - Key the follow-up off the **`sys.id` the write returned** instead of searching for the row again.
-> - For a read-then-write against a shared row, correctness comes from **`version` optimistic
->   locking** (*Patterns* #3), not from the read path.
->
-> Only when none of those fit should the search itself drop to `advanced: false`. If its `where` is
-> on the system axes (a `createdBy`, a status, a tag), that is cheap and you are done. If it has to
-> match a `fields.*` value, **pair it with the system axes** — the ContentType scope, plus something
-> like `createdBy: ":self"` — so the unindexed part runs over a small subset instead of the Space.
->
-> **Content only** — `advanced` is ignored on a Media read, on a ServiceUser read, and on a
-> `ContentType` count, so none of them reach the indexed path or its operators. (A `fields.*` the
-> search targets must also be a search-enabled field type — see `weegloo-create-content-type`.)
->
-> ```jsonc
-> // the default: leave advanced alone, whatever where/order you use
-> { "type": "ResourceForEach", "resource": "Content",
->   "contentType": { "sys": { "id": "ct_post" } },
->   "where": { "fields.title": { "eq": "weegloo" } },
->   "order": "-fields.score", "name": "post", "onEach": [ /* … */ ] }
->
-> // the exception: this run just wrote the row and must see it — and has no sys.id to read by.
-> // the fields.* match is unindexed, so createdBy narrows it before that runs.
-> { "type": "ResourceFind", "resource": "Content", "name": "fresh",
->   "contentType": { "sys": { "id": "ct_job" } },
->   "where": { "createdBy": ":self", "fields.token": "{ /payload/token }" },
->   "advanced": false }
-> ```
+> **`where` / `order` field keys — a content field MUST be `fields.<apiName>`, never the bare name
+> (the #1 mistake).** `fields.postId`, not `postId` — a bare content-field name fails with
+> **`WEB400002` "'…' does not exist"**. The space **default locale is applied automatically**, so
+> **do not hand-append a locale** (`postId.ko-KR` fails too); spell `fields.<name>.<locale>` only for
+> a **non-default** locale. **No prefix** on **`sys.*`** keys or the **`createdBy`** convenience
+> (with **`:self`** = the executing caller). Same rules for `order` — `"-fields.score"`,
+> `"-sys.createdAt"`. Leave **`advanced`** at its `true` default.
 
 ### Resource writes (`requiredAction` per action)
 
-- **`ResourceCreate`** (Create) — `resource`, `contentType` (**required** for Content; only `sys.id`),
-  `fields`.
-- **`ResourceUpdate`** (Edit) — `target`, `fields` — **full replacement** (Content **or** Media): the
-  resource's fields become exactly `fields`; any field/locale you **omit is cleared**. For **Media**,
-  the `file` locales you list are **re-ingested** and omitted ones removed.
-- **`ResourcePatch`** (Edit) — `target`, `fields` — **partial merge** (Content **or** Media): only the
-  named fields — and within each, the named locales — change; everything unmentioned is preserved. A
-  bucket set to literal `null` **deletes** it. For **Media**, a named `file` locale with a
-  `{ source, encoding }` directive **re-ingests** that locale (`null` deletes it); `title`/
-  `description` merge per locale.
-- **`ResourceDelete`** (Delete) — `target`. **Draft/Archived items only.** (No `version`.)
-- **`ResourcePublish` / `ResourceUnpublish` / `ResourceArchive` / `ResourceUnarchive`** — `target`
-  state transitions (each also takes `version`).
-
-**Shared write options:**
+- **`ResourceCreate`** — `resource`, `contentType` (**required** for Content; only `sys.id`), `fields`.
+- **`ResourceUpdate`** — `target`, `fields` — **full replacement**: any field/locale you **omit is
+  cleared** (for **Media**, listed `file` locales are re-ingested, omitted ones removed).
+- **`ResourcePatch`** — `target`, `fields` — **partial merge**: only the named fields, and within
+  each the named locales, change. A bucket set to literal `null` **deletes** it.
+- **`ResourceDelete`** — `target`. **Draft/Archived only.** (No `version`.)
+- **`ResourcePublish` / `Unpublish` / `Archive` / `Unarchive`** — `target` transitions (each takes
+  `version`).
 
 | Option | On | Meaning |
 |--------|----|---------|
-| `fields` | Create/Update/Patch | field-key → value. If `locale` is **set**, each value is a **bare** value written into that one locale; if `locale` is **omitted**, each value must itself be an explicit **`{ "<locale>": value }` map** (a non-map value ⇒ `400`). **Media** keys are fixed: `title`/`description` (scalar) and `file` = a `{ source, encoding }` **ingest directive**. A `locale → null` entry **deletes** that locale bucket. |
-| `locale` | Create/Update/Patch | literal locale code **or** value expression. **Set it** to write bare `fields` values into that single locale; **omit it** and every `fields` value must be a `{ "<locale>": value }` map. Omitting `locale` does **not** default to the space locale. |
-| `version` | Update/Patch/Publish/Unpublish/Archive/Unarchive | **optimistic lock** (value expression → Int). Present ⇒ the write applies only if the target's current `sys.version` matches; a mismatch aborts with a **version-conflict error** (catchable by `Try`). Omit ⇒ no check. |
-| `publish` | Create/Update/Patch | **default `true`** — publish after the write so CDA/ACDA deliver it; set `false` to keep it a draft. |
-| `propagateEvents` | **every write** | **default `false` — a Script's writes are SILENT**: they do **not** emit `EntityEvent`s, so **search indexing and Webhooks do NOT fire** on them. Set `true` (per action) when a write must index the row or trigger other Webhooks. |
+| `fields` | Create/Update/Patch | field-key → value. With `locale` **set**, each value is a **bare** value for that locale; with `locale` **omitted**, each value must be an explicit **`{ "<locale>": value }` map** (a non-map ⇒ `400`). **Media** keys are fixed: `title`/`description` (scalar) and `file` = a `{ source, encoding }` ingest directive. `locale → null` **deletes** that bucket. |
+| `locale` | Create/Update/Patch | literal code **or** value expression. Omitting it does **not** default to the space locale. |
+| `version` | Update/Patch/Publish/Unpublish/Archive/Unarchive | **optimistic lock** (→ Int): the write applies only if `sys.version` matches; a mismatch aborts with a catchable conflict error. Omit ⇒ no check. |
+| `publish` | Create/Update/Patch | **default `true`** — publish after the write so CDA/ACDA deliver it; `false` keeps a draft. |
+| `propagateEvents` | **every write** | **default `false` — a Script's writes are SILENT**: no `EntityEvent`s, so **search indexing and Webhooks do NOT fire**. Set `true` per action when a write must index the row or trigger other Webhooks. |
 
-**Media ingest** — set `fields.file.{locale} = { "source": "…", "encoding": "url" | "base64" }` on a
-Media **`ResourceCreate`**, **`ResourceUpdate`** (re-ingests the listed locales — full replace), or
-**`ResourcePatch`** (re-ingests just the named locales). **`encoding`** is **`url`** (the worker
-fetches the URL's bytes) or **`base64`** (decodes the value). *(The `Binary` encoding is **rejected**
-in Scripts with a `400` — use `url` or `base64`.)* A file ingest **may** appear inside a `Loop`
-`body` / `ResourceForEach` `onEach`. A Media that is still **processing** cannot be updated/patched/deleted (busy), and
-publish is refused until all its files are processed.
+**Media ingest** — `fields.file.{locale} = { "source": "…", "encoding": "url" | "base64" }` on a Media
+`ResourceCreate` / `ResourceUpdate` (re-ingests the listed locales) / `ResourcePatch` (just the named
+ones). **`url`** makes the worker fetch the bytes **outside the 10 MiB `Http` cap**; **`base64`**
+decodes the value; **`Binary` is rejected (`400`)**. An ingest **may** sit inside a `Loop` body /
+`onEach`. A Media still **processing** cannot be updated/patched/deleted and will not publish
+(`weegloo-media-lifecycle`).
 
-**Ids are validated:** every `target.sys.id` / `contentType.sys.id` must resolve to a real id token
-matching **`^[A-Za-z0-9_-]{1,64}$`** — an unsubstituted placeholder (e.g. `"<POST_ID>"`), quotes, or
-whitespace is rejected with a clean **`400`** (NoSQL-injection guard).
+**Ids are validated:** every `target.sys.id` / `contentType.sys.id` must match
+**`^[A-Za-z0-9_-]{1,64}$`** — an unsubstituted placeholder (`"<POST_ID>"`), quotes or whitespace is
+rejected with a clean **`400`** (NoSQL-injection guard).
 
 ## Value expressions — `{ /pointer }`
 
@@ -543,219 +213,127 @@ Any string value may embed a pointer. Roots:
 
 | Root | Resolves to |
 |------|-------------|
-| `/payload` | the JSON body passed to `/execute` — e.g. `{ /payload/fields/prompt }` |
-| `/rawPayload` | that same body as the caller's **own text, before parsing** — the only form a signature can be checked against (`Signature.value`) |
-| `/headers` | request HTTP headers, **keys lower-cased** — e.g. `{ /headers/authorization }`, `{ /headers/x-provider-signature }` |
-| `/now` | when the run started: **`/now/seconds`**, **`/now/millis`** (epoch) and **`/now/iso`** |
-| `/<name>` | the result of an earlier statement with that `name` — e.g. `{ /resp/body/... }`, `{ /post/sys/id }` |
-| `/vars/<name>` | a `SetVar` variable — e.g. `{ /vars/total }` |
-| `/error` | only inside a `Try` `catch` — e.g. `{ /error/message }` |
+| `/payload` | the JSON body passed to `/execute` — `{ /payload/fields/prompt }` |
+| `/rawPayload` | that body as the caller's **own text, before parsing** — the only form a signature can be checked against |
+| `/headers` | request headers, **keys lower-cased** — `{ /headers/authorization }` |
+| `/now` | when the run started: **`/now/seconds`**, **`/now/millis`**, **`/now/iso`** |
+| `/<name>` | an earlier statement's result — `{ /resp/body/... }`, `{ /post/sys/id }` |
+| `/vars/<name>` | a `SetVar` variable |
+| `/error` | only inside a `Try` `catch` — `{ /error/message }` |
 
-- **`/now` is read once per run** and shared by `Parallel` branches, so two statements can never
-  disagree about "now" — which is what makes it usable in a signed message or a replay window. There
-  is **no statement that reads the clock**, and **no zone to choose**: an epoch count is the same
-  number everywhere, and `/now/iso` is the same rendering as `sys.createdAt`, so it compares against
-  one directly. A replay window is plain arithmetic (a timestamp captured as text is coerced):
-  `{ "$<": [ { "$-": [ "{ /now/seconds }", "{ /sig/1 }" ] }, 300 ] }`.
+- **Single pointer** preserves the source type (a number stays a number); a **mixed template**
+  concatenates as string (`"page-{ /payload/fields/n }-of-10"`) — so two pointers in one string
+  already concatenate and need no `$cat`. Missing path → **`null`** (single) / **`""`** (mixed).
+  Literal brace: **`\{`** (other braces, e.g. a JSON literal, need no escape).
+- **`/now` is read once per run** and shared by `Parallel` branches, so no two statements disagree
+  about "now". `/now/iso` is the same rendering as `sys.createdAt`.
+- **JsonLogic** operators: `if`/`?:`, `and`/`or`/`!`/`!!`, `==`/`!=`/`===`/`!==`/`<`/`<=`/`>`/`>=`,
+  `+`/`-`/`*`/`/`/`%`, `min`/`max`, `cat`, `in`, `merge`, `date`. Operands resolve pointers first:
+  `{ "$+": [ "{ /vars/n }", 1 ] }`. **Not supported:** `map`/`filter`/`reduce`/`all`/`some`/`none` —
+  iterate with `Loop`, and filter a list by date server-side through `where`.
 
-- **Single pointer** preserves the source type (`{ /payload/fields/count }` stays a number).
-- **Mixed template** concatenates as string (`"page-{ /payload/fields/n }-of-10"`).
-- Missing path → **`null`** (single pointer) or **`""`** (mixed).
-- **Literal brace:** write **`\{`** — that position is then not read as a pointer. Only `{ /… }`-shaped
-  substrings (brace, optional space, a `/pointer`, optional space, brace) resolve at all, so other
-  braces (e.g. a JSON literal `{"k":…}`) are left as-is and need no escape.
-- **JsonLogic** operators: `if`/`?:`, `and`/`or`/`!`/`!!`,
-  `==`/`!=`/`===`/`!==`/`<`/`<=`/`>`/`>=`, `+`/`-`/`*`/`/`/`%`, `min`/`max`, `cat`, `in`, `merge`, `date`.
-  Operands resolve pointers first, then apply the op: `{ "$+": [ "{ /vars/n }", 1 ] }`.
-  **Not supported:** array iterators `map` / `filter` / `reduce` / `all` / `some` / `none` — iterate with
-  `Loop`, and filter a *list* by date server-side through `where` (`gte`/`lte`), not in JsonLogic.
+**`$` on operators — required in data slots.** A key like `cat` or `in` is a legitimate **field
+name**, so where keys belong to your data an operator needs a **`$` prefix**:
 
-### `date` — comparing dates, whatever the format
-
-**Comparison coerces its operands to numbers, so date TEXT is `NaN` and every comparison over it is
-silently `false`** — never compare `"2026-10-03"` directly. Normalize it first. There is deliberately no
-`before` / `after` / `equal` operator, because once normalized the stock ones are the answer:
-
-```jsonc
-{ "date": [ <value>, <output>? ] }                                 // `$date` in a data slot
-{ "<":  [ { "date": a }, { "date": b } ] }                         // before  (`>` = after)
-{ "<=": [ { "date": from }, { "date": x }, { "date": to } ] }      // between — chained comparison
-{ "==": [ { "date": [a, "day"] }, { "date": [b, "day"] } ] }       // same DAY (bare `date` = same instant)
-{ "date": [ { "+": [ "{ /now/millis }", 604800000 ] }, "iso" ] }   // 7 days from now, ready to store
-```
-
-- **Reads** ISO-8601 / RFC 3339 (`2026-10-03T09:00:00+09:00`; fraction and offset optional, a space
-  accepted in place of `T`), a bare `2026-10-03` (UTC midnight), RFC 1123 as an HTTP `Date` header carries
-  it (`Sat, 03 Oct 2026 00:00:00 GMT`), and an epoch count (`< 1e11` ⇒ seconds, else milliseconds — so
-  `{ /now/seconds }` and `{ /now/millis }` both read correctly). **No offset ⇒ UTC.**
-- **`output`:** `millis` (default — the comparable one) · `seconds` · `iso` · `day` (`2026-10-03`).
-- **`iso` is the only form a `Date` FIELD accepts on write.** Storing a payload date needs it:
-  `"fields": { "visitAt": { "en-US": { "$date": [ "{ /payload/fields/visitAt }", "iso" ] } } }` — a bare
-  `2026-10-03` written straight into a Date field is rejected.
-- **Absent or unreadable ⇒ 400** (catchable by `Try`), and so is a number outside the epoch window
-  (`20261003`, `2026`, `0`). That is deliberate: read as epochs they would become silent 1970 dates, and a
-  guard comparing against 1970 does not fail — it inverts.
-
-### `$` on operators — required in data slots
-
-A key like `cat` or `in` is a legitimate **field name**, so where keys belong to your data the
-operator needs a **`$` prefix** to be read as an operator:
-
-| Slot | Fields | How keys are read |
-|---|---|---|
-| **Data** | `fields` (Create/Update/Patch) · `Http.body` · `Return.value` · `SetVar.value` · `Cache.value` · `Cache.defaultValue` | A key without `$` is **always a field name**. Operators **must** use `$`: `{ "$+": [ … ] }`. |
-| **Expression** | `If.condition` · `Loop.while` · `version` | The whole value is an expression — bare (`{ "and": [ … ] }`) and `$` both work. |
-| **Template** | everything else — `url`, `method`, `headers[].value`, `locale`, `order`, `over`, `target.sys.id`, `EmailSend.*`, `ParseJson.value` | Plain strings; only `{ /pointer }` applies. |
-
-- Once inside a `$` operation, **nested** operators need no `$` (adding it is still valid).
-- **When unsure, prefix every operator with `$`** — it is correct in every slot.
-- A data key that really starts with `$` is **doubled**: `"$$ref"` means the field `$ref`.
-- **Errors:** an unknown `$` key ⇒ **`WGL400055`**; a `$` operator sharing its object with sibling
-  keys ⇒ **`WGL400056`** (an operation must be its object's only key — move sibling data one level out).
+- **Data slots** — `fields` (Create/Update/Patch) · `Http.body` · `Return.value` · `SetVar.value` ·
+  `Cache.value`/`defaultValue`: a key without `$` is **always a field name**; operators **must** use
+  `$`.
+- **Expression slots** — `If.condition` · `Loop.while` · `version`: the whole value is an expression,
+  so bare and `$` both work.
+- **Template slots** — everything else (`url`, `headers[].value`, `locale`, `order`, `over`,
+  `target.sys.id`, `EmailSend.*`, `ParseJson.value`): plain strings, only `{ /pointer }` applies.
+- Nested operators inside a `$` operation need no `$`. **When unsure, prefix every operator with
+  `$`** — correct in every slot.
 
 ```jsonc
-"fields": { "cat": { "en-US": "hello" } }                      // data slot: `cat` is a FIELD
-"fields": { "n":   { "en-US": { "$+": [ "{ /row/fields/n/en-US }", 1 ] } } }   // compute ⇒ needs $
-"condition": { "and": [ { "<": [ "{ /a/body/risk }", 0.5 ] } ] }               // expression slot: bare OK
+"fields": { "cat": { "en-US": "hello" } }                                     // data slot: `cat` is a FIELD
+"fields": { "n":   { "en-US": { "$+": [ "{ /row/fields/n/en-US }", 1 ] } } }  // compute ⇒ needs $
+"condition": { "and": [ { "<": [ "{ /a/body/risk }", 0.5 ] } ] }              // expression slot: bare OK
 ```
+
+> **Dates:** comparison coerces operands to numbers, so date **text is `NaN` and every comparison
+> over it is silently `false`** — never compare `"2026-10-03"` directly. Normalize with the **`date`**
+> operator, which is also the only way to produce the `iso` form a **Date field accepts on write**.
+> Formats, outputs, the before/after/between recipes and operator edge cases (`WGL400055` /
+> `WGL400056`, `$$`-escaped field names): **`references/value-expressions.md`** — read it whenever a
+> date is compared, stored or arrives in the payload.
 
 ## Run budget and limits
 
-A run executes **on the request**: the response carries what `Return` produced — its `statusCode`
-(default `200`) and `return`, or `error` when the run failed. The caller holds the connection for the
-whole run, so **how long the Script can take is a design constraint**, not something to find out in
-production.
+A run executes **on the request**, so **how long the Script can take is a design constraint**. The
+budget is **computed from the Script** — every declared `timeoutMs` adds (`Http` counts `1 + retry`
+times), sequences add, `If` takes the wider branch, `Parallel` the slowest, `Try` adds
+`body`+`catch`+`finally`, iterations **multiply** — then **capped by the platform**. At the cap it is
+**truncated, not rejected**: a big loop is cut off mid-run and the writes it already made stay made.
+Keep an iterating body **idempotent / resumable** and split work that cannot fit.
 
-**The time budget is computed from the Script, not fixed**, and the platform caps it. Every declared
-`timeoutMs` adds to it — `Http` counts `1 + retry` times, `EmailSend` once — while anything that
-declares no time of its own (store round-trips, Media ingest, work inside iterations) comes out of the
-base. Sequences add, `If` takes the wider branch, `Parallel` the slowest, `Try` adds
-`body`+`catch`+`finally`, iterations **multiply**. At the cap the budget is **truncated, not rejected**
-— a big loop is cut off mid-run, and the writes it already made stay made. So keep an iterating body
-**idempotent / resumable**, and split work that cannot fit into runs that can (*The external-API job
-pattern*).
+Everyday caps: `Http` `timeoutMs` **60s** (default 30s), `retry` **2**, response body **10 MiB** ·
+`EmailSend` **30s**, 50 recipients · `SetVar` **10** · `Cache` **5** · `Loop` `maxIterations` /
+`ForEach` `limit` **10,000**. **Statement count and external-I/O count are per-plan — never
+hard-code them.** Full table, the resolved-length caps on `Signature`/`Hash`/`Regex`, and the rest of
+save-time validation: **`references/queries-and-iteration.md`**.
 
-| Limit | Value |
-|-------|-------|
-| Run timeout | **computed** from the declared `timeoutMs` values, then capped by the platform — size the Script to fit it; do not hardcode a number |
-| Max statements / max external I/O ops | **per-plan** (see below) |
-| Max `SetVar` | **10** |
-| Max `Cache` | **5** (none inside `Loop`/`ResourceForEach`) |
-| `Http` retry cap | **2** |
-| Per-`Http` `timeoutMs` cap | **60s** (omitted ⇒ 30s) |
-| Per-`EmailSend` `timeoutMs` cap | **30s** |
-| `Loop` `maxIterations` / `ResourceForEach` `limit` cap | **10,000** |
-| `EmailSend` recipients (`to`+`cc`+`bcc`) | **50** |
-| `Signature` `value` — **resolved** message | **65,536 chars** (over ⇒ statement fails, `422`) |
-| `Hash` `value` — **resolved** message | **128 chars** (over ⇒ statement fails, `422`) |
-| `Regex` `pattern` — as authored | **128 chars** (rejected at save) |
-| `Regex` `value` — **resolved** text | **10,240 chars** (over ⇒ statement fails) |
-| Max `Http` **response body** size | **10 MiB** (larger ⇒ statement throws) |
-| External calls inside `Loop` / `ResourceForEach` | **allowed** |
-
-> **Statement count and external-I/O count are per-plan, not constants — never hard-code them.** When a
-> save is rejected for exceeding one, the caller simplifies the Script or upgrades the plan.
-
-**Save-time validation** also enforces: a **`ResourceForEach` `onEach` block may not be empty** (empty `If`/`Loop`/`Try`/`Parallel`
-bodies are allowed); binding **`name`**s must match **`^[a-zA-Z0-9_-]+$`** (letters, digits, `_`, `-` only —
-so no `/` or `~`, and also no dots, spaces, or other punctuation), be unique, and not a reserved root
-(`payload`/`rawPayload`/`headers`/`now`/`vars`/`error`); and — when **`anonymousCallEnabled`** is true —
-no `:self` filter (**`WGL400061`**).
-
-**The resolved-length caps above are checked when the statement runs, not at save** — they bound the
-message a `Signature`/`Hash` actually authenticates and the text a `Regex` scans, and those lengths are
-unknown until the pointers resolve. `Signature`'s cap is sized for a real webhook body: the expression
-`{ /rawPayload }` is sixteen characters standing for however many kilobytes the caller sent.
-
-**Deleting a Script is blocked while a Webhook still runs it.** Delete that Webhook first, or point it
-at another Script (`weegloo-webhook`).
+Scripts **per Space** are plan-limited, and **executions are a monthly allowance for the whole
+Organization** shared with Webhook-run Scripts and every **Scheduler** run — when it is spent, Script
+execution is suspended and any Scheduler that comes due is **deactivated**. On a `WGL429*` do not
+loop-retry; surface the upgrade path.
 
 ## Secrets & auth
 
-- Put API keys in **`Http` `headers`** with **`"secret": true`** — secret values are encrypted at
-  rest. Never place keys in `payload` or Content fields.
-- ⚠️ **`Signature.secret` has no such flag** — a webhook signing secret written into a Script is
-  stored as authored and is readable by anyone who can read that Script. Keep Script `Read` off
-  end-user roles when a Script carries one.
-- **Execute authorization:** only the **caller's Script `Execute` permission** is checked at
-  `/execute`; missing it → **`403`**. On **`/execute/anonymous`** no permission is checked at all —
-  `anonymousCallEnabled` is the whole decision, and the Script must authenticate its own input.
-  The resource operations *inside* the script then run with the
-  **Script author's authority, delegated** — individual resource permissions are **not** re-validated
-  per statement at runtime. So a low-privilege end user can execute a Script that performs writes the
-  author authorized, without granting that user those writes directly.
-- **Author gate (create/edit time — the key gotcha):** because inner ops aren't re-checked at run
-  time, the **Script's author must hold an *unconditional* `Allow`** (no `contentType`/`createdBy`/
-  `tag` filter) for **each** Content/Media action the Script performs — validated when the Script is
-  saved; missing it → **`WGL403015`** (Content **create** may keep a `contentType` filter, the one
-  exception). Practically: **author Scripts as an admin / broadly-permissioned Weegloo User.** A
-  narrowly-scoped role cannot save a Script that writes outside its filters.
-  **A `ResourceCount` is gated the same way, on the map matching what it counts** — a Content count
-  needs unconditional `content` `Read`, a **ContentType count needs unconditional `contentType`
-  `Read`**, which a role that only grants Content/Media rights does not carry.
-- **Attribution & `:self`:** resource writes are attributed to the **executor** (`sys.createdBy` /
-  `updatedBy` = whoever called `/execute`), and **`:self` inside the script resolves to that
-  executor** — even though authorization came from the author. So enforce ownership in the Script
-  itself with `where: { "createdBy": ":self" }`, since the broad author authority won't do it for you.
+- Put API keys in **`Http` `headers`** with **`"secret": true`** — encrypted at rest. Never in
+  `payload` or Content fields. ⚠️ **`Signature.secret` has no such flag** — a signing secret written
+  into a Script is stored as authored and readable by anyone who can read that Script, so keep Script
+  `Read` off end-user roles.
+- **Execute authorization:** only the caller's **Script `Execute`** permission is checked at
+  `/execute` (missing ⇒ **`403`**); on `/execute/anonymous` nothing is checked. The resource
+  operations *inside* run with the **Script author's authority, delegated** — **not** re-validated per
+  statement at runtime, which is what lets a low-privilege caller perform writes the author authorized.
+- **Author gate (save time — the key gotcha):** because inner ops aren't re-checked at run time, the
+  **author must hold an *unconditional* `Allow`** (no `contentType`/`createdBy`/`tag` filter) for
+  **each** Content/Media action the Script performs, validated when the Script is saved; missing it ⇒
+  **`WGL403015`**. Content **create** may keep a `contentType` filter, the one exception; a
+  `ResourceCount` is gated on the map matching what it counts (a **ContentType** count needs
+  unconditional `contentType` `Read`). Practically: **author Scripts as an admin.**
+- **Attribution & `:self`:** writes are attributed to the **executor** (whoever called `/execute`) and
+  **`:self` resolves to that executor**, even though authorization came from the author — so enforce
+  ownership in the Script with `where: { "createdBy": ":self" }`; the author's broad authority will
+  not do it for you.
 
-## Roles — grant Script `Execute`
-
-`SpaceRole` and `ServiceUserRole` gain a **`script`** permission map (peer to `contentType`,
-`content`, `media`). Actions: **`Create`, `Read`, `Edit`, `Delete`, `Execute`, `All`** — `Execute`
-is unique to Script (the right to call `/execute`). On `script` the meaningful filters are
-**`createdBy`** and **`self`** (`contentType` and `tag` do **not** apply). Scope `Execute` three ways:
-
-| Rule | Meaning |
-|------|---------|
-| `"Execute": { "Allow": [] }` | may Execute **any** Script in the Space |
-| `createdBy :self` | may Execute only Scripts the **caller created** |
-| **`self`** = a Script `Refer` | may Execute **exactly that one Script** (least-privilege) |
+**Granting the caller `script.Execute`.** `SpaceRole` and `ServiceUserRole` carry a **`script`**
+permission map peer to `content`/`media`, whose actions add **`Execute`** (the right to call
+`/execute`). Scope it three ways: `"Execute": { "Allow": [] }` = **any** Script in the Space ·
+`createdBy :self` = only Scripts the **caller created** · **`self`** (a `Refer` to one Script) =
+**exactly that one Script** — the least-privilege default for exposing a single endpoint. Only
+`createdBy` and `self` apply on this map. Grant end users `Execute` only, never
+`Create`/`Edit`/`Delete`. Use a **`ServiceUserRole`** for a ServiceLogin caller, a **`SpaceRole`** for
+a Weegloo User / `DeliveryAccessToken` / `SpaceAccessToken`.
 
 ```json
-"script": {
-  "Execute": {
-    "Allow": [
-      { "self": { "sys": { "type": "Refer", "id": "<scriptId>", "targetType": "Script" } } }
-    ]
-  }
-}
+"script": { "Execute": { "Allow": [
+  { "self": { "sys": { "type": "Refer", "id": "<scriptId>", "targetType": "Script" } } }
+] } }
 ```
-
-- The **`self`** filter pins a rule to **one specific Script by reference** — the cleanest way to let
-  a group of users run a single backend endpoint without granting "execute any Script." Do **not**
-  confuse `self` (this filter — a `Refer` to one entity) with the `createdBy.sys.id: ":self"`
-  sentinel (which means "the current caller").
-- **End users who call a Script** need `script.Execute` on their role — on the **`ServiceUserRole`**
-  (ServiceLogin → ACMA execute) or **`SpaceRole`** (Weegloo User / `DeliveryAccessToken`). Grant
-  `Execute` (all / own / one specific), generally **not** `Create`/`Edit`/`Delete` — authoring is an
-  admin task.
-- Full filter mechanics, `self` vs `:self`, and the author gate: **`weegloo-space-role`**.
 
 ## The external-API job pattern
 
 **Goal:** frontend submits input → an external API is called → the result is stored → frontend gets
 it. One Script does the whole thing.
 
-1. **Author a Script** (`method: "Post"`) that:
-   - optionally validates/charges (`ResourceFind` the caller's wallet by `where: {createdBy: ":self"}`,
-     `If` balance check, `ResourcePatch` to deduct — wrap risky steps in `Try`/`catch` to refund),
-   - `Http` POSTs to the provider (key in a `secret` header),
-   - `ParseJson` when the provider nests its JSON inside a string (LLM structured output),
-   - writes the result back with `ResourceCreate`/`ResourcePatch` (text field, or a **Media** ingest
-     for images: `ResourceCreate resource:"Media"` with `file.{locale}.source`+`encoding`),
-   - `Return`s a small summary.
-2. **Grant `script.Execute`** to the caller's role.
+1. **Author a Script** (`method: "Post"`) that: optionally validates/charges (`ResourceFind` the
+   caller's wallet by `where: { "createdBy": ":self" }`, `If` balance check, `ResourcePatch` to
+   deduct — wrap risky steps in `Try`/`catch` to refund); `Http` POSTs to the provider (key in a
+   `secret` header); `ParseJson` when the provider nests JSON inside a string; writes the result back
+   with `ResourceCreate`/`ResourcePatch` (a text field, or a **Media** ingest for images); `Return`s a
+   small summary.
+2. **Grant `script.Execute`** to the caller's role (above).
 3. **Frontend**: `POST …/scripts/{id}/execute` with the payload and read the result off the response.
-   **When the provider is too slow to answer inside one run**, keep the wait off the request: the
-   frontend creates a job Content row, a **`Webhook`** on `Content.Create` runs the Script that calls
-   the provider and writes the result back (`weegloo-webhook`), and the frontend **polls that row by
-   `sys.id`** — `weegloo-api-query-optimization`. If that job Content is polled on **ACDA / CDA**
-   under a `createdBy :self` role, its ContentType needs **`publishWithAuthor: true`**, or the
-   delivery read matches nothing — `weegloo-create-content-type`.
-4. **Event-driven variant**: instead of the frontend calling `/execute`, attach the Script to a
-   **Webhook** (`script` Refer, on e.g. `Content.Create`) so it runs automatically — `weegloo-webhook`.
-
-Minimal cookbook (call LLM, write result Content, return id):
+   **When the provider is too slow for one run**, keep the wait off the request: the frontend creates
+   a job Content row, a **`Webhook`** on `Content.Create` runs the Script that calls the provider and
+   writes the result back, and the frontend **polls that row by `sys.id`**. If that job Content is
+   polled on **ACDA / CDA** under a `createdBy :self` role, its ContentType needs
+   **`publishWithAuthor: true`** or the delivery read matches nothing.
+4. **Event-driven variant**: attach the Script to a **Webhook** (`script` Refer, on e.g.
+   `Content.Create`) so it runs automatically instead of being called.
 
 ```jsonc
 {
@@ -770,53 +348,44 @@ Minimal cookbook (call LLM, write result Content, return id):
 }
 ```
 
-> **Structured output — the result arrives as a string, not as JSON.** Asking an LLM for JSON gets you
-> JSON *inside* `content`, so the cookbook's `{ /resp/body/choices/0/message/content }` is one long
-> string: pointers into it (`…/content/score`) resolve to nothing and the field is written as raw text.
-> Put a `ParseJson` between the call and the write, then address the parsed value:
+> **Structured output arrives as a string, not as JSON.** Asking an LLM for JSON gets you JSON
+> *inside* `content`, so the cookbook's `{ /resp/body/choices/0/message/content }` is one long string
+> and pointers into it (`…/content/score`) resolve to nothing. Put a `ParseJson` in between, wrapped
+> in `Try` (a model replying in prose fails the parse), then address the parsed value:
 >
 > ```jsonc
 > { "type": "ParseJson", "name": "answer", "value": "{ /resp/body/choices/0/message/content }" },
 > { "type": "ResourceCreate", "resource": "Content", "contentType": { "sys": { "id": "ct_result" } },
->   "fields": { "score":   { "en-US": "{ /answer/score }" },
->               "summary": { "en-US": "{ /answer/summary }" } }, "name": "out" }
+>   "fields": { "score": { "en-US": "{ /answer/score }" } }, "name": "out" }
 > ```
->
-> Wrap it in `Try` — a model that replies in prose instead of JSON fails the `ParseJson`, and `catch`
-> is where you record that or `Return` a retryable error.
 
-> **Large `Http` responses — image / file generation.** The `Http` response body is capped at **10 MiB**
-> (see *Statements → Http* and the limits table). A generation API that returns the asset **inline as
-> base64** can exceed that and make the call **throw**, so prefer a provider mode that returns a **URL**
-> to the generated asset (a tiny JSON response), then hand that URL to the **Media** ingest with
-> **`encoding: "url"`** — the ingest worker fetches the bytes on its own path, **not** through the
-> 10 MiB `Http` cap. Reserve `encoding: "base64"` for assets you are sure stay well under 10 MiB.
+> **Image / file generation:** a provider returning the asset **inline as base64** can blow the
+> 10 MiB `Http` cap and make the call throw. Prefer a provider mode that returns a **URL** (a tiny
+> JSON response) and hand that URL to the Media ingest with `encoding: "url"`.
 
-Locale: write Content/Media fields under the **default locale** bucket (`fields.text.en-US`) unless
-the field is `localized: true` — see `weegloo-default-locale`.
+Write Content/Media fields under the **default locale** bucket (`fields.text.en-US`) unless the field
+is `localized: true` — `weegloo-default-locale`.
 
-## Plan limits
+## References
 
-The number of Scripts per Space is **plan-limited** (illustrative: Free **3** / Basic **10** / Pro
-**50** / Enterprise unlimited). On a limit error (`WGL429*`), do not loop-retry — surface the upgrade
-path per `weegloo-global-rules`. Confirm current caps on the pricing page; do not hardcode.
-
-**Executions are a monthly allowance for the Organization, and `/execute` is not its only consumer** —
-every **Scheduler** run spends one too (`weegloo-scheduler`), so a tight cron competes with the
-product's own traffic. When that allowance is spent, Script execution is suspended for the
-Organization and any Scheduler that comes due is **deactivated** rather than run.
+- **`references/patterns.md`** — the five non-outbound shapes: all-or-nothing work with compensation,
+  `version` optimistic locking, privilege delegation, and the secret-gated anonymous-board
+  edit/delete. Read it when the task is one of those rather than an outbound API call.
+- **`references/queries-and-iteration.md`** — `ResourceForEach` / `ResourceCount` in full, Advanced
+  Search (`advanced`) in full, the limits table and save-time validation. Read it when the Script
+  searches, iterates or counts, or is large enough that the run budget matters.
+- **`references/verify-callbacks.md`** — `Signature` / `Hash` / `Regex`, the replay window and the
+  anonymous endpoint. Read it when the Script *receives* a signed request instead of sending one.
+- **`references/value-expressions.md`** — the `date` operator and operator edge cases. Read it
+  whenever a date is compared, stored or read out of the payload.
 
 ## Related
 
-- `weegloo-webhook` — event triggers that run a Script (or call a URL).
-- `weegloo-scheduler` — clock triggers: a cron entry that runs one Script on a schedule (each run
-  spends one Script execution from the monthly allowance).
-- `weegloo-payment` — PG / MoR integration: the confirm and callback shapes, and what `Signature` /
-  `Hash` / `Regex` / `/now` are for in practice.
-- `weegloo-space-role` — the `script.Execute` permission and `:self` filter.
-- `weegloo-space-access-token` — the SpaceAccessToken that carries `script.Execute` for anonymous / public callers (role-scoped).
-- `weegloo-create-content-type` / `weegloo-default-locale` — result ContentType fields, locale buckets.
-- `weegloo-media-lifecycle` — when an ingested Media is deliverable.
-- `weegloo-api-endpoints` — base URLs, vendor JSON, OpenAPI discovery.
-- `weegloo-api-query-optimization` — poll a result Content by `sys.id`.
-- `weegloo-minimal-load` — rule: a Script must earn its run; fetch the minimum and compute on the client.
+- `weegloo-webhook` (event triggers) · `weegloo-scheduler` (cron triggers) · `weegloo-payment`
+  (PG / MoR confirm and callback shapes) · `weegloo-send-email` (the `EmailAccount` behind
+  `EmailSend`).
+- `weegloo-space-role` (the `script` map's filters) · `weegloo-space-access-token` (the token that
+  carries `script.Execute` for anonymous / public callers).
+- `weegloo-create-content-type` / `weegloo-default-locale` (result fields, locale buckets) ·
+  `weegloo-media-lifecycle` (when an ingested Media is deliverable) · `weegloo-api-endpoints` (base
+  URLs, vendor JSON) · `weegloo-api-query-optimization` (poll a result Content by `sys.id`).

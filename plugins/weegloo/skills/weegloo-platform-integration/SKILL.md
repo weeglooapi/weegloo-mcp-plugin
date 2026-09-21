@@ -3,437 +3,160 @@ name: weegloo-platform-integration
 description: ROUTER / entry point for Weegloo — use FIRST for "integrate / connect / add / use Weegloo" and for BUILD or DEVELOP anything with Weegloo ("make a homepage using Weegloo"), in ANY language. Naming Weegloo IS the trigger; a vague, featureless request is the strongest case. Routes plain needs to the right skill: login, signup, social login, user/app data, search, multi-language switcher, file upload/download, images, hosting/deploy, public/team sharing, roles, permissions, external API, webhooks, cron jobs, payments, email, maps, 주소/우편번호 lookup. 위글루로 개발/연동/구축, 홈페이지 만들어줘, 배포, 로그인, 검색, 결제, 지도, 권한.
 ---
 
+
 # Weegloo Platform Integration (capability router)
 
-When the user asks to integrate Weegloo, or requests functionality that can be provided by
-Weegloo, automatically identify the appropriate Weegloo capabilities and configure them
-without requiring the user to know specific Weegloo feature names.
+Translate a plain-language need into the **correct concrete skill(s)**, then hand off. This skill
+**routes; it does not implement** — the only three things it owns outright, because no downstream
+Weegloo skill covers them, are the **Payments** provider default, the **Maps** embed and the
+**Images** placeholder rule. It does not replace the `weegloo-global-rules` gates: MCP auth, then the
+Organization/Space choice, then `weegloo-service-architecture` for architecture.
 
-This skill is a **router/dispatcher**. Its job is to translate a plain-language need into the
-**correct concrete skill(s)**, then hand off. It does **not** implement features itself — the only
-two exceptions are the standing **Payments** provider default and the **Maps** embed below, neither
-of which has a downstream Weegloo skill to hand off to — and it does **not** replace the existing
-hard gates in `weegloo-global-rules` (e.g. architecture work must still go through
-`weegloo-service-architecture`).
+## Trigger — read before deciding this skill does not apply
 
-## What counts as a trigger — read this before deciding the skill does not apply
+**Naming Weegloo as the platform to build with IS the trigger.** *integrate* / *connect* / *add* are
+**not** required and their absence is **not** an exemption.
 
-**Naming Weegloo as the platform to build with IS the trigger.** The words *integrate* / *connect* /
-*add* are **not** required, and their absence is **not** an exemption:
+- "Develop it with Weegloo", "build this with Weegloo", "make the site using Weegloo", "set it up on
+  Weegloo", "just use Weegloo for this" all enter here first. A bare develop-with-Weegloo request
+  naming **no** feature is the **strongest** case for this router, not a weaker one — the whole
+  capability map has to be worked out from the frontend.
+- Any capability Weegloo could provide (login, data, search, upload, hosting, sharing, roles,
+  external API, cron, payments, email, maps), whether or not "Weegloo" is said.
+- **Any language** — the trigger is the intent, not an English keyword.
 
-- **"Develop it with Weegloo"**, "build this with Weegloo", "make the site using Weegloo", "set it
-  up on Weegloo", "just use Weegloo for this" — **every one of these enters here first.** A bare
-  *develop-with-Weegloo* request is the **strongest** case for this router, not a weaker one: it names
-  no feature, so the entire capability map below is what has to be worked out from the frontend.
-- Any request for a capability Weegloo could provide — login, data, search, upload, hosting, sharing,
-  roles, external API, cron, payments, **maps** — whether or not the word "Weegloo" is even said.
-- **Any language.** The trigger is the *intent* — *make something, on Weegloo* — not an English
-  keyword. The same request written in Korean, Japanese or any other language enters here identically;
-  `weegloo-global-rules` carries the literal non-English phrasings.
+**Do not skip straight to building.** Scaffolding a frontend or creating resources before step 1 is
+what makes the result wrong.
 
-**Do not skip straight to building.** On such a request, scaffolding a frontend or creating resources
-before step 1 (reading the existing frontend as the spec) is what makes the result wrong. The
-`weegloo-global-rules` gates — MCP auth, then the Organization/Space choice — still run first.
+## Definition of done
 
-## Definition of done — what "integrate Weegloo" means (read this FIRST)
+Finished means every capability the frontend implies is **wired and live**, not scaffolded.
 
-"Integrate Weegloo" is **not** finished when the pieces are *scaffolded* — it is finished when every
-capability the frontend implies is **actually wired and live**. Hold the whole flow to this contract:
+- **A capability counts as done only when it works end-to-end.** A `ServiceUserRole` with no
+  `ServiceLogin` (sign-in does nothing), or a ContentType the UI never calls, is **incomplete**.
+  Never report an inert capability as completed.
+- **A deployable web app gets deployed.** A static/SPA target with no other host named ⇒ deploy to
+  **Weegloo WebHosting** and report the live `…weegloo.app` URL. Skip only if the user named another
+  host or it cannot build to a static export (`weegloo-web-hosting`).
+- **The only legitimate reason to stop short is a blocking user-only input** (step 4). Then **end the
+  turn by asking for that one value**, naming the capability it unblocks — never a "done" report that
+  lists the missing input as optional homework.
 
-- **A capability counts as done only when it is switched on and works end-to-end** — not when its
-  supporting resource exists but the feature is inert. Creating a `ServiceUserRole` but never creating
-  the `ServiceLogin` (so sign-in does nothing), or modelling a ContentType the UI never gets wired to
-  call, is **incomplete work** — not "done, finish the rest later." **Never report an inert capability
-  as completed.**
-- **A deployable web app gets deployed.** If the integration target is a runnable static/SPA site and
-  the user has not named another host, deploying it to **Weegloo WebHosting** and reporting the live
-  `…weegloo.app` URL is part of finishing — running it only locally is **not** a deliverable. (Skip the
-  deploy *only* if the user specified another host, or the app genuinely cannot build to a static
-  export — see `weegloo-web-hosting`.)
-- **The only legitimate reason to stop short of a wired-and-live capability is a blocking user-only
-  input** (step 4). When that happens, **end the turn by asking for that one value** and naming the
-  capability it unblocks — do **not** end with a "done" report that lists the missing input as optional
-  future homework. Asking and waiting is the correct finish here; silently deferring is the failure to
-  avoid.
-
-## How to use this skill
+## How to route
 
 1. **FIRST, reverse-engineer the service intent from the existing frontend — never skip this.**
    "Integrate Weegloo" almost always means "wire Weegloo into an app whose UI and code already
-   exist." Treat that **UI + code as the spec** for what the backend must provide, and read it
-   systematically *before* routing or creating anything. The single most common failure is not
-   grasping the service's full intent from the frontend — work through these in order:
+   exist." Treat that **UI + code as the spec**. The single most common failure is not grasping the
+   service's full intent from the frontend. In order:
    - **a. What features does the product need?** Inspect pages/routes, components, forms, buttons,
-     lists, modals, app state, mock/seed/fixture data, hard-coded sample values, `fetch`/API stubs,
-     `config`/env placeholders, and comments/TODOs. From those, infer the capabilities in play:
-     auth (login/signup), per-user vs shared data, list+detail views, search/filter, file
-     upload/download, **calls to an external API** (e.g. an AI/LLM/image endpoint behind a key),
-     public vs members-only sharing, deploy/hosting. Map each to the capability list below.
-     A **language switcher** — `English` / `Korean` buttons (usually labelled in each language's own
-     script), an `EN` / `KO` toggle, a flag or globe menu, `/en/…` routes, a `lang` / `locale` value
-     in state or config — means the product is **multi-language**; that is a capability too
-     (*Localization* below), not a frontend detail.
-     An **owner / admin / staff / dashboard / back-office** surface in the UI (e.g. a "manage
-     bookings", "settings", "moderation", or full-data overview screen, including a prototype's
-     `role`-switch "admin" mode) is itself a capability — an **in-app admin login** for a Weegloo
-     User (`weegloo-user-login`). Recognize it and auto-integrate it like any other leaf; do **not**
-     silently assume "the team will use the Weegloo Console."
-   - **b. Which Weegloo resources does each feature imply?** e.g. a Google sign-in button + a
-     personal "history" list → ServiceLogin + ServiceUser + a per-user-scoped ContentType; a
-     "generate image from a prompt" flow that calls a third-party API → a **Script** (external `Http`
-     call + Media ingest / Content write-back) + a job/result ContentType; an image grid → Media +
-     delivery.
-   - **c. Design each ContentType FROM the UI, not from a guess.** Read the actual inputs and
-     outputs the UI binds to and derive fields, types, and validations: each form control → a field;
-     a fixed set of choices (a ratio/size selector, status chips, a category dropdown) → an
-     enum/allowed-values validation whose options **exactly match the UI's**; required inputs →
-     required fields; observe max lengths, number ranges, referenced assets (→ Refer/Media), and
-     per-item ownership (per-user → `:self`). Mismatched validations silently break writes, so align
-     them to the code. Then build it via `weegloo-create-content-type`.
-   - **d. Plan the per-page API calls so each screen renders as the user intended.** For every view,
-     decide exactly which endpoint and shape to call and when — list vs on-click **detail** fetch,
-     reference expansion to resolve a Media field into a real image URL, publish/poll timing. A
-     list/sidebar shows a lightweight label; opening an item fetches its detail (see
-     `weegloo-api-query-optimization`). The test is: would a real user see what the UI promises?
-   - **Fill gaps by reasoning — do not model only what is literally spelled out.** Frontends are
-     usually partial: mock data, TODOs, a field shown but never wired, an action with no backend.
-     When the UI implies something the code doesn't fully express, infer the **complete, sensible**
-     design and build that — capture the service's *intent*, not just its current stubs. Prefer a
-     reasoned default over a question; reserve questions for the unavoidable user-only inputs
-     (secrets/credentials and the Organization/Space choice — see steps 4–5).
-2. **Read the request through the capability map below** and confirm which leaf capabilities apply,
-   using what step 1 surfaced.
-3. **Do NOT ask the user which capabilities to integrate.** Even for broad/ambiguous requests
-   (e.g. "connect Weegloo", "manage data with Weegloo"), do not present a capability menu and do
-   not ask scoping questions about which features to include. Instead, **automatically integrate
-   every capability that can feasibly be implemented** for the request — treat the full capability
-   map below as in-scope by default and wire up each leaf that applies. Choose sensible defaults
-   yourself (e.g. read+write where both make sense) rather than asking the user to decide.
-   - **EXCEPTION — Organization / Space MUST still be asked.** "Do not ask" applies only to *which
-     capabilities/features* to integrate. It does **not** override the `weegloo-global-rules` hard
-     gate: the target **Organization** and **Space** must always be decided **with the user** before
-     any space-scoped work — never guess, auto-pick, or use the first item from a list. Confirm the
-     Organization + Space first, then auto-integrate every feasible capability into it.
-4. **Ask for required external inputs JUST-IN-TIME — never batch them into a final wrap-up.**
-   Some capabilities need a value only the user can supply (e.g. a Google OAuth Client ID/Secret
-   for ServiceLogin, a third-party API key for a Webhook). Do **not** plow through everything and
-   then conclude with a summary table that asks the user to "provide all of these and I'll finish"
-   — that pattern is wrong. Instead, work capability-by-capability and the **moment** you reach a
-   step that genuinely needs such an input, **stop and ask for that one thing**, then continue once
-   you have it. Integrate everything you *can* without user input silently; surface a question only
-   at the exact point it blocks the next concrete action, and ask only for what that step needs.
-   - **Two kinds of missing input — handle them differently:**
-     - **Blocking (only the user can supply it):** OAuth `clientId` / `clientSecret`, third-party API
-       keys, an SMTP credential — on the Google email default, a **Google App Password** plus the
-       Google address it belongs to (see **Email** below) — etc. — **except a PG / MoR key**, which has
-       a working public-test-key default and is therefore *not* blocking (see **Payments** below).
-       Note the asymmetry: a *default vendor* removes the "which one?" question, it does **not** make
-       that vendor's credential non-blocking. When you reach the step that needs a truly
-       blocking value, **stop, ask for it, and wait** — the capability is **not done** until you have
-       the value and have actually created the resource with it. Do **not** downgrade to "I set up the role; add the key later" and move on: an inert
-       auth/login/webhook feature is *incomplete* (see *Definition of done*). So if this is where the
-       turn ends, it ends **with the question**, not with a completion report.
-     - **Self-resolving (you can supply a placeholder and fix it yourself):** e.g. a ServiceLogin
-       `callbackUrl` before the deploy URL exists — set a placeholder, deploy, then patch it. **Do not
-       ask the user** for these; resolve them yourself.
-   - **Just-in-time means *at the step that needs it* — not earlier, not at the end.** Do not
-     front-load a blocking question during analysis before you actually reach the step, and do not
-     push it past the step into a closing summary. Between those points, integrate everything you
-     *can* without user input silently.
-   - This does not reintroduce capability menus or scoping questions (step 3 still holds). It only
-     governs *how* you collect the unavoidable per-capability inputs: incrementally, in context.
-5. **Default entry point:** almost every "integrate Weegloo" request is really "build something on
-   Weegloo", so unless the need is a single isolated feature, route to **`weegloo-service-architecture`
-   FIRST** — it decides the API/login/role combination, then chains into content modeling and the
-   rest. Do not bypass it.
-6. **Hand off — do not answer from this skill.** Invoke the concrete skill(s) in the
-   "→ skill" column and follow them. This file deliberately contains no implementation detail.
+     lists, modals, app state, mock/seed/fixture data, hard-coded samples, `fetch`/API stubs, env
+     placeholders, comments/TODOs. Infer: auth, per-user vs shared data, list+detail, search/filter,
+     file upload/download, **external API calls** (an AI/LLM/image endpoint behind a key), public vs
+     members-only sharing, deploy. Two surfaces are easy to miss and are **capabilities, not frontend
+     details**: a **language switcher** (an `EN`/`KO` toggle, a flag or globe menu, `/en/…` routes, a
+     `lang` value in state, copy duplicated per language in fixtures) ⇒ *Multi-language*; an
+     **owner / admin / staff / dashboard / back-office** surface (a "manage bookings", settings,
+     moderation or full-data screen, including a prototype's `role`-switch "admin" mode) ⇒ an
+     **in-app admin login**. Never silently assume "the team will use the Weegloo Console".
+   - **b. Which Weegloo resources does each feature imply?** A Google sign-in button + a personal
+     "history" list → ServiceLogin + ServiceUser + a per-user-scoped ContentType; a "generate image
+     from a prompt" flow calling a third-party API → a **Script** (`Http` + Media ingest / Content
+     write-back) + a job/result ContentType; an image grid → Media + delivery.
+   - **c. Design each ContentType FROM the UI, not from a guess.** Each form control → a field; a
+     fixed set of choices (a ratio/size selector, status chips, a category dropdown) → an
+     allowed-values validation whose options **exactly match the UI's**; required inputs → required
+     fields; observe max lengths, number ranges, referenced assets (→ `Refer`/Media) and per-item
+     ownership (per-user → `:self`). Mismatched validations silently break writes. Build it via
+     `weegloo-create-content-type`.
+   - **d. Plan the per-page API calls** so each screen renders as intended — list vs on-click detail
+     fetch, reference expansion to resolve a Media field into a real image URL, publish/poll timing.
+     The test: would a real user see what the UI promises?
+   - **Fill gaps by reasoning.** Frontends are partial — mock data, TODOs, a field shown but never
+     wired, an action with no backend. Infer the complete, sensible design and build **that**.
+     Prefer a reasoned default over a question.
+2. **Read the request through the table below** and confirm which leaf capabilities apply.
+3. **Do NOT ask the user which capabilities to integrate.** Even for broad requests ("connect
+   Weegloo", "manage my data with Weegloo"), present no capability menu and no scoping questions —
+   **automatically integrate every capability that can feasibly be implemented**, choosing sensible
+   defaults yourself (read+write where both make sense).
+   - **EXCEPTION — Organization / Space MUST still be asked.** "Do not ask" covers *which features*;
+     it does not override the `weegloo-global-rules` gate. Confirm Organization + Space with the user
+     first — never guess, auto-pick, or take the first list item — then auto-integrate into it.
+4. **Ask for required external inputs JUST-IN-TIME — never batch them into a final wrap-up.** Work
+   capability by capability; the **moment** a step genuinely needs a user-only value, **stop, ask for
+   that one thing, and wait**, then continue. Never plow through everything and close with a "provide
+   all of these and I'll finish" table.
+   - **Blocking (only the user can supply it):** OAuth `clientId`/`clientSecret`, third-party API
+     keys, an SMTP credential — **except a PG/MoR key**, which has a working public-test default.
+     Note the asymmetry: a **default vendor** removes the "which one?" question, it does **not** make
+     that vendor's credential non-blocking. The capability is **not done** until you have the value
+     and have created the resource with it — never downgrade to "I set up the role, add the key
+     later". If that is where the turn ends, it ends **with the question**.
+   - **Self-resolving (you fix it yourself):** e.g. a ServiceLogin `callbackUrl` before the deploy URL
+     exists — set a placeholder, deploy, then patch it. **Do not ask the user** for these.
+   - **Announce-early, not a question:** the moment ServiceLogin / social login enters the plan, give
+     the user the provider **Redirect URI** (see the *Login* rows) — deploy-independent, so nothing
+     blocks saying it up front.
+   - Just-in-time means *at the step that needs it* — not front-loaded during analysis, not pushed
+     into a closing summary. Between those points, integrate everything you can silently.
+5. **Default entry point:** unless the need is a single isolated feature, route to
+   **`weegloo-service-architecture` FIRST** — it decides the API/login/role combination and chains
+   into content modeling and the rest. Do not bypass it.
+6. **Hand off — do not answer from this skill.** Invoke the skills in the "→ skill" column and follow
+   them. This file carries no implementation detail beyond its three owned exceptions.
 
-## Keep the final reply SHORT (integration flow only)
+## Capability → skill table
 
-This applies specifically to a broad **"integrate Weegloo"** request — the entry-point flow this
-skill governs. When you finish, the user-facing message must be **brief and plain**:
+The always-loaded `weegloo-*` rules already carry the standing policies (never ask which PG/MoR,
+which SMTP vendor, or for a Maps/Kakao key; never generate an image). These rows carry the **routing
+target plus what those rules do not say**.
 
-- **Report only what was completed**, as a short list. Do not narrate the plan, the steps you took,
-  the architecture, or what work remains/comes next.
-- **No Weegloo-internal jargon.** The person asking may not know Weegloo at all — terms like
-  `ContentType`, `ServiceUserRole`, `:self`, `ACMA`, `DeliveryAccessToken`, `Script`, resource
-  `sys.id`s, status codes (404), etc. are meaningless to them. Describe outcomes in plain language
-  (e.g. "the site is live at …", not "WebHosting resource reached state COMPLETED").
-- **No remaining-work tables or "give me these and I'll continue" wrap-ups** (per step 4, ask for a
-  needed input at the moment it blocks you — not as a closing summary).
-- Surface a link/URL the user can actually use when there is one; keep everything else terse.
-- **Colour the two lines that carry the most weight** (`weegloo-global-rules` → *Highlight what the
-  user must act on or must know*): act-on values — the live URL, an OAuth Redirect URI to register —
-  in **green** (`+ ` in a `diff` fence); must-know facts about what shipped — payments on test keys,
-  say — in **red** (`- `). One to three lines each, never colour the narration.
+| Need (plain language) | → Concrete skill(s), and the gate that goes with it |
+|---|---|
+| Login | `weegloo-user-login` (admin/staff) / `weegloo-service-login` (product end-users); unsure → disambiguate via `weegloo-service-architecture`. **`weegloo-user-login` is browser-only — a native Android / iOS app can only sign in as a Service User**, whichever side of the product it serves. |
+| Signup (open end-user sign-up) | `weegloo-service-login` |
+| Social Login | `weegloo-service-login-client` (provider-agnostic spine) + the provider skill: `weegloo-service-login-google` / `-github` / `-facebook` / `-gitlab` / `-kakao` / `-naver` / `-line`. Infer the provider from the product — don't ask; there is **no built-in default**, so don't reflexively pick Google. **A native Android / iOS app takes the same route and additionally needs its callback deep link (`myapp://login`, an App Link / Universal Link) registered in `ServiceLogin.allowedCallbackUrls`** before the first sign-in attempt, or the login entry rejects the request. |
+| **Provider Redirect URI** (any ServiceLogin / social-login work) | **Announce it UP FRONT, not only at the end.** As soon as it enters the plan, hand the user `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` with real values substituted, to register in the provider console — **in green (`+ `), marked exact-paste** — so they can do that manual step while you build, then **repeat it in the completion message**. Deploy-independent, so nothing blocks saying it early. Details: `weegloo-service-login`. |
+| Account deletion / withdrawal | `weegloo-service-login` — **no API can delete a ServiceUser**, only the console. Model it as a request ContentType the member writes via ACMA + an admin who deletes them in the console; that in-app request path is what the App Store / Play Store require. |
+| Admin / Owner / Staff UI (dashboard, settings, moderation, all-member data) | `weegloo-user-login` — console FE login popup → CMA, as an **in-app admin UI**. **Auto-integrate by default**: it needs **no** user-supplied secret (the admin signs in against the live console), so it adds **no** question. Do **not** silently downgrade it to "managed in the Weegloo Console" unless the user **explicitly** asks for Console-only. Cross-member reads/edits belong on **CMA**, never a public CDA token or a per-member ACDA. |
+| User Data (private / per-user) | `weegloo-service-architecture` + `weegloo-create-content-type` + `weegloo-space-role` (`createdBy :self`) |
+| Application Data (shared models, CRUD) | `weegloo-create-content-type` + `weegloo-cma-json-patch` + `weegloo-cda-publish` |
+| Multi-language / i18n (a language switcher in the UI) | `weegloo-create-content-type` (set `localized: true` per field, on the reader-facing **text** only) + `weegloo-default-locale` (write rules and read shapes). Invoke both. Router-owned provisioning: **give the Space ≥2 Locales** — list with `cma_GetListLocales`, add one with `cma_CreateLocale`, picking the code yourself from what the product is for (a Korean-facing shop ⇒ `ko-KR`; don't ask — step 3), with **`optional: true`** (keeps Content creatable without a translation for every required field) **and `fallbackCode` = the default locale's `code`** (without it the second language renders half-blank). **Never machine-translate** to fill locales. **Build the switcher from the Locale list at runtime** (`GET /v1/spaces/{spaceId}/locales`, CDA — `sys.code` is the `?locale=` value, `sys.name` the label, `sys.default` marks the default; **`optional` and `fallbackCode` are body-level, NOT under `sys`**), never a hard-coded language array. |
+| Search (over content / Media) | `weegloo-api-query-optimization` + `weegloo-list-pagination`. Decide the **locus** first: filtering an already-loaded array is correct **only when that array is the whole dataset** — paginated, large or unknown-size data (e.g. *all* Media in a Space) is searched server-side. |
+| File Upload (a product feature) | `weegloo-upload-api` — the app's own code calls the Upload REST API, then creates the Media (or WebHosting) from the returned Upload id, on the plane matching the caller's identity (**CMA** Media for a Weegloo User, **ACMA** Media for a Service User). |
+| File Download | `weegloo-cda-publish` (published Media delivered via CDA/ACDA) |
+| Images for the UI (hero, thumbnail, gallery, avatar, logo, product shot) | **no skill — see *Images* below.** |
+| Web Hosting (deploy a website / static site) | `weegloo-web-hosting` (+ `weegloo-upload-api` for the build-ZIP upload; + `weegloo-delivery-access-token` if the site reads published content from CDA) |
+| Public Sharing (anyone can read) | `weegloo-delivery-access-token` + `weegloo-cda-publish` |
+| Team Sharing (scoped to members) | `weegloo-space-role` + `weegloo-service-login` (ACDA scope) |
+| Role Management | `weegloo-space-role` |
+| Access Control (least-privilege tokens, scoped reads) | `weegloo-space-role` + `weegloo-delivery-access-token`; a Space-scoped read+write token → `weegloo-space-access-token` |
+| API Connection / server-side automation (call third-party APIs without a backend; compute or write back Content/Media; "create a job → poll the result") | `weegloo-script` |
+| Webhook (a Space event → call a URL **or** run a Script) | `weegloo-webhook` |
+| Scheduled / recurring job ("every night", "every 15 minutes", a daily digest, a periodic sync, a cleanup sweep) | `weegloo-scheduler` (one Script on a five-field **UTC** cron) + `weegloo-script` for the work. The trigger decides: **clock → Scheduler**, **content event → `weegloo-webhook`**, **caller → the Script's `/execute`**. A UI hint counts — a "runs daily at 9am" label, a schedule picker, a "last synced" timestamp, a cron string in config, or a frontend `setInterval` standing in for server-side work. |
+| Send email (confirmation, receipt, notification, verification code, digest, contact form, an alert from a scheduled job) | `weegloo-send-email` (register the SMTP sender) + `weegloo-script` (`EmailSend` sends); pair with `weegloo-webhook` when a content event triggers it, or `weegloo-scheduler` when the clock does. The vendor default and the two-values-only credential ask are in the always-loaded rule — follow it and **wait** for the credential rather than shipping an inert email feature. |
+| Payment (PG or MoR — checkout, verification, provider callbacks; **not** Weegloo's own plan billing) | `weegloo-payment`, which hard-codes Stripe's published sample test keys, so the checkout ships working and **never inert**. Beyond the standing rule: a "Pay"/"Buy now" button **in any language** means payments were *asked for*, **not** that a provider was *named*. Read https://docs.stripe.com/testing first — **every `docs.stripe.com` page also serves Markdown at the same path with `.md` appended** (`…/testing.md`), which is what to use when the rendered page returns an app shell. The `4242 4242 4242 4242` test card **cannot be prefilled** (Stripe's fields are cross-origin), so show it prominently beside the pay button, not as fine print. A **named** provider's key **is** a genuine blocking input (step 4) — ask, and **never** fall back to Stripe because it has not arrived; a named provider **replaces** Stripe entirely. |
+| Map (a place, address, branch, venue, office, "how to find us" / directions, store locator) | **no skill — see *Maps* below**, which carries the key. |
+| Address / postcode lookup (주소 · 우편번호 찾기 in a signup, profile, checkout, shipping or branch form — a `zonecode`/`zipcode`/`postcode` field, a 도로명·지번 pair, an address book) | `weegloo-address-search` (the key-free Kakao/Daum Postcode widget; South Korea only — the rest is in the always-loaded rule). |
 
-This brevity rule is for the integration entry point. It does **not** silence the just-in-time
-questions in step 4, and it does not apply when the user explicitly asks for detail or invokes a
-specific concrete skill directly.
-
-**One required exception — a test-mode payment flow.** If payments were wired with the Stripe
-default (see *Payments*), the closing message **must** still say that payments run in Stripe test
-mode, are **not really charged** and do **not accept real cards**, and ask for the user's contracted
-PG/MoR details if they have any.
-That is a disclosure about what shipped, not deferred work, so the "no give-me-these wrap-ups" ban
-does not cover it. A few plain sentences — never omit it, and put the not-really-charged line in
-**red** (`- ` in a `diff` fence) so it cannot be skimmed past.
-
-**A map ships with the same kind of disclosure**, in one red line: the Google Maps embed runs on the
-API key built into this plugin, so its quota is shared, and the user can swap in their own key (or
-restrict this one to their own origin) for production. One line — not a section.
-
-## Available capabilities
-
-Each leaf maps to the concrete skill that actually does the work.
-
-- **Authentication**
-  - **Login** → identity model must be determined first (Weegloo has two separate ones):
-    admin/staff = `weegloo-user-login`; product end-users = `weegloo-service-login`.
-    **`weegloo-user-login` is browser-only — a native Android / iOS app can only sign in as a
-    Service User**, whichever side of the product it serves.
-    If unsure which, route to `weegloo-service-architecture` to disambiguate.
-  - **Signup** (open end-user sign-up) → `weegloo-service-login`
-  - **Social Login** (OAuth providers — Google / GitHub / Facebook / GitLab / LINE / Kakao / Naver;
-    browser SDK / wire protocol; **native Android / iOS apps take the same route and additionally
-    need their callback deep link registered in `ServiceLogin.allowedCallbackUrls`**) →
-    `weegloo-service-login-client` (provider-agnostic spine); for Google, also `weegloo-service-login-google`,
-    for GitHub, `weegloo-service-login-github`, for Facebook, `weegloo-service-login-facebook`, for
-    GitLab, `weegloo-service-login-gitlab`, for Kakao, `weegloo-service-login-kakao`, for Naver,
-    `weegloo-service-login-naver`, for LINE, `weegloo-service-login-line`. Infer the provider
-    from the product — don't ask; if none is indicated, reason the best-fit provider (no built-in
-    default — don't reflexively pick Google).
-  - **The provider Redirect URI is announced UP FRONT, not only at the end.** Any ServiceLogin /
-    social-login work: as soon as it enters the plan, tell the user the
-    `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` URI (real values
-    substituted) to register in the provider console — **in green**, marked exact-paste — so they can
-    do that manual step while you build, then **repeat it in the completion message**. It is
-    deploy-independent, so nothing blocks saying it early. Details: `weegloo-service-login`.
-  - **Admin / Owner / Staff surface** (an in-product dashboard, settings, moderation, or
-    back-office screen — anything where staff read or edit *all* members' data, not just their own)
-    → `weegloo-user-login` (console FE login popup → CMA, an **in-app admin UI**). **Auto-integrate
-    by default**, exactly like any other capability: it needs **no** user-supplied secret (the admin
-    signs in against the live Weegloo console), so it adds **no** question. Do **not** silently
-    downgrade an admin/owner surface to "managed in the Weegloo Console" — build it in-app unless the
-    user **explicitly** asks for Console-only. Cross-member reads/edits belong here (CMA), **not** on
-    a public CDA token or per-member ACDA.
-- **Data Management**
-  - **User Data** (per-user / private, member-owned) → `weegloo-service-architecture` +
-    `weegloo-create-content-type` + `weegloo-space-role` (`createdBy :self` scoping)
-  - **Application Data** (shared content models, CRUD, updates) → `weegloo-create-content-type` +
-    `weegloo-cma-json-patch` + `weegloo-cda-publish`
-  - **Search** (a search box / filter over content or Media) → first decide the **locus**: filtering
-    an already-loaded in-memory array is correct **only when that array is the whole dataset**; if the
-    data is paginated, large, or of **unknown size** (e.g. *all* Media in a Space — visible items are
-    not the full set), search **server-side** via the list API, not `Array.filter`. Full-text search
-    over `fields.*` text (e.g. a title) needs the **Advanced Search** header
-    `X-Weegloo-Advanced-Search: true` — plain `eq` is exact-match only, **and unindexed, so a
-    `fields.*` query without the header gets slow and times out as the Space fills up**;
-    RichText/Json aren't searchable. → `weegloo-api-query-optimization` + `weegloo-list-pagination`
-- **Localization (multi-language)**
-  - **A language switcher in the UI means the product is multi-language** — `English` / `Korean` /
-    `Japanese` buttons (usually labelled in each language's own script), an `EN` / `KO` / `JA`
-    toggle, a flag or globe menu, `/en/…` routes, a `lang` value in state, or the same copy
-    duplicated per language in fixtures. Weegloo covers it with **`Locale`** (the Space's languages)
-    plus the per-field **`localized`** flag → `weegloo-create-content-type` (setting the flag) **+
-    `weegloo-default-locale`** (write rules and read shapes). Invoke both; do not model from memory.
-  - **Give the Space at least two Locales.** List them first (`cma_GetListLocales`) — a Space with
-    only its default leaves the switcher nothing to switch. Add one with `cma_CreateLocale`, choosing
-    the code yourself from what the product is for (a Korean-facing shop ⇒ `ko-KR`) — **don't ask**,
-    step 3 — and create it with **`optional: true`** and **`fallbackCode` = the default locale's
-    `code`**. Both settings matter: `optional: true` keeps Content creatable without a
-    translation for every required field, and `fallbackCode` is what shows the default language where a
-    translation is missing.
-  - **`fallbackCode` is not decoration — Weegloo does NOT fall back to the default on its own.** A
-    Locale without it returns **empty** for anything it does not itself hold — including every
-    `localized: false` field (price, image, id), which is stored under the default locale only. Omit it
-    and the second language renders half-blank.
-  - **Set `localized: true` field by field, from the service.** Ask of each field: *would a reader in
-    another language need a different value here?* Yes → the text a reader sees (title, body,
-    description, category or button label) → `localized: true`. No → prices, dates, counts, status
-    enums, slugs and ids, and a `Refer → Media` that is the same asset in every language → leave it
-    `false`. That usually lands on the text fields, but decide it per field, never by type alone.
-  - **Never machine-translate to fill the other locales.** Write the **default-locale** value and stop
-    there; `fallbackCode` covers the rest until the user supplies real translations. Inventing
-    translations is wrong work, not helpfulness.
-  - **Read one language at a time — `?locale=<code>` on every delivery read**
-    (`…/contents?locale=ko-KR`), matching the switcher's current choice and re-fetched when it changes.
-    Delivery then returns that language **flattened** — `fields.title` is the string itself, **not**
-    `fields.title["ko-KR"]` — which is both the smaller payload and the shape the UI wants. Reserve
-    **`locale=*`** (every language at once, **no fallback applied**) for an editor-style screen that
-    shows all languages side by side.
-  - **Build the switcher from the Locale list, not a hard-coded array** — `GET /v1/spaces/{spaceId}/locales`
-    (CDA). Each item carries **`sys.code`** (the value for `?locale=`), **`sys.name`**
-    ("Korean (South Korea)") for the label, and **`sys.default`**; `optional` and `fallbackCode` are
-    body-level, not under `sys`.
-    **Render the options from that response at runtime — never a fixed language array in the code — so
-    a Locale added to or deleted from the Space appears or disappears on screen with no code change.**
-- **File Storage**
-  - **Upload** (a file-upload feature in the user's own product) → `weegloo-upload-api` (the app's
-    code calls the **Weegloo Upload REST API**, then creates Media/WebHosting from the returned
-    Upload id, on the matching plane: CMA Media for Weegloo Users, ACMA Media for Service Users).
-    The `weegloo-upload` MCP is **not** the implementation path for a product's upload feature — see
-    the note below.
-  - **Download** (deliver stored files to clients) → published Media via CDA/ACDA;
-    see `weegloo-cda-publish`.
-  - **Images the UI needs** (a hero, a thumbnail grid, a gallery tile, an avatar, a logo, a product
-    shot) → the **user's** files only: something they attached, a path they named, images already
-    committed to the frontend repo, or Media the Space already holds. **None supplied ⇒ do not
-    generate one** — the frontend draws its own placeholder region while the `Refer → Media` field
-    stays modelled and wired but empty. Full rule: *Images* below — there is no separate Weegloo
-    skill for this.
-- **Hosting & Deployment**
-  - **Web Hosting** (deploy a website / static site to a Weegloo subdomain over HTTPS) →
-    `weegloo-web-hosting` (uses `weegloo-upload-api` to upload the build ZIP; add
-    `weegloo-delivery-access-token` if the site reads published content from CDA)
-- **Sharing**
-  - **Public Sharing** (anyone can read) → `weegloo-delivery-access-token` + `weegloo-cda-publish`
-  - **Team Sharing** (scoped to members) → `weegloo-space-role` + `weegloo-service-login` (ACDA scope)
-- **Permissions**
-  - **Role Management** → `weegloo-space-role`
-  - **Access Control** (least-privilege tokens, scoped reads) → `weegloo-space-role` +
-    `weegloo-delivery-access-token`; Space-scoped read+write token →
-    `weegloo-space-access-token`
-- **External Service Integration**
-  - **API Connection / server-side automation** (call third-party APIs without a backend; compute or
-    write-back Content/Media; "create a job → poll the result") → `weegloo-script` (Weegloo **Script**)
-  - **Webhook** (react to a Space event → call a URL **or** run a Script) → `weegloo-webhook`
-- **Scheduled / Recurring Work**
-  - **Scheduled job** (anything that must run **on a clock** rather than on a request or an event —
-    a cron entry, "every night", "every 15 minutes", a daily digest, a periodic sync with a
-    third-party API, a cleanup / expiry sweep, polling an external queue) → **`weegloo-scheduler`**
-    (a **Scheduler** runs one **Script** on a five-field UTC cron) **+ `weegloo-script`** for the work
-    itself. Distinguish by trigger: **clock → Scheduler**, **content event → `weegloo-webhook`**,
-    **caller → the Script's `/execute`**. A UI hint counts — a "runs daily at 9am" label, a schedule
-    picker, a "last synced" timestamp, a cron string in config, or a `setInterval` in the frontend
-    standing in for server-side work.
-- **Email**
-  - **Send email** (a confirmation or receipt, a notification, a verification code or magic link, a
-    digest, a contact form that must reach the owner, an alert from a scheduled job) →
-    **`weegloo-send-email`** (register the SMTP sender) **+ `weegloo-script`** (`EmailSend` does the
-    sending); pair with `weegloo-webhook` when a content event triggers it, or `weegloo-scheduler`
-    when the clock does.
-  - **Which SMTP vendor — do NOT ask.** If the user **named** a service or SMTP vendor (Gmail, Naver,
-    Resend, Brevo, SendGrid, Mailgun, SES, their own server…), or a credential for one already sits in
-    the repo/env, use that one. If they named **none**, send through **Google (Gmail SMTP)** — a
-    standing default like Stripe under *Payments*, not a question.
-  - **The credential IS blocking, though** (exactly like a Stripe key): there is no public test
-    account. On the
-    Google default, ask for exactly two values and wait — a **Google App Password** created at
-    **https://myaccount.google.com/apppasswords**, and the **real Google address it belongs to** (never
-    an arbitrary or invented address — Gmail rewrites the From to the authenticated account). Ask for
-    an App Password, **never** the account password, and say in the same breath that they should tell
-    you if they would rather use a different SMTP service.
-  - **Those two are the ONLY inputs.** The rest you fill in yourself: `smtp.gmail.com` / `587` /
-    `StartTls` is fixed, the login and the From address are both that same Google address verbatim, and
-    the From display name plus the console label you derive from the product. Never ask about a host,
-    port, security mode, label, or display name.
-  - **Registering the sender delivers a real test message** to that inbox — say so before creating it.
-    Full mechanics: `weegloo-send-email`.
-- **Payments**
-  - **Payment** (take money from the product's own customers through any PG or MoR — checkout,
-    verification, provider callbacks) → `weegloo-payment`. **Not** Weegloo's own subscription/plan
-    billing.
-  - **Which provider — do NOT ask.** "Which PG / MoR should I use?" is a scoping question and step 3
-    bans it. If the user **named** a provider (or a contracted key already sits in the repo/env),
-    integrate that one. If they named **none**, integrate **Stripe in test mode** — read
-    **https://docs.stripe.com/testing** first and follow `weegloo-payment`. **Every `docs.stripe.com`
-    page also serves Markdown at the same path with `.md` appended** (`…/testing.md`), which is what
-    to use when the rendered page comes back as an app shell; if a URL is dead or moved, re-derive it
-    from a link inside a Stripe page you already fetched rather than guessing variants (same
-    discipline as the Weegloo docs rule in `weegloo-global-rules`). A checkout page, or a "Pay" /
-    "Buy now" button **in any language**, in the frontend means payments were *asked for*; it does
-    **not** mean a provider was *named*.
-  - **Neither the provider NOR the keys are a question.** Stripe publishes a **sample test key pair
-    on its own shared demo account**, and `weegloo-payment` §1 hard-codes it — exactly like the Maps
-    key below, you supply it yourself:
-    - `pk_test_TYooMQauvdEDq54NiTphI7jx` / `sk_test_BQokikJOvBiI2HlWgH4olfQ2`.
-    - **Build the entire checkout with those keys already wired in**, so it runs end to end on
-      delivery. **Never ask the user for a key** — not up front, not as a closing "send me these two
-      values" — and never ship an inert checkout.
-    - If the user **named** a different provider, that provider's key **is** a genuine blocking input
-      (step 4) — ask for it and **never** fall back to Stripe because it has not arrived. A provider
-      the user did not choose is wrong work.
-  - **The test card cannot be prefilled.** Stripe's card fields are cross-origin by design, so the
-    test number (`4242 4242 4242 4242`) must be displayed prominently in the checkout UI — a visible
-    callout next to the pay button, not fine print. Real cards are refused in test mode.
-  - **Disclosure is mandatory** once it works: tell the user payments were wired with Stripe, that
-    test mode means **nothing is actually charged** and real cards do not work, and that moving to
-    their own Stripe account or a contracted PG/MoR is available — **as a statement, not a request
-    for credentials**. A named provider then **replaces** Stripe entirely. This is the one required
-    exception to the brevity rule below. Put the **nothing-is-actually-charged** line in **red**
-    (`- ` in a `diff` fence, per `weegloo-global-rules`) — it is the fact most costly to miss.
-- **Location, Maps & Address**
-  - **Map** (a place, address, branch, venue, office, or a "how to find us" / directions block shown
-    on a map) → a Google **Maps Embed API** `<iframe>`, with the API key **already hard-coded here**.
-    **Never ask the user for a Maps key** — the key is supplied here, so a map is **not** a blocking
-    input (step 4). Note the contrast with *Payments*: the **provider** there is likewise a standing
-    default rather than a question, and its published sample test keys are hard-coded the same way. Full recipe:
-    *Maps* below — there is no separate Weegloo skill for this.
-  - **Address / postcode lookup** (an address field in a signup, profile, checkout, shipping or
-    branch-registration form — a `우편번호` / `주소 찾기` button, a `zonecode` / `zipcode` /
-    `postcode` field, a 도로명·지번 pair, an address book) → **`weegloo-address-search`** (the
-    Kakao/Daum Postcode widget). **SOUTH KOREA only** — it searches the Korean government address
-    database, so a form holding foreign addresses gets a free-text field instead, and the user is
-    told why. **Never ask for a Kakao key**: the widget needs none, so it is **not** a blocking
-    input (step 4).
+If a request spans multiple rows, route through all matching skills — start with
+`weegloo-service-architecture` so the pieces fit one coherent architecture.
 
 ## Maps — Google Maps embed (the key is already here; never ask for one)
 
-A site that has to show **where something is** — a store or branch address, a "how to find us" /
-directions block, an office location, a venue on an event page, a store locator or "nearest branch"
-list — gets a **Google Maps Embed API `<iframe>`**. Reference:
-https://developers.google.com/maps/documentation/embed/get-started
+A site that has to show **where something is** gets a **Google Maps Embed API `<iframe>`**: one
+iframe, no SDK, no `<script>` loader, no map object to initialise and nothing for a server to do — so
+it works unchanged on a static Weegloo WebHosting deploy and adds **no files** to the ≤300-entry ZIP.
+Not the Maps **JavaScript** API.
 
-**This is one of the two places the router carries implementation detail itself** (the other is the
-Payments provider default), because a map is not a Weegloo resource — there is no downstream Weegloo
-skill to hand off to. Everything needed is in this section.
-
-**Embed, not the Maps JavaScript API.** An embed is one `<iframe>`: no SDK, no `<script>` loader, no
-map object to initialise, and nothing for a server to do — so it works unchanged on a **static
-Weegloo WebHosting** deploy (`weegloo-web-hosting`) and adds **no files** to the ≤300-entry ZIP.
-
-### The API key — use this literal value
+**The API key — paste this literal value as the `key` parameter:**
 
 ```
 AIzaSyBx3fotrbPKPdJUZ5bYrNLH_cTDTXcQMKg
 ```
 
-Paste it verbatim as the `key` parameter. **Do not** emit a `YOUR_API_KEY` placeholder, **do not**
-read it from an env var that a static build has no way to inject, and **do not** ask the user for
-their own key. A Maps **Embed** key is **public by design** — it travels inside the iframe `src` and
-is visible to every visitor — so hard-coding it into the built page is the intended usage, not a
-leak.
-
-**It is a shared key that ships with this plugin, so its quota is shared too.** Say so in one line
-when you report a finished site (in **red**, per `weegloo-global-rules`), and mention that the user
-can swap in their own key — or add their deployed origin to this key's HTTP-referrer restrictions in
-the Google Cloud console — for production.
-
-### Pick the mode from what the UI actually shows
-
-Base URL: **`https://www.google.com/maps/embed/v1/{mode}?key={KEY}&{params}`**
-
-| UI intent | `{mode}` | Required parameter |
-|---|---|---|
-| **one place / address on a map** (the common case) | `place` | `q=` place name, address, plus code, or `place_id:…` |
-| a bare coordinate view, no pin | `view` | `center=lat,lng` |
-| a directions / route block ("how to get here") | `directions` | `origin=` + `destination=` |
-| "nearby X" / a category of results | `search` | `q=` search term (optionally location-restricted) |
-| a street-level look at the frontage | `streetview` | `location=lat,lng` **or** `pano=` |
-
-Every mode also accepts `zoom` (0–21), `maptype=roadmap` / `satellite`, `language`, `region`
-(two-character ccTLD) and `center`. `directions` adds `waypoints` (pipe-separated, max 20),
-`mode=driving` / `walking` / `bicycling` / `transit` / `flying`, `avoid=tolls` / `ferries` /
-`highways`, and `units=metric` / `imperial`. `streetview` adds `heading` (-180–360), `pitch`
-(-90–90), `fov` (10–100), `radius` and `source`.
-
-**Localize the map to the site's audience** with `language=` and `region=` — e.g.
-`language=ko&region=KR`, `language=ja&region=JP` — so map labels and search behaviour match what
-the visitor expects. Omit both for an English/global site.
-
-### The iframe
+A Maps **Embed** key is **public by design** — it travels inside the iframe `src` — so hard-coding it
+into the built page is the intended usage, not a leak.
 
 ```html
 <iframe
@@ -443,189 +166,69 @@ the visitor expects. Omit both for an English/global site.
   title="Store location"></iframe>
 ```
 
-- **URL-encode `q` / `origin` / `destination`.** Spaces become `+` or `%20`. An un-encoded non-ASCII
-  address often still resolves, but encode it anyway — build the value with `encodeURIComponent`
-  when the address comes from content.
-- **Minimum size is 200×200 px.** Below that the map does not render at all — a compact mini-map
-  card must still clear it.
-- Keep `loading="lazy"` and `referrerpolicy="strict-origin-when-cross-origin"` (Google's recommended
-  attributes), and give every iframe a `title` for screen readers.
-- Prefer a **responsive wrapper** (`aspect-ratio`, or a `position:relative` padding box) over a fixed
-  pixel height, so the map survives mobile.
-- Prefer **`q=place_id:…`** when the exact business is known: an address string can resolve to a
-  neighbouring pin, a place ID cannot.
+Base URL **`https://www.google.com/maps/embed/v1/{mode}?key={KEY}&{params}`**. Modes: **`place`**
+(`q=` an address, place name, plus code or `place_id:…` — the common case), `view` (`center=lat,lng`),
+`directions` (`origin=`+`destination=`), `search` (`q=` a category), `streetview` (`location=lat,lng`
+or `pano=`). **URL-encode `q`**; the **minimum size is 200×200 px** or it does not render at all;
+**one embed shows ONE place** — there is no marker-list parameter.
 
-### One embed shows ONE place — plan a list accordingly
+**Read `references/maps-embed.md`** before building anything beyond a single `place` pin: the other
+modes' parameters, `language`/`region` localization, a **branch list / store locator** with several
+places, sourcing the address from a ContentType instead of hard-coded HTML, responsive sizing, or a
+map that renders an error.
 
-The Embed API takes **no marker list** — there is no parameter for an arbitrary set of custom pins.
-So for a **branch list / store locator / venue gallery**, either render **one small iframe per
-card** (each with its own `q`), or use **`search` mode** when the pins genuinely are a search result
-(`q=coffee+shops+in+Seattle`). Do **not** reach for the Maps **JavaScript** API for multi-marker —
-that pulls an SDK, a script loader and a different quota into a static site. If the design truly
-requires clustered custom markers, **say so and ask** before switching.
-
-### Where the address comes from
-
-If the places are content the user manages, the address belongs in a **ContentType field**, not in
-hard-coded HTML: model `name` and `address` (ShortText), plus `lat` / `lng` / `placeId` when the
-design needs them (`weegloo-create-content-type`), read them over CDA, and build the iframe `src` in
-the browser from the field value. Hard-code an address **only** for a single fixed location that is
-part of the site's chrome — a footer, a contact page.
-
-### If the map does not render
-
-Google renders its own error **inside** the iframe. The usual causes: the **Maps Embed API** is not
-enabled on the key's project, the key's HTTP-referrer restriction does not cover the deployed origin,
-or a malformed `q`. Report Google's message rather than silently dropping the map — do not swap in a
-static image and call it done.
+**Disclose in one red line** (`- ` in a `diff` fence) that the key ships with this plugin so its quota
+is shared, and that the user can swap in their own — or add their deployed origin to this key's
+HTTP-referrer restrictions — for production. One line, not a section.
 
 ## Images — use the user's files; never generate one
 
-A frontend almost always needs images — a hero, a thumbnail grid, a gallery, an avatar, a logo, a
-product shot, a background — and modelling them as **Media** behind a `Refer → Media` field is
-correct. Where the **bytes** come from is the part that keeps going wrong.
+The always-loaded rule already forbids generating, drawing, downloading or uploading filler imagery,
+and requires the one red disclosure line. What this router adds:
 
-**1. The user's files win — and look before concluding there are none.** Images they attached, named
-a path to, or already committed to the frontend repo (`public/`, `assets/`, `static/`) are the assets
-to use: upload them with the **`weegloo-upload` MCP** and create the Media. Check the Space too —
-`cma_GetListMedias` may already hold exactly what the design calls for.
+- **Look before concluding there are none.** Images the user attached, named a path to, or already
+  committed to the frontend repo (`public/`, `assets/`, `static/`) are the assets to use — upload
+  them with the **`weegloo-upload` MCP** and create the Media. Check the Space too:
+  `cma_GetListMedias` may already hold exactly what the design calls for.
+- **Wire the real path anyway — the placeholder is a fallback, not a substitute.** Keep the
+  `Refer → Media` field, keep the UI code that resolves it to a URL (`include=1` —
+  `weegloo-api-query-optimization`), and fall through to the frontend's own placeholder only when the
+  field is empty. The user drops their file in later and the site shows it **with no code change**.
+- **A missing image is neither a blocking input (step 4) nor an inert capability (*Definition of
+  done*).** Do not stop to ask for images and do not hold the turn waiting for them — ship the
+  placeholders and carry on.
 
-**2. With none supplied, do NOT produce one.** No image generation, no AI-drawn artwork, no stock
-photo pulled off the web, no hand-authored mock illustration — and none of that uploaded into Media.
-Leave the **Media field empty** and let the **frontend** render the image region as a **placeholder it
-draws itself**: a CSS block carrying the design's aspect ratio over a neutral background, plus a label
-or an inline SVG icon if the layout wants one. **Not** a remote placeholder service
-(`via.placeholder.com`, `picsum.photos`, an Unsplash URL) — that is a third-party request a static
-WebHosting site does not need and can outlive — and not a grey box uploaded as Media either.
+## Final reply — keep it SHORT
 
-**3. Wire the real path anyway — the placeholder is a fallback, not a substitute.** Keep the
-`Refer → Media` field on the ContentType, keep the UI code that resolves it to a URL and renders it
-(`include=1` — `weegloo-api-query-optimization`), and fall through to the placeholder only when the
-field is empty. The user then drops their own file in and the site shows it **with no code change**;
-that is what makes an empty image area finished work rather than a hole.
+For the broad "integrate Weegloo" flow this router governs, the closing message is **brief and
+plain**:
 
-**4. Why this is a rule, not a preference.** Seed content is throwaway — the user deletes the sample
-entries and replaces them with real assets — so a generated image is tokens and wall-clock time spent
-on a file that is about to be deleted. And a plausible-looking invented photo in a site reported as
-finished reads as real content: the user cannot tell fabricated filler apart from what they supplied.
+- **Report only what was completed**, as a short list. Do not narrate the plan, the steps you took,
+  the architecture, or what remains.
+- **No Weegloo-internal jargon** — the person asking may not know Weegloo at all. `ContentType`,
+  `ServiceUserRole`, `:self`, `ACMA`, `DeliveryAccessToken`, `Script`, resource `sys.id`s and status
+  codes are meaningless to them. Say "the site is live at …", not "WebHosting resource reached state
+  COMPLETED".
+- **No remaining-work tables and no "give me these and I'll continue" wrap-ups** — per step 4, a
+  needed input is asked at the moment it blocks you, not as a closing summary.
+- Surface a link/URL the user can actually use when there is one; keep everything else terse.
+- **Colour only the two lines that carry the most weight** (per `weegloo-global-rules`): act-on
+  values — the live URL, the OAuth Redirect URI — in **green** (`+ `); must-know facts about what
+  shipped in **red** (`- `). One to three lines each; never colour the narration.
 
-**5. A missing image is neither a blocking input (step 4) nor an inert capability (*Definition of
-done*).** Do not stop to ask the user for images and do not hold the turn waiting for them — ship the
-placeholders and carry on. The Media path being wired is what "done" means here; only the bytes are
-absent. Then disclose it in **one** line, in **red** (`- ` in a `diff` fence, per
-`weegloo-global-rules`): the image areas are placeholders until they add their own files.
+This brevity rule is for the integration entry point. It does **not** silence the just-in-time
+questions in step 4, and it does not apply when the user explicitly asks for detail or invokes a
+concrete skill directly.
 
-## Capability → skill quick table
+**Required exceptions — disclosures that must still be made.** If payments were wired with the Stripe
+default, the closing message **must** say payments run in **test mode**, are **not really charged**
+and do **not** accept real cards, and ask for the user's contracted PG/MoR details if they have any —
+with the not-really-charged line in **red**. If a map shipped, one red line for the shared key. These
+are disclosures about what shipped, not deferred work, so the no-wrap-ups ban does not cover them.
 
-| Need (plain language)        | → Concrete skill(s) to invoke                                             |
-|------------------------------|--------------------------------------------------------------------------|
-| Login                        | `weegloo-user-login` (admin) / `weegloo-service-login` (end-user); disambiguate via `weegloo-service-architecture` |
-| Signup                       | `weegloo-service-login`                                                   |
-| Social Login                 | `weegloo-service-login-client` (spine) + `weegloo-service-login-google` (Google), `weegloo-service-login-github` (GitHub), `weegloo-service-login-facebook` (Facebook), `weegloo-service-login-gitlab` (GitLab), `weegloo-service-login-kakao` (Kakao), `weegloo-service-login-naver` (Naver), `weegloo-service-login-line` (LINE). Infer provider from product; no default; don't ask. |
-| Account deletion / withdrawal (member leaves the product) | `weegloo-service-login` — **no API can delete a ServiceUser**, only the console. Model it as a request ContentType the member writes via ACMA + an admin who deletes them in the console; that in-app request path is what the App Store / Play Store require. |
-| Admin / Owner / Staff UI (dashboard, settings, moderation, all-member data) | `weegloo-user-login` (in-app admin via console FE popup → CMA) |
-| User Data (private/per-user) | `weegloo-service-architecture` + `weegloo-create-content-type` + `weegloo-space-role` |
-| Application Data             | `weegloo-create-content-type` + `weegloo-cma-json-patch` + `weegloo-cda-publish` |
-| Multi-language / i18n (a language switcher in the UI) | `weegloo-create-content-type` (`localized: true` on the per-language text fields only) + `weegloo-default-locale`. Space needs **≥2 Locales** — add one with `optional: true` and `fallbackCode` = the default's `code` (without it the second language renders blank). Never machine-translate to fill locales; read with **`?locale=<code>`**. |
-| Search (over content/Media)  | decide in-memory vs server-side (loaded array ≠ dataset); any `fields.*` filter or `order` → `X-Weegloo-Advanced-Search: true` (exact-match **and** unindexed without it — slow, then timeouts) → `weegloo-api-query-optimization` + `weegloo-list-pagination` |
-| File Upload (product feature)| `weegloo-upload-api` (Upload REST API → CMA/ACMA Media / WebHosting create) |
-| File Download                | `weegloo-cda-publish` (Media via CDA/ACDA)                               |
-| Images for the UI (hero, thumbnail, gallery, avatar, logo, product shot) | **no skill — see *Images* above**: use the files the **user** supplied (attachments, the repo’s `public/`/`assets/`, Media the Space already holds). **None supplied ⇒ never generate one** — the frontend draws its own CSS/SVG placeholder (not a remote placeholder service), the `Refer → Media` field stays modelled and wired but empty, and the missing asset is **neither blocking nor inert**. Disclose it in one red line. |
-| Web Hosting (deploy a site)  | `weegloo-web-hosting` (+ `weegloo-upload-api` for the build upload)      |
-| Public Sharing               | `weegloo-delivery-access-token` + `weegloo-cda-publish`                  |
-| Team Sharing                 | `weegloo-space-role` + `weegloo-service-login`                           |
-| Role Management              | `weegloo-space-role`                                                      |
-| Access Control               | `weegloo-space-role` + `weegloo-delivery-access-token`; scoped write → `weegloo-space-access-token` |
-| API Connection / server-side automation | `weegloo-script` (Script; call external APIs + write results back to Content/Media) |
-| Webhook (event → URL or Script) | `weegloo-webhook`                                                     |
-| Scheduled / recurring job (cron — "every night", "every 15 min", daily digest, periodic sync, cleanup sweep) | `weegloo-scheduler` (Scheduler runs one Script on a five-field **UTC** cron) + `weegloo-script` for the work. Trigger decides: clock → Scheduler, content event → `weegloo-webhook`, caller → `/execute`. |
-| Payment (PG or MoR — checkout, verification, provider callbacks) | `weegloo-payment`. **Never ask which provider**: one named → that one; **none named → Stripe in test mode** (read docs.stripe.com/testing first). Neither the provider nor the keys are a question — the skill hard-codes Stripe's published sample `pk_test_`/`sk_test_` pair, so **never ask for a key**. Show the `4242…` test card in the UI (it cannot be prefilled), then **disclose** “test mode, nothing really charged, real cards refused” without requesting credentials. NOT Weegloo's own plan billing. |
-| Send email (notify, receipt, verify, digest, contact form) | `weegloo-send-email` (register the SMTP sender first — creating one sends a real test message) + `weegloo-script` (`EmailSend`). **Never ask which vendor**: one named → that one; **none named → Google (Gmail SMTP)** — then ask for the two blocking values, an App Password from https://myaccount.google.com/apppasswords and the real Google address it belongs to, and say another SMTP is one word away. |
-| Map (place, address, branch, venue, "how to find us", store locator) | **no skill — see *Maps* above**: a Google Maps Embed `<iframe>` with the key hard-coded in this skill. **Never ask for a Maps key**; not a blocking input. `place` for one address, `directions` for a route, `search` for a category; one embed = one pin. |
-| Address / postcode lookup (주소 · 우편번호 찾기 in a signup, profile, checkout, shipping or branch form) | `weegloo-address-search` — the key-free Kakao (Daum) Postcode widget, **SOUTH KOREA only**. **Never ask for a Kakao key**; not a blocking input. Non-Korean addresses → free-text field, and say so. |
+## Reference
 
-If a request spans multiple rows, route through all matching skills — start with
-`weegloo-service-architecture` so the pieces fit one coherent architecture.
-
-## File Storage — Upload API (product feature) vs the `weegloo-upload` MCP
-
-These are two different things; do not confuse them. Full mechanics and the create payloads live in
-**`weegloo-upload-api`** — invoke it for any file-upload work.
-
-- **A file-upload feature inside the user's own product** → **`weegloo-upload-api`**: the
-  application code calls the **Weegloo Upload REST API**, then creates the **Media** (or
-  **WebHosting**) from the returned Upload id, on the plane that matches the caller's identity
-  (**CMA Media** for a Weegloo User, **ACMA Media** for a Service User; never route Service-User
-  media through CMA). This is the path to guide for any user-facing upload feature.
-- **The `weegloo-upload` MCP server** is a tool for the **agent/LLM itself** to upload local files
-  (e.g. while seeding content or deploying a WebHosting ZIP during a chat). It is **not** the
-  implementation of the product's upload feature — do not wire the user's app to depend on it, and
-  do not present it as the app's upload path.
-
-## Hard rules
-
-- **A "develop it with Weegloo" request enters here — always**, in any language. "Build this with
-  Weegloo" names no feature, which makes it the **strongest** trigger for this router — not a reason
-  to skip it and start coding (see *What counts as a trigger*).
-- **This skill never implements** — it identifies and routes. The pointed-to skill does the work. The
-  three things it owns outright, because no Weegloo skill covers them: the **Payments** provider
-  default, the **Maps** embed, and the **Images** placeholder rule.
-- **Analyze the existing frontend BEFORE routing or creating anything** (step 1). Derive features,
-  required resources, ContentType fields/validations, and per-page API calls from the actual UI and
-  code — and fill the inevitable gaps by reasoning about the service's intent, not by modeling only
-  the literal stubs. Do not design from the user's request sentence alone — base every decision on
-  the analyzed frontend (UI + code), treating that as the real spec.
-- **Finish the job — done means wired-and-live, not scaffolded (see *Definition of done*).** A
-  capability whose resource exists but whose feature is inert (e.g. a role created but no
-  `ServiceLogin`) is **incomplete**, and a runnable static/SPA app left running only locally is
-  **not deployed**: with no other host named, deploy it to Weegloo WebHosting and report the live URL.
-- **Collect required inputs just-in-time, never as a closing batch.** When a step needs a
-  user-only **blocking** value (OAuth `clientId`/`clientSecret`, API keys), stop and **ask for that
-  one value and wait** — the capability is not done until you have it and create the resource; do not
-  downgrade to "scaffolded the role, add the key later," and do not finish with a summary that hands
-  the user a list of secrets to supply. **Self-resolving** values (e.g. a pre-deploy `callbackUrl`)
-  you fix yourself with a placeholder — never ask the user for those.
-- **Do not bypass existing gates.** Architecture → `weegloo-service-architecture`; ContentType
-  design → `weegloo-create-content-type` (+ `weegloo-default-locale` for multi-locale); CDA tokens
-  → `weegloo-delivery-access-token`; external-API / server-side automation → `weegloo-script`,
-  event triggers → `weegloo-webhook`, clock/cron triggers → `weegloo-scheduler`; payments
-  → `weegloo-payment`; Korean address / postcode lookup → `weegloo-address-search`;
-  WebHosting deploy → `weegloo-web-hosting`.
-- **Payments: never ask which PG/MoR, and never hide the test mode.** No provider named ⇒ integrate
-  **Stripe in test mode** (`weegloo-payment`) rather than asking or stalling — and **never ask for a
-  key either**: the skill hard-codes Stripe's published sample `pk_test_`/`sk_test_` pair, so the
-  checkout ships working, never inert. Show the `4242…` test card in the UI, since it cannot be
-  prefilled. Then the completion message **must** disclose that nothing is really charged and real
-  cards are refused — a disclosure, not a credentials request. A provider the user later names
-  **replaces** Stripe.
-- **Maps: never ask for a Google Maps key.** A place/address on a map ships as a **Maps Embed
-  `<iframe>`** using the key hard-coded in *Maps* above — not a placeholder, not an env var, not a
-  question, and not the Maps JavaScript API. Disclose in one line that the key is shared with the
-  plugin and can be swapped for the user's own.
-- **Address lookup: South Korea only, no key, and never roll your own.** An address or `우편번호`
-  field in a form goes through **`weegloo-address-search`** (the Kakao/Daum Postcode widget) — no
-  API key, no registration, no question, and no proxy or home-made postcode table. For non-Korean
-  addresses it is the **wrong** tool: ship a free-text field and say so.
-- **Images: never invent one.** Image bytes come from the **user** — something they attached, files
-  already in the repo, or Media the Space holds. With none supplied, **do not generate, draw or
-  download** an image and do not upload filler into Media: the frontend renders its own CSS/SVG
-  placeholder (not a remote placeholder service) while the `Refer → Media` field stays modelled and
-  wired, so the user’s own file appears later with no code change. Seed content gets deleted, so a
-  generated image is time spent on a doomed file — and it reads as fabricated content. A missing image
-  is **neither a blocking input nor an inert capability**: ship it, and disclose it in one red line.
-- **Respect the two identity systems.** "Login/Signup" splits into Weegloo User (admin) vs Service
-  User (end-user). Do not ask the user to choose — infer the right identity model from the request
-  (and integrate both where both clearly apply), defaulting sensibly rather than prompting.
-- **Fetch the minimum; compute on the client.** Every screen you wire reads **only** what it renders
-  (`select`, server-side filters, `limit`, `totalCount` instead of paging to count) and derives
-  everything that needs no server-side authority — totals, sorting, grouping, formatting, date math —
-  **in the browser / app**, not through another Weegloo call or a Script. Never pull a whole
-  collection to filter it locally, and never poll a list on a timer. Non-negotiable rule:
-  **`weegloo-minimal-load`**.
-- **When unsure how a feature behaves, read the docs first** (per `weegloo-global-rules`); do not guess.
-
-## Related
-
-- `weegloo-service-architecture` — the primary downstream entry point (API + login + role per service type).
-- `weegloo-minimal-load` — rule: fetch the minimum, compute on the client, and what must stay server-side.
-- `weegloo-global-rules` — global gates this router must respect.
+- **`references/maps-embed.md`** — the full Maps Embed recipe: every mode's parameters,
+  `language`/`region` localization, iframe sizing and accessibility, planning a multi-place branch
+  list or store locator, sourcing the address from a ContentType, and diagnosing a map that will not
+  render. Read it for any map beyond a single `place` pin.
