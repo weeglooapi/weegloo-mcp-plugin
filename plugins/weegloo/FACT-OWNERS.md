@@ -94,7 +94,7 @@ git worktrees.
   - `skills/weegloo-script/SKILL.md`
   - `skills/weegloo-script/references/patterns.md`
   - `skills/weegloo-script/references/queries-and-iteration.md`
-- **forbidden**: `see a just-written row[^.]{0,90}writes based on what it read` — scopes the exception to a row THIS execution wrote. The *Script A writes → Script B searches for it* case then reads as an ordinary query, stays on the default path, and answers **empty on a clean 200** — no error anywhere, and B looks innocent because B wrote nothing. Present at `da14b30`, fixed at `6a0d2b1`.
+- **forbidden**: `see a just-written row[^.]{0,90}writes based on what it read` — scopes the exception to a row THIS execution wrote. The *Script A writes → Script B searches for it* case then reads as an ordinary query, stays on the default path, and answers **empty on a clean 200** — no error anywhere, and B looks innocent because B wrote nothing. Present at `da14b30`, fixed at `8a96493`.
 - **why**: Four sites state the flag and only the owner states the mechanism (two stores, one lagging). If they diverge on *who* the write came from, every cross-Script and Webhook-triggered read silently loses its row while reading as correct.
 
 ### acma-contents-nested
