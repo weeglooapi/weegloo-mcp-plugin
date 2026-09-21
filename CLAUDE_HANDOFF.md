@@ -34,15 +34,15 @@ used to be scored as evidence, and each produced a confident wrong conclusion. S
 | 4 | Rules compressed in place, 110 gates inventoried | verified, 69/69 |
 | 3 | Router + `weegloo-script` split into spine + `references/` | verified, 68/69 (1 flaky) |
 | 3b | Remaining 7 skills over 18 KB | verified, 68/69 (1 flaky) |
-| 5 | Provider-skill consolidation, errors reference | **not started, optional** |
+| 5 | 7 provider OAuth skills folded into the spine's `references/` | done |
 
 Phases were done out of numeric order: 4 before 3, because 4 held the large always-loaded saving
 and 3 was blocked on the harness probe.
 
-**Always-loaded budget: 145,606 B → 88,301 B (−57,305 B, ≈ −39%, ~17.4k tokens every session).**
-`rules` 70,380 B + 30 skill `description`s 17,921 B. Per-invoke: the router 53,118 → 22,291 B
-(−58%), `weegloo-script` 60,517 → 28,085 B (−54%); 11 `references/` files, 70,780 B, load only
-when their spine points at them.
+**Always-loaded budget: 145,606 B → 84,694 B (−60,912 B, ≈ −42%, ~18.5k tokens every session).**
+`rules` 71,141 B + 23 skill `description`s 13,553 B. Per-invoke: the router 53,118 → 22,291 B
+(−58%), `weegloo-script` 60,517 → 28,085 B (−54%); 18 `references/` files load only when their
+spine points at them.
 
 ---
 
@@ -173,6 +173,19 @@ measurement discipline above is written the way it is.
   The detail was still in another **always-loaded** rule, and the fixture still fell from 100% to
   40%. Restoring `Content → Media → ContentType → Space` fixed it. A table row must be actionable
   on its own; a link buys precision, never correctness.
+- **An agent told to "restructure, not rewrite" will rewrite.** Folding the provider skills, one
+  normalizer replaced two console steps with forward pointers ("the client-type note below") —
+  inside the very block the file tells the agent to paste to the user, where "below" resolves to
+  nothing. A user building an Android app would have picked Google's *Android* client type, which
+  issues no client secret, and the integration would stall on a blocking input the source file had
+  already answered. The same agent also invented launch advice the original deliberately omitted.
+  Nothing about the output looked wrong; it read *better*. Only the verifier holding the ORIGINAL
+  open caught it — so never run a restructuring pass without one, and keep the originals on disk
+  until it has.
+- **`perl -i` writes a `.bak` on this machine.** Four accumulated silently across edits. The
+  manifest builder's path validation is what surfaced them (`skill file key is not a safe relative
+  path: 'SKILL.md.bak'`) — they would otherwise have shipped to every `npx` user as fake skill
+  files. Prefer the Edit tool or a Node script; if you must use perl, `-i''` and then check.
 - **Splitting a skill breaks the pointers aimed at it.** Moving the `SETTING_*` table into
   `references/` left four sibling skills pointing at a section that no longer existed. The table
   went back into the spine rather than retargeting the siblings — a skill pointing into another
@@ -212,11 +225,16 @@ Codex needs `codex login` before its half of the probe can run.
 2. **Open the PR.** Target **`develop`** — never `latest`/`main`
    ([`.claude/rules/git-workflow.md`](.claude/rules/git-workflow.md)). 24 commits are pushed and
    unmerged.
-3. **Optional, Phase 5.** Consolidate the 7 provider OAuth skills (51 KB, 54% shared boilerplate);
-   note `update.js`'s `new = catalog \ prevAvailable` means a renamed id is silently auto-added to
-   users who had deliberately deselected the old one — needs a `SUCCEEDED_BY` map first. And an
-   errors reference carrying only what `docs.weegloo.com` does **not** have: the wrong repair an
-   agent reaches for first.
+3. **Optional, not started.** An errors reference carrying only what `docs.weegloo.com` does
+   **not** have: the wrong repair an agent reaches for first.
+
+   *Phase 5 is done* — and it corrected two claims this file used to make. The provider bodies were
+   **19.3%** shared (9,221 B of 47,775 B), not 54%, and since only one provider body ever loads the
+   saving from consolidating them was ~1.3 KB per invoke — nothing. The cost was entirely in the 7
+   always-loaded `description`s. The `SUCCEEDED_BY` worry does not apply to a **deletion**: it
+   guards a *rename*, and folding into an id users already have introduces no new id, so
+   [`update.js:97`](installer-cli/src/update.js:97) auto-adds nothing and
+   [`update.js:17`](installer-cli/src/update.js:17) prunes the seven. A rename still needs the map.
 4. **Not done, worth knowing:** 8 skill descriptions still contain zero Korean
    (`cda-publish`, `cma-json-patch`, `default-locale`, `delivery-access-token`, `list-pagination`,
    `service-architecture`, `upload-api`, `web-hosting`), and several have 200–400 B of headroom. A
