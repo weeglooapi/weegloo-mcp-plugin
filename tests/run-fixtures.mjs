@@ -353,6 +353,7 @@ async function main() {
     // more than the extra calls: the verdict is a majority across (1 + confirmRetries) runs,
     // and a split verdict is reported as FLAKY rather than as a regression.
     const flaky = [];
+    const unconfirmed = [];
     if (regressions.length && args.confirmRetries > 0) {
       const byFixture = new Map();
       for (const r of regressions) {
@@ -363,8 +364,21 @@ async function main() {
       console.log(`\nconfirming ${regressions.length} regression(s) — re-running ${byFixture.size} fixture(s) ${args.confirmRetries}x...`);
       for (const [fixtureId, regs] of byFixture) {
         const fx = fixtures.find((f) => f.id === fixtureId);
-        if (!fx) continue;
+        // With `--only`, a regression can come from a fixture carried in by `--merge` that this
+        // run did not load, so there is nothing to re-run. Silently skipping left it classified as
+        // a CONFIRMED regression on zero confirmation attempts — the same overstatement as counting
+        // an errored retry. It is unconfirmed, and the run still fails.
+        if (!fx) {
+          for (const r of regs) {
+            console.log(`    ${r.key}: UNCONFIRMED — not in this run's fixture selection, cannot re-measure`);
+            unconfirmed.push(r.key);
+            const idx = regressions.findIndex((x) => x.key === r.key);
+            if (idx >= 0) regressions.splice(idx, 1);
+          }
+          continue;
+        }
         const tally = new Map(regs.map((r) => [r.key, [false]])); // the run that just failed
+        let completed = 0;
         for (let i = 0; i < args.confirmRetries; i++) {
           try {
             const response = await runAgent(agentCmd, fx.prompt + PLAN_ONLY_SUFFIX);
@@ -374,9 +388,25 @@ async function main() {
               const key = `${fixtureId}::${a.id}`;
               if (tally.has(key)) tally.get(key).push(a.pass);
             }
+            completed++;
           } catch (err) {
             console.log(`    retry ${i + 1} errored: ${err.message}`);
           }
+        }
+        // An errored retry is NOT evidence. When every retry dies — a rate limit, a refusal, a
+        // truncated reply — the only datum left is the single failing run that opened this block,
+        // and calling that "fails consistently" is the same false-confidence bug as scoring a
+        // truncated response. Observed for real: both Phase 4 regressions reported 0/1 with four
+        // errored retries behind them. Unconfirmed still fails the run; it just does not lie about
+        // what was measured.
+        if (completed === 0) {
+          for (const key of tally.keys()) {
+            console.log(`    ${key}: UNCONFIRMED — every retry errored, 1 observation only`);
+            unconfirmed.push(key);
+            const idx = regressions.findIndex((r) => r.key === key);
+            if (idx >= 0) regressions.splice(idx, 1);
+          }
+          continue;
         }
         for (const [key, runs] of tally) {
           const passes = runs.filter(Boolean).length;
@@ -410,7 +440,7 @@ async function main() {
       }
       console.error('\n  This run cannot support a "no regression" claim. Re-run the missing fixtures.');
     }
-    if (regressions.length || unverified.length) return 1;
+    if (regressions.length || unverified.length || unconfirmed.length) return 1;
     console.log('no regressions — every baseline assert was measured.');
   }
 
