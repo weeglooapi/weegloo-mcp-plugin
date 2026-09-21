@@ -28,35 +28,26 @@ provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 The `clientId` / `clientSecret` come from the user's **own GitHub OAuth App** and only the user can
 produce them. So when you reach this step, **stop and ask** — and **don't ask bare**. Hand the user the
-illustrated walkthrough, which carries a screenshot of every step below:
+illustrated walkthrough, which carries a screenshot of every step:
 
 ```diff
 + https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/github
 ```
 
-Then summarize it inline, with the real `{spaceId}` already filled into the callback URL above:
+**Send the link and the facts below — do not retype GitHub's menu path.** The page has the clicks in
+pictures and is kept current; a path pasted from memory goes stale the next time GitHub rearranges
+its settings. What the page cannot know is *your* values and *this* integration's constraints:
 
-1. Go to **GitHub → your profile menu → Settings → Developer settings → OAuth Apps**, then click **New
-   OAuth App** (the button reads **Register a new application** the first time). Give the user **this
-   menu path** — it is the durable anchor. To register the app under an **organization** instead of a
-   personal account, go via **Your organizations → (org) Settings → Developer settings → OAuth Apps**.
-   If you also want to hand them a clickable link, **find the current one at that moment rather than
-   pasting a hardcoded/memorized URL** — look it up (e.g. GitHub's official "Creating an OAuth app" doc).
-2. Fill the form:
-   - **Application name** — any user-facing name.
-   - **Homepage URL** — your app's URL (a placeholder like the eventual site URL is fine; it is not part
-     of the OAuth handshake).
-   - **Authorization callback URL** — paste **exactly** the callback URL above (with the real
-     `{spaceId}`). This is the one field that matters for sign-in.
-   - There is **no "OAuth consent screen" / Test users** step (that is Google-only) and **no JavaScript
-     origins** field — the browser navigates to `auth.weegloo.com`, never to GitHub directly.
-   - You do **not** pick OAuth scopes here — there is no scope field on a GitHub OAuth App. Weegloo
-     requests the scopes it needs (`read:user`, `user:email`) automatically at sign-in. The user only
-     supplies the `clientId` / `clientSecret` and the callback URL.
-3. Click **Register application**. On the app's settings page, copy the **Client ID** (always visible).
-4. Next to **Client secrets**, click **Generate a new client secret**. **GitHub shows the secret value
-   only once** — copy it immediately. (If it is lost, generate a new one and update `ServiceLogin`.)
-5. Send back both the **Client ID** and the **Client secret**.
+- **The Authorization callback URL to register: the URL above, with the real `{spaceId}` filled in** —
+  byte-exact, and without the `+ ` (spine pitfall **B**). It is the one field that decides whether
+  sign-in works.
+- **Personal account or organization** — the OAuth App can live under either; under an organization
+  it survives the creator leaving. The user's call, but ask it now rather than after the app exists.
+- **Homepage URL is not part of the handshake** — any placeholder (the eventual site URL) is fine.
+- **There are no scopes to pick and no consent screen** — a GitHub OAuth App has no scope field
+  (that is Google's model), and Weegloo requests `read:user` / `user:email` itself at sign-in.
+- **Send back: the Client ID and a newly generated Client secret.** **GitHub shows a secret value
+  only once** — say so *before* they generate it, or it is regenerate-and-update-`ServiceLogin`.
 
 ## GitHub-specific note — email retrieval can block first sign-in
 

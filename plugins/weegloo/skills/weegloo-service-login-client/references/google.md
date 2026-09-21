@@ -30,31 +30,27 @@ provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 The `clientId` / `clientSecret` come from the user's **own Google Cloud OAuth client** and only the user
 can produce them. So when you reach this step, **stop and ask** — and **don't ask bare**. Hand the user
-the illustrated walkthrough, which carries a screenshot of every step below:
+the illustrated walkthrough, which carries a screenshot of every step:
 
 ```diff
 + https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/google
 ```
 
-Then summarize it inline, with the real `{spaceId}` already filled into the redirect URI above:
+**Send the link and the facts below — do not retype Google's menu path.** The page has the clicks in
+pictures and is kept current; a console path pasted from memory sends the user hunting for a menu
+Google has since moved (they relocate these pages periodically). What the page cannot know is *your*
+values and *this* integration's constraints, so that is what you add:
 
-1. Go to the **Google Cloud Console → OAuth clients** page (create or select a project first):
-   **https://console.cloud.google.com/auth/clients** . Hand the user that link — it drops them
-   straight on the client list. If Google has relocated it (they move console pages periodically), fall
-   back to the durable menu path — **Google Auth Platform → Clients** (older consoles: **APIs &
-   Services → Credentials**) — which is the anchor; re-find the current URL from Google's docs if the
-   link 404s.
-2. **First time only:** configure the **OAuth consent screen** (User type **External**; set an app name
-   + support email). While the app stays in *Testing*, add the signing-in Google account under **Test
-   users**, otherwise sign-in is blocked.
-3. **+ Create Credentials → OAuth client ID**, and for **Application type select `Web application`** —
-   give it a name. **Choose `Web application` even when your product is an Android / iOS app**; do
-   *not* pick the "Android" or "iOS" type.
-4. Under **Authorized redirect URIs**, **Add URI** and paste **exactly** the redirect URI above (with
-   the real `{spaceId}`). **No "Authorized JavaScript origins" are needed** — the browser navigates to
-   `auth.weegloo.com`, never to Google directly.
-5. Click **Create**, then copy the **Client ID** and **Client Secret** from the dialog and send both
-   back.
+- **The Authorized redirect URI to register: the URI above, with the real `{spaceId}` filled in** —
+  byte-exact, and without the `+ ` (spine pitfall **B**). **No "Authorized JavaScript origins" are
+  needed** — the browser navigates to `auth.weegloo.com`, never to Google directly.
+- **Application type must be `Web application`** — **even when your product is an Android / iOS app**;
+  do *not* pick the "Android" or "iOS" type. A native-type client issues **no client secret**, so the
+  user gets stuck with nothing to send back.
+- **First time in a project, the OAuth consent screen has to exist** before a client can be created,
+  and while the app stays in *Testing* the signing-in Google account must be added under **Test
+  users** — otherwise sign-in is blocked for them.
+- **Send back: the Client ID and the Client Secret** shown when the client is created.
 
 **Do not** finish with only the `ServiceUserRole` created and the credentials written off as "add
 later" — a role with no `ServiceLogin` is **blocked-pending-input**, so end the turn by *asking for the

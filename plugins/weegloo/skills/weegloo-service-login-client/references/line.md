@@ -30,27 +30,23 @@ provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 The `clientId` / `clientSecret` come from the user's **own LINE Login channel** and only the user can
 produce them. So when you reach this step, **stop and ask** — and **don't ask bare**. Hand the user the
-illustrated walkthrough, which carries a screenshot of every step below:
+illustrated walkthrough, which carries a screenshot of every step:
 
 ```diff
 + https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/line
 ```
 
-Then summarize it inline, with the real `{spaceId}` already filled into the Callback URL above:
+**Send the link and the facts below — do not retype LINE's menu path.** The page has the clicks in
+pictures and is kept current; LINE relocates console pages, so a path pasted from memory goes
+stale. What the page cannot know is *your* values and *this* integration's constraints:
 
-1. Go to **LINE Developers Console → (create or select a) Provider → Create a new channel → LINE Login**.
-   Give the user **this menu path** — it is the durable anchor. If you also want to hand them a
-   clickable link, **find the current one at that moment rather than pasting a hardcoded/memorized
-   URL** — LINE relocates console pages, so a literal URL embedded here would go stale; look it up
-   (e.g. LINE's official "LINE Login / Integrating LINE Login" docs).
-2. Fill the channel form (channel name, region, etc.) and ensure the **Web app** app type is enabled —
-   the browser reaches LINE via `auth.weegloo.com`, so no native/mobile app type is needed for this flow.
-3. **Register the Callback URL:** on the channel's **LINE Login** tab, add **exactly** the Callback URL
-   above (with the real `{spaceId}`).
-4. **Get the credentials:**
-   - **`clientId` = Channel ID** — on the channel's **Basic settings**.
-   - **`clientSecret` = Channel secret** — also on **Basic settings** (issue/copy it there).
-5. Send back the **Channel ID** (`clientId`) and the **Channel secret** (`clientSecret`).
+- **The Callback URL to register: the URL above, with the real `{spaceId}` filled in** — byte-exact,
+  and without the `+ ` (spine pitfall **B**).
+- **The channel is a LINE Login channel with the Web app type enabled** — the browser reaches LINE
+  through `auth.weegloo.com`, so **no native/mobile app type is needed**, even for a mobile product.
+- **The two values are named differently than everywhere else:** `clientId` = **Channel ID**,
+  `clientSecret` = **Channel secret**. Say it in LINE's words or the user sends the wrong pair.
+- **Send back: the Channel ID (`clientId`) and the Channel secret (`clientSecret`).**
 
 **Do not** finish with only the `ServiceUserRole` created and the credentials written off as "add
 later" — a role with no `ServiceLogin` is **blocked-pending-input**, so end the turn by *asking for the

@@ -31,29 +31,25 @@ provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 The `clientId` / `clientSecret` come from the user's **own GitLab application** and only the user can
 produce them. So when you reach this step, **stop and ask** — and **don't ask bare**. Hand the user
-the illustrated walkthrough, which carries a screenshot of every step below:
+the illustrated walkthrough, which carries a screenshot of every step:
 
 ```diff
 + https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/gitlab
 ```
 
-Then summarize it inline, with the real `{spaceId}` already filled into the Redirect URI above:
+**Send the link and the facts below — do not retype GitLab's menu path.** The page has the clicks in
+pictures and is kept current; a path pasted from memory goes stale, and on a **self-hosted GitLab**
+it is that instance's own UI anyway. What the page cannot know is *your* values and *this*
+integration's constraints:
 
-1. Sign in to GitLab, go to **User settings → Applications**, and click **Add new application**. Give
-   the user **this menu path** — it is the durable anchor. If you also want to hand them a clickable
-   link, **find the current one at that moment rather than pasting a hardcoded/memorized URL**. On a
-   self-hosted GitLab the same path applies on that instance.
-2. **Name** — the name the end user sees while signing in.
-3. **Redirect URI** — paste **exactly** the URI above.
-4. **Confidential** is on by default. **Leave it on.** The token exchange happens on Weegloo's server
-   holding the secret, so this app really is a confidential client.
-5. **Scopes** — tick `read_user`, and **only** that one. See the note below.
-6. Click **Save application**.
-7. On the screen that opens, copy the **Application ID** (`clientId`) and the **Secret**
-   (`clientSecret`). **GitLab shows the Secret only at this moment** — have them copy it right away.
-   If it is lost, **Renew secret** on the same screen issues a new one and the `ServiceLogin` has to
-   be updated with it. The **Application ID** stays on that screen.
-8. Send back the **Application ID** and the **Secret**.
+- **The Redirect URI to register: the URI above, with the real `{spaceId}` filled in** — byte-exact,
+  and without the `+ ` (spine pitfall **B**).
+- **Leave `Confidential` on** (it is the default). The token exchange runs on Weegloo's server
+  holding the secret, so this genuinely is a confidential client.
+- **Scopes: `read_user`, and only that one** — see the note below.
+- **Send back: the Application ID (`clientId`) and the Secret (`clientSecret`).** **GitLab shows the
+  Secret only once, right after the application is saved** — say so *before* they click save. If it
+  is lost, **Renew secret** issues a new one and the `ServiceLogin` has to be updated with it.
 
 ## GitLab-specific note — `read_user` is the whole scope list
 

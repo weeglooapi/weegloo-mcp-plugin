@@ -30,31 +30,25 @@ provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 The `clientId` / `clientSecret` come from the user's **own Facebook app** and only the user can
 produce them. So when you reach this step, **stop and ask** — and **don't ask bare**. Hand the user
-the illustrated walkthrough, which carries a screenshot of every step below:
+the illustrated walkthrough, which carries a screenshot of every step:
 
 ```diff
 + https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/facebook
 ```
 
-Then summarize it inline, with the real `{spaceId}` already filled into the Redirect URI above:
+**Send the link and the facts below — do not retype Meta's wizard.** The page has the clicks in
+pictures and is kept current; Meta reshapes that wizard often enough that a path pasted from memory
+misleads. What the page cannot know is *your* values and *this* integration's constraints:
 
-1. Go to the Meta app console (**developers.facebook.com → My Apps**) and click **Create App**. The
-   wizard runs **App details → Use cases → Business → Requirements → Overview**. Give the user **this
-   menu path** — it is the durable anchor. If you also want to hand them a clickable link, **find the
-   current one at that moment rather than pasting a hardcoded/memorized URL**.
-2. On **Use cases**, pick **Authenticate and request data from users with Facebook Login**. The other
-   entries are for ads and messaging and do not configure sign-in.
-3. On **Business**, a business portfolio is not needed to obtain the credentials — the screen itself
-   says it can be added later.
-4. **Add the `email` permission:** **Use cases → Facebook Login → Customize → Permissions and
-   features**, then click **+ Add** on the `email` row. See the note below — this one is easy to skip
-   and Facebook will not do it for you.
-5. **Register the Redirect URI:** in the same **Customize** screen open **Settings**, paste
-   **exactly** the URI above into **Valid OAuth Redirect URIs**, then click **Save Changes**.
-6. **Copy the credentials:** **App settings → Basic**. **App ID** is `clientId`; for `clientSecret`,
-   click **Show** next to **App secret**. Unlike GitHub or GitLab, Facebook shows the secret again on
-   demand, so a lost copy does not force a regeneration.
-7. Send back the **App ID** and the **App secret**.
+- **The Valid OAuth Redirect URI to register: the URI above, with the real `{spaceId}` filled in** —
+  byte-exact, and without the `+ ` (spine pitfall **B**).
+- **Pick the Facebook Login use case** (*authenticate and request data from users*) — the other use
+  cases are ads and messaging and configure no sign-in at all.
+- **`email` is a permission you have to add by hand** — Facebook will not include it for you, and
+  Weegloo needs it. Easy to skip, and it fails only later, at first sign-in.
+- **A business portfolio is not needed** to obtain the credentials, whatever the screen suggests.
+- **Send back: the App ID (`clientId`) and the App secret (`clientSecret`).** Unlike GitHub or
+  GitLab, Facebook shows the secret again on demand, so a lost copy is not a regeneration.
 
 A red **Currently ineligible for submission** banner on that screen (missing app icon, privacy policy
 URL, category) is about **App Review**, not about sign-in — the credentials work without it.

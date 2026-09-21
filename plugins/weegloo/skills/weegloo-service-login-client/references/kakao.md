@@ -30,33 +30,27 @@ provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 The `clientId` / `clientSecret` come from the user's **own Kakao Developers app** and only the user can
 produce them. So when you reach this step, **stop and ask** — and **don't ask bare**. Hand the user the
-illustrated walkthrough, which carries a screenshot of every step below:
+illustrated walkthrough, which carries a screenshot of every step:
 
 ```diff
 + https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/kakao
 ```
 
-Then summarize it inline, with the real `{spaceId}` already filled into the Redirect URI above:
+**Send the link and the facts below — do not retype Kakao's menu path.** The page has the clicks in
+pictures and is kept current; Kakao relocates console pages, so a path pasted from memory sends the
+user hunting. What the page cannot know is *your* values and *this* integration's constraints:
 
-1. Go to **Kakao Developers → My Application** and create (or select) an app. Give the user **this menu
-   path** — it is the durable anchor. If you also want to hand them a clickable link, **find the current
-   one at that moment rather than pasting a hardcoded/memorized URL** — Kakao relocates console pages,
-   so a literal URL embedded here would go stale; look it up (e.g. Kakao's official "Kakao Login"
-   REST API / Getting Started docs).
-2. **`clientId` = the app's REST API key**, not the JavaScript key or Native key. Find it under **App
-   settings → App Keys → REST API key**. Copy that — using the wrong key silently breaks the
-   server-side token exchange.
-3. **Activate Kakao Login:** **Product settings → Kakao Login**, and set the **Activation** toggle to
-   **ON**. Sign-in stays inert until this is on.
-4. **Register the Redirect URI:** still under **Kakao Login**, add **exactly** the Redirect URI above
-   (with the real `{spaceId}`). If the console also requires a registered **Web platform** site domain
-   before it will save a Redirect URI, register `https://auth.weegloo.com` there (**App settings →
-   Platform → Web**) — the browser reaches Kakao via `auth.weegloo.com`, never your app directly.
-5. **Generate AND enable the Client Secret:** **Kakao Login → Security → Client secret**, generate a
-   code, then set its **activation state** to **Enable**. Copy the generated value — this is
-   `clientSecret`. A secret that is generated but left **disabled** (or never generated) is a common
-   cause of exchange failures once Weegloo sends it.
-6. Send back the **REST API key** (`clientId`) and the **Client secret** (`clientSecret`).
+- **The Redirect URI to register: the URI above, with the real `{spaceId}` filled in** — byte-exact,
+  and without the `+ ` (spine pitfall **B**). If the console refuses to save it until a **Web
+  platform** site domain exists, that domain is `https://auth.weegloo.com` — the browser reaches
+  Kakao through Weegloo, never through your app.
+- **`clientId` is the app's REST API key** — **not** the JavaScript key and **not** the Native key.
+  The wrong key breaks the server-side token exchange *silently*, so name the right one explicitly.
+- **Kakao Login has to be activated** (the Activation toggle) — until it is, sign-in stays inert no
+  matter how correct the credentials are.
+- **The Client secret must be generated AND switched to enabled.** One that exists but is left
+  **disabled** is the usual cause of an exchange failure once Weegloo starts sending it.
+- **Send back: the REST API key (`clientId`) and the Client secret (`clientSecret`).**
 
 ## Kakao-specific note — email is mandatory, and Kakao gates it
 

@@ -31,32 +31,30 @@ provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 The `clientId` / `clientSecret` come from the user's **own Naver Developers application** and only the
 user can produce them. So when you reach this step, **stop and ask** — and **don't ask bare**. Hand the
-user the illustrated walkthrough, which carries a screenshot of every step below:
+user the illustrated walkthrough, which carries a screenshot of every step:
 
 ```diff
 + https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/naver
 ```
 
-Then summarize it inline, with the real `{spaceId}` already filled into the Callback URL above:
+**Send the link and the facts below — do not retype Naver's menu path.** The page has the clicks in
+pictures and is kept current; Naver relocates console pages, so a path pasted from memory goes
+stale. What the page cannot know is *your* values and *this* integration's constraints:
 
-1. Go to **Naver Developers → Application → Register Application**. Give the user **this menu path** —
-   it is the durable anchor. If you also want to hand them a clickable link, **find the current one at
-   that moment rather than pasting a hardcoded/memorized URL** — Naver relocates console pages, so a
-   literal URL embedded here would go stale; look it up (e.g. Naver's official "Naver Login" developer
-   guide).
-2. **API to use:** select **Naver Login**. Without it the app has no login capability.
-3. **Information to collect (member info):** choose the fields the product needs. If the product needs
-   the member's email, mark **email** as **required** here — Naver returns only the fields you selected.
-4. **Environment / Callback URL:** add the **web environment that matches your product — PC web, mobile
-   web, or both** — and register **exactly** the Callback URL above (with the real `{spaceId}`) under
-   it. The Callback URL is the **same regardless of the user's device**: the OAuth redirect always
-   targets `auth.weegloo.com`, not your app, so the "environment" only tells Naver which client
-   platform the product runs on — it does not change the Callback URL. If a **service URL** is also
-   required per environment, use your app's base URL (or a placeholder until deploy — it is not part of
-   the OAuth handshake the way the Callback URL is).
-5. On the registered app's detail page, copy the **Client ID** (`clientId`) and **Client Secret**
-   (`clientSecret`).
-6. Send back both values.
+- **The Callback URL to register: the URL above, with the real `{spaceId}` filled in** — byte-exact,
+  and without the `+ ` (spine pitfall **B**). It is **the same whatever device the member uses**:
+  the redirect always targets `auth.weegloo.com`, never your app. So the **environment** you pick
+  (PC web, mobile web, or both) only tells Naver which platform the product runs on — pick the ones
+  that match it, and register that same URL under each.
+- **"API to use" must include Naver Login** — without it the application has no login capability at
+  all.
+- **Email is opt-in at registration.** Naver returns only the member fields selected under
+  *information to collect*, so if the product needs the email address, mark **email required** there
+  — retrofitting it later means re-consenting every member.
+- **A service URL, if the form demands one, is not part of the handshake** — the app's base URL or a
+  placeholder until deploy is fine. The Callback URL is the one that must be exact.
+- **Send back: the Client ID (`clientId`) and the Client Secret (`clientSecret`)** from the
+  registered application.
 
 ## Naver-specific note — development status limits who can sign in
 

@@ -222,7 +222,7 @@ completion message** — the when/why/green-presentation is owned by `weegloo-se
 
 ### G. `clientId` / `clientSecret` are blocking, user-only inputs
 
-`callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` come from the user's own OAuth client at the chosen provider and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.) **When you ask, don't ask bare** — read the chosen provider's `references/{provider}.md` page (table below) and hand the user its step-by-step console walkthrough, with the real `{spaceId}` filled into the redirect URI. Do **not** give one provider's steps for another.
+`callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` come from the user's own OAuth client at the chosen provider and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.) **When you ask, don't ask bare, and don't retype the provider's console path** — read the chosen provider's `references/{provider}.md` page (table below) and hand the user **that provider's illustrated doc page** (`https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/{provider}`) **plus the redirect URI with the real `{spaceId}` filled in**, then the few constraints the doc cannot decide for them (which key is the `clientId`, a toggle that must be on, a secret shown only once). A menu path written out from memory goes stale the next time that console is rearranged, and the user hunts for a screen that moved. Do **not** give one provider's page or URI for another.
 
 ## Configuration responsibilities (provider console + Weegloo Console)
 
@@ -290,9 +290,10 @@ as another's, or giving one provider's console steps for a different product.
 | Facebook | `facebook` | **`references/facebook.md`** |
 | GitLab   | `gitlab`   | **`references/gitlab.md`** |
 
-**Read the page for the chosen provider — its console steps exist nowhere else.** Each one carries
-that provider's exact redirect URI, its console navigation under its own menu names, the mapping
-between its vocabulary and Weegloo's, its own traps, and the illustrated guide to hand the user at
+**Read the page for the chosen provider — what it carries exists nowhere else.** Each one gives that
+provider's exact redirect URI, the mapping between its vocabulary and Weegloo's (`clientId` is a
+*REST API key* on Kakao, a *Channel ID* on LINE, an *App ID* on Facebook), its own traps, and the
+illustrated guide **to hand the user in place of a console walkthrough** at
 `https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/{provider}`,
 keyed by the same `{provider}` value as the table. The same value is what goes in the ServiceLogin's
 `providers` entry as **`registrationId`**.
@@ -310,7 +311,7 @@ If a server, CLI, or native app needs to exchange tokens, follow the wire protoc
 
 - **`references/{provider}.md`** — the console setup for ONE provider: `google`, `github`, `kakao`,
   `naver`, `line`, `facebook`, `gitlab` (table above). Read the one you are wiring, and only that
-  one. **This is not optional detail** — the redirect URI to register, the console walkthrough and
+  one. **This is not optional detail** — the redirect URI to register, the doc page to hand over and
   the provider's own traps are there and nowhere else, so an answer written from this spine alone
   asks the user for `clientId` / `clientSecret` with no idea where to find them.
 - **`references/native-apps.md`** — read it **whenever the client is a native Android or iOS app**
