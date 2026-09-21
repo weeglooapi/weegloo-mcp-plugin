@@ -185,7 +185,7 @@ When wiring ServiceLogin for a product:
 ## Related
 
 - **Wire protocol + official browser SDK (`weegloo-service-user`):** **`weegloo-service-login-client`** skill (provider-agnostic spine).
-- **Per-provider console setup (obtain `clientId`/`clientSecret`):** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-github`** (GitHub), **`weegloo-service-login-facebook`** (Facebook), **`weegloo-service-login-gitlab`** (GitLab), **`weegloo-service-login-kakao`** (Kakao), **`weegloo-service-login-naver`** (Naver), **`weegloo-service-login-line`** (LINE).
+- **Per-provider console setup (obtain `clientId`/`clientSecret`):** **`weegloo-service-login-client`** → its `references/{provider}.md` page — `google`, `github`, `facebook`, `gitlab`, `kakao`, `naver`, `line`.
 - **Base URLs / Accept header / API docs:** **`weegloo-api-endpoints`** rule.
 - **Picking the API combo per service type:** **`weegloo-service-architecture`** skill.
 - **Weegloo User login (admin / platform account — CMA, Upload, CDA):** **`weegloo-user-login`** skill.

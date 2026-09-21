@@ -1,21 +1,8 @@
----
-name: weegloo-service-login-kakao
-description: Kakao / 카카오 (Kakao Login) OAuth 2.0 setup for a Weegloo ServiceLogin: the Kakao Developers steps producing `clientId`/`clientSecret` — the REST API key IS the clientId, the Client Secret must be generated AND enabled — the Kakao Redirect URI to register on auth.weegloo.com, switching Kakao Login on, the email consent item and its Business-app gate (no email, no sign-in), and the walkthrough for asking those blocking credentials. Use ONLY when the chosen provider is Kakao — never for Google, GitHub, Facebook, GitLab, LINE or Naver. Spine: `weegloo-service-login-client`. 카카오 로그인, 카카오톡 로그인.
----
+# Kakao — ServiceLogin console setup
 
-# Weegloo ServiceLogin — Kakao provider setup
-
-This is the **Kakao instance** of the provider-agnostic ServiceLogin setup. It covers only the
-**Kakao Developers** side: creating the app and producing the `clientId` / `clientSecret` that
-`ServiceLogin` needs. Everything else (the `auth.weegloo.com` wire protocol, the SDK, `callbackUrl`,
-`exchangeToken`, ACMA/ACDA scope) is provider-agnostic and lives in the spine.
-
-> **Prerequisite gate.** Use this **only after** you have a ServiceLogin design from
-> **`weegloo-service-login`** (the conceptual model) and the wire-protocol/SDK flow from
-> **`weegloo-service-login-client`** (the spine). This skill does **not** decide whether to use Kakao —
-> the provider must already be chosen from the product's actual need. **Do not use this for a
-> non-Kakao provider** (other providers follow the same *shape*, but their console steps differ —
-> Google, GitHub, Facebook, GitLab, Naver, and LINE have their own dedicated skills).
+Read this **only when** the chosen provider is Kakao (`kakao`). It assumes the spine (`SKILL.md`):
+the wire protocol, the SDK, `callbackUrl`, `exchangeToken` and the ACMA/ACDA token boundary are
+there, not here.
 
 ## Kakao's Redirect URI (deploy-independent — register it now)
 
@@ -26,18 +13,18 @@ In the Kakao Developers console, the **Redirect URI** (under **Kakao Login**) is
 + https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/kakao
 ```
 
-The leading **`+ `** renders the line green (`weegloo-global-rules` → *Highlight what the user
-must act on or must know*) and is **not part of the URI** — the **Redirect URI** field takes the
-`https://…` text only. **Tell the user this URI up front, before you build**, not only when you
-ask for the credentials (`weegloo-service-login` → *Tell the user the provider Redirect URI UP
-FRONT*).
+The leading `+ ` is **not part of the URI** — Kakao's **Redirect URI** field takes the `https://…`
+text only.
+
+**Tell the user this URI up front, before you build** (`weegloo-service-login` → *Tell the user the
+provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 - The `/code/` segment is required — it is the **Kakao → Weegloo** callback, **not** the browser entry
   URL (`…/login/oauth2/kakao`). Putting `/code/` in the entry URL, or the entry URL in this field,
   breaks sign-in (spine pitfall **A**).
 - It depends only on `auth.weegloo.com` + your `spaceId` + `kakao`, so it is **fully known now** —
-  register it before the app is deployed (spine pitfall **G**). `callbackUrl` is the deploy-dependent
-  one; this is not.
+  register it before the app is deployed (spine pitfall **F**, *Two URLs, two lifetimes*).
+  `callbackUrl` is the deploy-dependent one; this is not.
 
 ## Walk the user through it — `clientId` / `clientSecret` are blocking inputs
 
@@ -71,18 +58,12 @@ Then summarize it inline, with the real `{spaceId}` already filled into the Redi
    cause of exchange failures once Weegloo sends it.
 6. Send back the **REST API key** (`clientId`) and the **Client secret** (`clientSecret`).
 
-Then create the `ServiceLogin` with those values (provider `kakao`), plus `defaultRole` and
-`callbackUrl` per the spine. **Do not** finish with only the `ServiceUserRole` created and the
-credentials written off as "add later" — a role with no `ServiceLogin` is **blocked-pending-input**, so
-end the turn by *asking for the credentials*, not by reporting Kakao sign-in as done.
-
 ## Kakao-specific note — email is mandatory, and Kakao gates it
 
 **Weegloo requires a member email.** If the provider returns none, Weegloo **rejects the sign-in
 server-side** (before any callback) and **no `ServiceUser` is created** — the same email-required
-failure the **`weegloo-service-login-github`** skill documents as `WGL422056`. A member with no email is
-therefore a **blocked sign-in, not a state to design around**: without an email the person simply
-**cannot use the service**.
+failure Weegloo raises as `WGL422056`. A member with no email is therefore a **blocked sign-in, not a
+state to design around**: without an email the person simply **cannot use the service**.
 
 Kakao makes this easy to hit: it does **not** return an email unless the **Kakao Account (email)**
 consent item is enabled under **Kakao Login → Consent Items**, and Kakao gates the email scope behind
@@ -98,9 +79,8 @@ So treat email as **mandatory setup**, not optional:
   email**, still cannot sign in — and the abort is server-side and unrecoverable in code, so **tell end
   users up front** that a shared email is required (same lever as the GitHub case).
 
-## Related
-
-- **Provider-agnostic spine (wire protocol, SDK, `callbackUrl`, pitfalls):** **`weegloo-service-login-client`**.
-- **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser):** **`weegloo-service-login`**.
-- **Other dedicated provider skills:** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-github`** (GitHub), **`weegloo-service-login-facebook`** (Facebook), **`weegloo-service-login-gitlab`** (GitLab), **`weegloo-service-login-naver`** (Naver), **`weegloo-service-login-line`** (LINE).
-- **Picking the API combo per service type:** **`weegloo-service-architecture`**.
+Then create the `ServiceLogin`: the `providers` entry's **`registrationId`** is `kakao`, plus
+`defaultRole` and `callbackUrl` per the spine. **Do not** finish with only the `ServiceUserRole`
+created and the credentials written off as "add later" — a role with no `ServiceLogin` is
+**blocked-pending-input**, so end the turn by *asking for the credentials*, not by reporting Kakao
+sign-in as done.

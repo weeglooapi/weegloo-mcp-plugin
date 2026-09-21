@@ -1,23 +1,10 @@
----
-name: weegloo-service-login-facebook
-description: Facebook (Facebook Login) OAuth 2.0 setup for a Weegloo ServiceLogin: the Meta app console steps that produce `clientId`/`clientSecret` (Facebook's App ID / App secret), the Facebook Redirect URI to register on auth.weegloo.com, the opt-in `email` permission, the App Review gate that blocks everyone but the creator's account, and the walkthrough to hand the user when asking for those blocking credentials. Use ONLY when the chosen provider is Facebook — never for Google, GitHub, GitLab, LINE, Kakao or Naver. Spine: `weegloo-service-login-client`. 페이스북 로그인, 메타 앱.
----
+# Facebook — ServiceLogin console setup
 
-# Weegloo ServiceLogin — Facebook provider setup
+Read this **only when** the chosen provider is Facebook (`facebook`). It assumes the spine
+(`SKILL.md`): the wire protocol, the SDK, `callbackUrl`, `exchangeToken` and the ACMA/ACDA token
+boundary are there, not here.
 
-This is the **Facebook instance** of the provider-agnostic ServiceLogin setup. It covers only the
-**Meta app console** side: creating the app and producing the `clientId` / `clientSecret` that
-`ServiceLogin` needs. Everything else (the `auth.weegloo.com` wire protocol, the SDK, `callbackUrl`,
-`exchangeToken`, ACMA/ACDA scope) is provider-agnostic and lives in the spine.
-
-> **Prerequisite gate.** Use this **only after** you have a ServiceLogin design from
-> **`weegloo-service-login`** (the conceptual model) and the wire-protocol/SDK flow from
-> **`weegloo-service-login-client`** (the spine). This skill does **not** decide whether to use
-> Facebook — the provider must already be chosen from the product's actual need. **Do not use this for
-> a non-Facebook provider** (other providers follow the same *shape*, but their console steps differ —
-> Google, GitHub, GitLab, Kakao, Naver, and LINE have their own dedicated skills).
-
-## Facebook's Redirect URI (deploy-independent — register it now)
+## Facebook's Valid OAuth Redirect URIs (deploy-independent — register it now)
 
 In the Meta app console the field is **Valid OAuth Redirect URIs**, under the Facebook Login use
 case's **Settings**. Its value, with the real `{spaceId}` substituted:
@@ -26,11 +13,11 @@ case's **Settings**. Its value, with the real `{spaceId}` substituted:
 + https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/facebook
 ```
 
-The leading **`+ `** renders the line green (`weegloo-global-rules` → *Highlight what the user
-must act on or must know*) and is **not part of the URI** — the **Valid OAuth Redirect URIs** field
-takes the `https://…` text only. **Tell the user this URI up front, before you build**, not only when
-you ask for the credentials (`weegloo-service-login` → *Tell the user the provider Redirect URI UP
-FRONT*).
+The leading `+ ` is **not part of the URI** — Facebook's **Valid OAuth Redirect URIs** field takes
+the `https://…` text only.
+
+**Tell the user this URI up front, before you build** (`weegloo-service-login` → *Tell the user the
+provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 - The `/code/` segment is required — it is the **Facebook → Weegloo** callback, **not** the browser
   entry URL (`…/login/oauth2/facebook`). Putting `/code/` in the entry URL, or the entry URL in this
@@ -72,10 +59,9 @@ Then summarize it inline, with the real `{spaceId}` already filled into the Redi
 A red **Currently ineligible for submission** banner on that screen (missing app icon, privacy policy
 URL, category) is about **App Review**, not about sign-in — the credentials work without it.
 
-Then create the `ServiceLogin` with those values (provider `facebook`), plus `defaultRole` and
-`callbackUrl` per the spine. **Do not** finish with only the `ServiceUserRole` created and the
-credentials written off as "add later" — a role with no `ServiceLogin` is **blocked-pending-input**, so
-end the turn by *asking for the credentials*, not by reporting Facebook sign-in as done.
+**Do not** finish with only the `ServiceUserRole` created and the credentials written off as "add
+later" — a role with no `ServiceLogin` is **blocked-pending-input**, so end the turn by *asking for
+the credentials*, not by reporting Facebook sign-in as done.
 
 ## Facebook-specific note — `email` is a permission you have to add
 
@@ -91,7 +77,7 @@ Facebook also allows accounts registered with a phone number rather than an emai
 user may decline the email permission. If the product cannot serve a member who arrives without an
 email, say so to end users up front — that is a product decision, not something the console settles.
 
-## App Review gates who else can sign in
+## Facebook-specific note — App Review gates who else can sign in
 
 Until the app passes **App Review**, **only the account that created it can sign in.** This is not a
 Weegloo restriction and not something the `ServiceLogin` payload can affect.
@@ -104,9 +90,5 @@ Weegloo restriction and not something the `ServiceLogin` payload can affect.
   sit as **Not submitted** until then. Requirements are Meta's and they change — have the user read
   Meta's current App Review documentation rather than working from a remembered checklist.
 
-## Related
-
-- **Provider-agnostic spine (wire protocol, SDK, `callbackUrl`, pitfalls):** **`weegloo-service-login-client`**.
-- **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser):** **`weegloo-service-login`**.
-- **Other dedicated provider skills:** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-github`** (GitHub), **`weegloo-service-login-kakao`** (Kakao), **`weegloo-service-login-naver`** (Naver), **`weegloo-service-login-line`** (LINE).
-- **Picking the API combo per service type:** **`weegloo-service-architecture`**.
+Then create the `ServiceLogin`: the `providers` entry's **`registrationId`** is `facebook`, plus
+`defaultRole` and `callbackUrl` per the spine.

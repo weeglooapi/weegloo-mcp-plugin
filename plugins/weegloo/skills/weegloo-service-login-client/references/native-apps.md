@@ -85,7 +85,7 @@ The response, refresh (step 3) and logout (step 4) are identical to the browser 
 - **The provider's OAuth client stays a "Web application" type — even for a native app.** The OAuth
   redirect targets `auth.weegloo.com`, not your app, so where a provider console asks for an
   application type, pick **Web**; do **not** create an "Android" / "iOS" client for this flow. (Google
-  specifics: **`weegloo-service-login-google`**.) Provider SDK / app-to-app sign-in is not part of
+  specifics: **`references/google.md`**.) Provider SDK / app-to-app sign-in is not part of
   this flow.
 - **Prefer verified deep links** — Android **App Links**, iOS **Universal Links** — over a bare custom
   scheme. An unverified scheme can be claimed by another installed app, and `exchangeToken`, though

@@ -1,6 +1,6 @@
 ---
 name: weegloo-service-login-client
-description: Add Weegloo ServiceLogin OAuth sign-in (Google, GitHub, Facebook, GitLab, LINE, Kakao, Naver) to a browser or native Android / iOS app: the auth.weegloo.com wire protocol both speak, plus the browser npm SDK `weegloo-service-user`. Provider is inferred from the product, never asked, no default. Covers login redirect, token exchange, refresh, logout; login-entry URL vs provider redirect URI; ACMA current user at GET /v1/me; the native path (deep link in allowedCallbackUrls, redirect_uri + PKCE, no SDK). Use when wiring sign-in, debugging the OAuth callback, or going server-side/native. 로그인, 소셜 로그인, 구글/카카오/네이버 로그인, 회원가입, OAuth 연동.
+description: Weegloo ServiceLogin OAuth sign-in — Google, GitHub, Facebook, GitLab, LINE, Kakao, Naver — for a browser or native Android / iOS app: the auth.weegloo.com wire protocol, the npm SDK `weegloo-service-user`, and each provider's console setup in `references/{provider}.md`. Provider inferred, never asked, no default. Covers login redirect, token exchange, refresh, logout; login-entry URL vs provider redirect URI; ACMA current user at GET /v1/me; the native path (allowedCallbackUrls deep link, PKCE, no SDK). Use when wiring sign-in or debugging the callback. 로그인, 소셜 로그인, 회원가입, OAuth 연동, 구글/카카오/네이버/깃허브/라인/페이스북/깃랩 로그인.
 ---
 
 # Weegloo - ServiceLogin client integration (wire protocol + browser SDK)
@@ -222,13 +222,13 @@ completion message** — the when/why/green-presentation is owned by `weegloo-se
 
 ### G. `clientId` / `clientSecret` are blocking, user-only inputs
 
-`callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` come from the user's own OAuth client at the chosen provider and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.) **When you ask, don't ask bare** — invoke the chosen provider's own skill (table below) and hand the user its step-by-step console walkthrough, with the real `{spaceId}` filled into the redirect URI. Do **not** give one provider's steps for another.
+`callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` come from the user's own OAuth client at the chosen provider and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.) **When you ask, don't ask bare** — read the chosen provider's `references/{provider}.md` page (table below) and hand the user its step-by-step console walkthrough, with the real `{spaceId}` filled into the redirect URI. Do **not** give one provider's steps for another.
 
 ## Configuration responsibilities (provider console + Weegloo Console)
 
 Weegloo ServiceLogin is **provider-agnostic** — `ServiceLogin` is the system, a provider (Google,
 GitHub, Facebook, GitLab, LINE, Kakao, Naver) is a pluggable choice. The setup below is the **same shape for every provider**;
-only the console-specific clicks differ — those live in a per-provider skill, one for each of the seven.
+only the console-specific clicks differ — those live in `references/{provider}.md`, one page per provider.
 
 **The shape (any provider):**
 
@@ -280,19 +280,22 @@ as another's, or giving one provider's console steps for a different product.
 
 ### Per-provider console steps (every provider has one)
 
-| Provider | `{provider}` | Console-setup skill |
+| Provider | `{provider}` | Console-setup page |
 |---|---|---|
-| Google   | `google`   | **`weegloo-service-login-google`** |
-| GitHub   | `github`   | **`weegloo-service-login-github`** |
-| Kakao    | `kakao`    | **`weegloo-service-login-kakao`** |
-| Naver    | `naver`    | **`weegloo-service-login-naver`** |
-| LINE     | `line`     | **`weegloo-service-login-line`** |
-| Facebook | `facebook` | **`weegloo-service-login-facebook`** |
-| GitLab   | `gitlab`   | **`weegloo-service-login-gitlab`** |
+| Google   | `google`   | **`references/google.md`** |
+| GitHub   | `github`   | **`references/github.md`** |
+| Kakao    | `kakao`    | **`references/kakao.md`** |
+| Naver    | `naver`    | **`references/naver.md`** |
+| LINE     | `line`     | **`references/line.md`** |
+| Facebook | `facebook` | **`references/facebook.md`** |
+| GitLab   | `gitlab`   | **`references/gitlab.md`** |
 
-Invoke and follow the one for the chosen provider. **Each provider skill also carries the illustrated
-guide to hand the user** — `https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/{provider}`,
-keyed by the same `{provider}` value as the table.
+**Read the page for the chosen provider — its console steps exist nowhere else.** Each one carries
+that provider's exact redirect URI, its console navigation under its own menu names, the mapping
+between its vocabulary and Weegloo's, its own traps, and the illustrated guide to hand the user at
+`https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/{provider}`,
+keyed by the same `{provider}` value as the table. The same value is what goes in the ServiceLogin's
+`providers` entry as **`registrationId`**.
 
 ## When the SDK cannot be used
 
@@ -305,6 +308,11 @@ If a server, CLI, or native app needs to exchange tokens, follow the wire protoc
 
 ## References (read only when the branch applies)
 
+- **`references/{provider}.md`** — the console setup for ONE provider: `google`, `github`, `kakao`,
+  `naver`, `line`, `facebook`, `gitlab` (table above). Read the one you are wiring, and only that
+  one. **This is not optional detail** — the redirect URI to register, the console walkthrough and
+  the provider's own traps are there and nowhere else, so an answer written from this spine alone
+  asks the user for `clientId` / `clientSecret` with no idea where to find them.
 - **`references/native-apps.md`** — read it **whenever the client is a native Android or iOS app**
   (and not otherwise). Carries the `allowedCallbackUrls` registration gate, the `redirect_uri` + PKCE
   entry parameters, the deep-link error returns, and the "Web application" OAuth-client-type rule.

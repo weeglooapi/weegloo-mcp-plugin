@@ -1,21 +1,8 @@
----
-name: weegloo-service-login-github
-description: Provider-specific console setup for Weegloo ServiceLogin with **GitHub** OAuth 2.0 — registering a GitHub OAuth App, getting clientId/clientSecret, the Authorization callback URL https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/github, the one-callback-URL-only and secret-shown-once gotchas, and the private-email first-sign-in failure. 깃허브 로그인, 깃헙 소셜 로그인 연동, GitHub 계정 회원가입. Use ONLY when the provider is GitHub, never for Google, Facebook, GitLab, LINE, Kakao or Naver. Wire protocol/SDK: weegloo-service-login-client; model: weegloo-service-login.
----
+# GitHub — ServiceLogin console setup
 
-# Weegloo ServiceLogin — GitHub provider setup
-
-This is the **GitHub instance** of the provider-agnostic ServiceLogin setup. It covers only the
-**GitHub** side: registering the OAuth App and producing the `clientId` / `clientSecret` that
-`ServiceLogin` needs. Everything else (the `auth.weegloo.com` wire protocol, the SDK, `callbackUrl`,
-`exchangeToken`, ACMA/ACDA scope) is provider-agnostic and lives in the spine.
-
-> **Prerequisite gate.** Use this **only after** you have a ServiceLogin design from
-> **`weegloo-service-login`** (the conceptual model) and the wire-protocol/SDK flow from
-> **`weegloo-service-login-client`** (the spine). This skill does **not** decide whether to use GitHub —
-> the provider must already be chosen from the product's actual need. **Do not use this for a
-> non-GitHub provider** (other providers follow the same *shape*, but their console steps differ —
-> Google, Facebook, GitLab, Kakao, Naver, and LINE have their own dedicated skills).
+Read this **only when** the chosen provider is GitHub (`github`). It assumes the spine (`SKILL.md`):
+the wire protocol, the SDK, `callbackUrl`, `exchangeToken` and the ACMA/ACDA token boundary are there,
+not here.
 
 ## GitHub's Authorization callback URL (deploy-independent — register it now)
 
@@ -25,18 +12,15 @@ In the GitHub OAuth App, the **Authorization callback URL** is, with the real `{
 + https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/github
 ```
 
-The leading **`+ `** renders the line green (`weegloo-global-rules` → *Highlight what the user
-must act on or must know*) and is **not part of the URI** — the **Authorization callback URL** field takes the
-`https://…` text only. **Tell the user this URI up front, before you build**, not only when you
-ask for the credentials (`weegloo-service-login` → *Tell the user the provider Redirect URI UP
-FRONT*).
+The leading `+ ` is **not part of the URI** — GitHub's **Authorization callback URL** field takes the
+`https://…` text only.
+
+**Tell the user this URI up front, before you build** (`weegloo-service-login` → *Tell the user the
+provider Redirect URI UP FRONT*), not only when you ask for the credentials.
 
 - The `/code/` segment is required — it is the **GitHub → Weegloo** callback, **not** the browser entry
   URL (`…/login/oauth2/github`). Putting `/code/` in the entry URL, or the entry URL in this field,
   breaks sign-in (spine pitfall **A**).
-- It depends only on `auth.weegloo.com` + your `spaceId` + `github`, so it is **fully known now** —
-  register it before the app is deployed (spine pitfall **G**). `callbackUrl` is the deploy-dependent
-  one; this is not.
 - **GitHub OAuth Apps allow exactly one callback URL** (unlike GitHub *Apps*). So this single value must
   be the `…/code/github` URL above — don't try to also list your app's `callbackUrl` here.
 
@@ -74,11 +58,6 @@ Then summarize it inline, with the real `{spaceId}` already filled into the call
    only once** — copy it immediately. (If it is lost, generate a new one and update `ServiceLogin`.)
 5. Send back both the **Client ID** and the **Client secret**.
 
-Then create the `ServiceLogin` with those values (provider `github`), plus `defaultRole` and
-`callbackUrl` per the spine. **Do not** finish with only the `ServiceUserRole` created and the
-credentials written off as "add later" — a role with no `ServiceLogin` is **blocked-pending-input**, so
-end the turn by *asking for the credentials*, not by reporting GitHub sign-in as done.
-
 ## GitHub-specific note — email retrieval can block first sign-in
 
 Weegloo reads the member's email from `GET https://api.github.com/user` only; it does **not** fall back
@@ -97,9 +76,8 @@ GitHub: the account must have a **public profile email** (GitHub → Settings �
 Since it can't be handled in code, the only real lever is communicating it to users up front — apply
 your own judgment on whether and where that belongs for the product you're building.
 
-## Related
-
-- **Provider-agnostic spine (wire protocol, SDK, `callbackUrl`, pitfalls):** **`weegloo-service-login-client`**.
-- **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser):** **`weegloo-service-login`**.
-- **Picking the API combo per service type:** **`weegloo-service-architecture`**.
-- **Other dedicated provider skills:** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-facebook`** (Facebook), **`weegloo-service-login-gitlab`** (GitLab), **`weegloo-service-login-kakao`** (Kakao), **`weegloo-service-login-naver`** (Naver), **`weegloo-service-login-line`** (LINE).
+Then create the `ServiceLogin`: the `providers` entry's **`registrationId`** is `github`, plus
+`defaultRole` and `callbackUrl` per the spine. **Do not** finish with only the `ServiceUserRole`
+created and the credentials written off as "add later" — a role with no `ServiceLogin` is
+**blocked-pending-input**, so end the turn by *asking for the credentials*, not by reporting GitHub
+sign-in as done.
