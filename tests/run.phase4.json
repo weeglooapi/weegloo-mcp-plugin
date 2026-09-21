@@ -1,18 +1,18 @@
 {
   "provenance": {
     "gitRef": "refactor/skill-rule-tree",
-    "gitSha": "24d9812",
+    "gitSha": "3d1258b",
     "gitDirty": true,
     "installedRef": "refactor/skill-rule-tree",
-    "installedVersion": "ed786c715b1c",
-    "ruleBytes": 70505,
+    "installedVersion": "aec085e5f4e4",
+    "ruleBytes": 70775,
     "skillBytes": 483724
   },
   "agentCmd": "claude -p",
   "totals": {
     "fixtures": 23,
     "asserts": 69,
-    "passed": 68
+    "passed": 69
   },
   "results": [
     {
@@ -249,7 +249,7 @@
           "question": "Does the answer delete children before the parent — i.e. remove the Content, Media and ContentTypes first and the Space last — rather than attempting to delete the Space directly?",
           "expect": "yes",
           "why": "Space 는 ContentType/Content/Media/WebHosting 이 남아 있으면 거부된다 (WGL422024)",
-          "pass": false
+          "pass": true
         },
         {
           "id": "unpublish-first",
@@ -259,7 +259,7 @@
           "pass": true
         }
       ],
-      "passed": 2,
+      "passed": 3,
       "total": 3
     },
     {
