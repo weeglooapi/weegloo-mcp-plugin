@@ -238,6 +238,48 @@ test('runUpdate: keeps selection, refreshes content, auto-adds new, prunes upstr
   });
 });
 
+test('runUpdate: a skill reorganised into spine + references/ syncs nested files and drops stale ones', async () => {
+  // The depth contract end-to-end (io.test.js covers the writer in isolation): an installed skill
+  // whose upstream version moved content into `references/` must come out with the new pages
+  // present and the superseded ones gone. A leftover page is not an error anywhere — the agent
+  // just reads a stale copy next to the current one.
+  await inTmpProject(async () => {
+    seedClaude({
+      skills: ['weegloo-a'],
+      rules: ['weegloo-version', 'weegloo-terms-consent'],
+      record: {
+        skills: ['weegloo-a'],
+        rules: ['weegloo-version', 'weegloo-terms-consent'],
+        availableSkills: ['weegloo-a'],
+        availableRules: ['weegloo-version', 'weegloo-terms-consent'],
+      },
+      stamp: { last_check: '2026-01-01T00:00:00', version: 'v1', ref: 'develop' },
+    });
+    // v1 on disk also had a reference page that v2 drops.
+    fs.mkdirSync(path.join('.claude', 'skills', 'weegloo-a', 'references'), { recursive: true });
+    fs.writeFileSync(path.join('.claude', 'skills', 'weegloo-a', 'references', 'old.md'), 'stale', 'utf-8');
+
+    const nested = {
+      ...MANIFEST,
+      skills: [
+        {
+          id: 'weegloo-a',
+          files: { 'SKILL.md': 'spine v2', 'metadata.json': '{}', 'references/new.md': 'page v2' },
+        },
+      ],
+    };
+    const res = await runUpdate(
+      { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: async () => nested, ...quiet }
+    );
+
+    assert.equal(res.status, 'updated');
+    assert.equal(fs.readFileSync('.claude/skills/weegloo-a/references/new.md', 'utf-8'), 'page v2');
+    assert.equal(fs.existsSync('.claude/skills/weegloo-a/references/old.md'), false, 'stale page pruned');
+    assert.equal(fs.readFileSync('.claude/skills/weegloo-a/SKILL.md', 'utf-8'), 'spine v2');
+  });
+});
+
 test('runUpdate: core rules are restored even after the user hand-deleted them', async () => {
   await inTmpProject(async () => {
     seedClaude({
