@@ -39,8 +39,9 @@ used to be scored as evidence, and each produced a confident wrong conclusion. S
 Phases were done out of numeric order: 4 before 3, because 4 held the large always-loaded saving
 and 3 was blocked on the harness probe.
 
-**Always-loaded budget: 145,606 B → 84,694 B (−60,912 B, ≈ −42%, ~18.5k tokens every session).**
-`rules` 71,141 B + 23 skill `description`s 13,553 B. Per-invoke: the router 53,118 → 22,291 B
+**Always-loaded budget: 144,523 B → 84,344 B (−60,179 B, ≈ −42%, ~18k tokens every session).**
+`rules` 70,791 B + 23 skill `description`s 13,553 B. All byte counts here are LF-normalised
+(`git show`); counting the Windows working tree adds ~1 KB of CR and reproduces nowhere else. Per-invoke: the router 53,118 → 22,291 B
 (−58%), `weegloo-script` 60,517 → 28,085 B (−54%); 18 `references/` files load only when their
 spine points at them.
 
