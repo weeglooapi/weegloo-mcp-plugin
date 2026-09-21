@@ -71,17 +71,23 @@ fail on its own preconditions for no reason.
 1. **WebHosting** — independent of everything else; only blocked while a deploy is in flight.
 2. **Content** — unpublish anything `Published`/`Changed`, then delete. Page the list (`links.next`);
    do not assume one page is all of it (**`weegloo-list-pagination`**).
-3. **ContentType** — only now, once **every** Content of it is gone (see the double-bind below).
-4. **Media** — unpublish, wait for any processing to settle, delete.
+3. **Media** — unpublish, wait for any processing to settle, delete. **Before the ContentType, not
+   after it**: a Media is a live row that blocks its ContentType exactly as a Content does, so a
+   ContentType attempted first is refused while its Media still exist.
+4. **ContentType** — only now, once **every** Content *and* Media of it is gone (see the double-bind
+   below).
 5. **Space**.
 
-Steps 1, 2+3 and 4 are independent of each other; only *within* the Content → ContentType chain is the
-order forced.
+Only WebHosting (step 1) is independent; it may be done at any point. Steps 2 → 3 → 4 are a forced
+chain — both Content and Media block the ContentType, and the ContentType blocks nothing but is
+blocked by both.
 
-## ContentType ← Content: the dependency, and the WGL422010 double-bind
+## ContentType ← Content and Media: the dependency, and the WGL422010 double-bind
 
-`cma_DeleteOneContentType` refuses while **any** Content of that type exists — **`WGL422010`**. "Any"
-means any status: `Draft` and `Archived` Content block it exactly like `Published` Content does.
+`cma_DeleteOneContentType` refuses while **any** Content **or Media** of that type exists —
+**`WGL422010`**. "Any" means any status: `Draft` and `Archived` rows block it exactly like
+`Published` ones do. **Media counts here too** — which is why Media is deleted *before* the
+ContentType (step 3 above), not after it as an independent tail step.
 
 **The trap: `cma_UnpublishOneContentType` is blocked by the same check.** So for a *published*
 ContentType that still has Content you cannot unpublish it into a deletable state first — both doors
@@ -89,6 +95,7 @@ are shut by the same condition. The order is forced:
 
 ```
 delete every Content of the type   (unpublish each Published/Changed one first)
+  → delete every Media of the type (unpublish first; wait for files to settle)
   → cma_UnpublishOneContentType    (now allowed; needs X-Weegloo-Version)
   → cma_DeleteOneContentType
 ```
