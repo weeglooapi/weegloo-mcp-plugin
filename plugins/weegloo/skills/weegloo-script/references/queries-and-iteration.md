@@ -99,6 +99,13 @@ ordinary query.
 - **A search keyed on a value the caller just sent** — an order number, a token, an idempotency key
   — instead of on the `sys.id` the write returned.
 
+**Nor does the `where` rescue you — the flag picks the STORE, not the index.** Both stores carry the
+`sys.*` indexes, so a search filtered *only* on indexed system axes (`createdBy`, a status, a tag, a
+reference) is served perfectly happily by the synced copy — and the row written a second ago is
+simply not in that copy yet. "My `where` is on an indexed field" answers a question about **speed**
+and says nothing about **freshness**. Inside the lag window that search takes `advanced: false` too,
+exactly like a `fields.*` one.
+
 **Even in that case, first try to restructure so it can stay `true`** — and usually you can:
 
 - Fetch it **by id** with **`ResourceRead`**. That statement never takes the indexed path at all, so
@@ -110,7 +117,8 @@ ordinary query.
   (`patterns.md` → *Concurrency-safe writes*), not from the read path.
 
 Only when none of those fit should the search itself drop to `advanced: false`. If its `where` is on
-the system axes (a `createdBy`, a status, a tag), that is cheap and you are done. If it has to match
+the system axes (a `createdBy`, a status, a tag), the non-advanced path is cheap and you are done —
+that is what the axis buys you here: a *low-cost* `false`, never a licence to stay `true`. If it has to match
 a `fields.*` value, **pair it with the system axes** — the ContentType scope, plus something like
 `createdBy: ":self"` — so the unindexed part runs over a small subset instead of the Space.
 

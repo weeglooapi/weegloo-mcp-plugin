@@ -181,7 +181,10 @@ All reads take **`from`**: **`Current`** (live draft, what CMA/ACMA read; **defa
 > `advanced: true` reads a **synced copy** that trails the writes by about a second; `false` reads
 > the store the writes land in. So a search for a just-written row answers **empty on a clean 200**,
 > never an error — and **who wrote it does not matter**: *Script A writes → Script B searches for it*
-> is the same window, even though B wrote nothing. That one search takes **`advanced: false`**.
+> is the same window, even though B wrote nothing. That one search takes **`advanced: false`** —
+> **including when its `where` touches only indexed `sys.*` fields**: the flag picks the *store*,
+> not the index, and both stores index `sys.*`, so a `createdBy` / status / tag filter is served by
+> the lagging copy just as happily. An indexed `where` is about speed, never about freshness.
 > Better still, avoid the search: pass the **`sys.id`** the write returned and read it with
 > **`ResourceRead`**, which never takes the indexed path. Both sides in full, with the cost of
 > `advanced: false` on a `fields.*` query: **`references/queries-and-iteration.md`**.

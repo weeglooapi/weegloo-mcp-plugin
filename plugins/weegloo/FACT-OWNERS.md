@@ -87,7 +87,7 @@ git worktrees.
 
 ### script-advanced-flag
 
-- **fact**: A Script search's `advanced` flag picks which STORE the read runs on: `true` (the default) reads a synced copy that trails the writes by about a second; `false` reads the store the writes land in, which has no `fields.*` index. So a search that must see a row written moments ago takes `advanced: false` — **whoever wrote it**, including another Script.
+- **fact**: A Script search's `advanced` flag picks which STORE the read runs on: `true` (the default) reads a synced copy that trails the writes by about a second; `false` reads the store the writes land in, which has no `fields.*` index. So a search that must see a row written moments ago takes `advanced: false` — **whoever wrote it**, including another Script, and **whatever the `where` touches**: the flag picks the store, not the index, so a filter on indexed `sys.*` axes is no exemption.
 - **owner**: `skills/weegloo-script/references/queries-and-iteration.md`
 - **mentions**: `advanced: (true|false)`
   - `rules/weegloo-global-rules.mdc`
