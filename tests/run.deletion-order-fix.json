@@ -1,0 +1,31 @@
+{
+  "what": "space-teardown re-measured after the Media-before-ContentType corpus fix, repeated to show stability",
+  "why": "The fixture was FLAKY on the previous corpus (confirm-first 3/5). Reading the responses showed the instability had two causes: the plan-only wrapper forbade the confirmation the rule requires, and the skill taught a wrong teardown order that the ordering assert was correctly failing. Both were fixed; this records the result.",
+  "notComparableTo": "tests/run.phase3b.json — that scorecard measured installedVersion 5c779366cd07, before this corpus fix. It is the record of Phase 3b and is deliberately not rewritten.",
+  "scope": "Only this fixture was re-measured. The corpus change touches deletion documentation only, and space-teardown is the sole fixture that exercises it.",
+  "provenance": {
+    "gitRef": "refactor/skill-rule-tree",
+    "gitSha": "1421307",
+    "gitDirty": false,
+    "installedRef": "refactor/skill-rule-tree",
+    "agentOrg": "SNOW Corp 5-A",
+    "agentModel": null,
+    "installedVersion": "c9b1104042c9",
+    "ruleBytes": 70842,
+    "skillBytes": 443538
+  },
+  "repeats": 5,
+  "perAssert": {
+    "confirm-first": "5/5",
+    "bottom-up-order": "5/5",
+    "unpublish-first": "5/5"
+  },
+  "negativeControl": {
+    "tool": "tests/negative-control.mjs",
+    "result": "every judge assert caught exactly the samples it covers",
+    "samples": {
+      "cascade-myth": "rejected by confirm-first + bottom-up-order",
+      "media-after-contenttype": "rejected by bottom-up-order, accepted by confirm-first (correct — that sample does confirm)"
+    }
+  }
+}

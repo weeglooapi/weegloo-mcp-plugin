@@ -34,6 +34,7 @@ const FIXTURE = '08-space-teardown.mjs';
 const WRONG_ANSWERS = [
   {
     id: 'cascade-myth',
+    violates: ['confirm-first', 'bottom-up-order'],
     // Deletes the Space directly on the belief that Weegloo cascades downward. Catches an assert
     // that stopped requiring any ordering at all.
     text: `Weegloo Space 삭제 계획입니다.
@@ -49,6 +50,7 @@ ContentType 과 글, 이미지는 Space 에 종속된 자원이라 상위 자원
   },
   {
     id: 'media-after-contenttype',
+    violates: ['bottom-up-order'],
     // Correct in every other respect — confirms, unpublishes, ends with the Space — and wrong in
     // exactly one: the ContentType goes before its Media, and Media is called independent. This is
     // the sample an "any order is fine" rewrite silently accepted.
@@ -83,17 +85,27 @@ const fx = (await import(pathToFileURL(path.join(__dirname, 'fixtures', 'routing
 const judges = fx.asserts.filter((a) => a.kind === 'judge');
 if (!judges.length) { console.error(`${FIXTURE} has no judge asserts to control`); process.exit(2); }
 
+// A sample wrong in ONE dimension must be rejected by the assert covering that dimension — and
+// ACCEPTED by the others. Demanding that every assert reject every sample was this control's own
+// bug: `media-after-contenttype` opens by promising to confirm before deleting, so `confirm-first`
+// saying YES is correct, and scoring that as VACUOUS would send the next person to "fix" a healthy
+// assert. Over-rejection is reported too — an assert that fails a sample it does not cover is
+// reading something it was never asked about, which is how a gate quietly starts measuring the
+// wrong thing.
 let failed = 0;
 for (const bad of WRONG_ANSWERS) {
-  console.log(`\n--- wrong answer: ${bad.id}`);
+  console.log(`
+--- wrong answer: ${bad.id}  (must be caught by: ${bad.violates.join(', ')})`);
   for (const a of judges) {
+    const shouldReject = bad.violates.includes(a.id);
     const verdict = parseVerdict(await agent(buildJudgePrompt(bad.text, a.question)));
-    if (verdict === null) { console.log(`  ??      ${a.id}: judge emitted no verdict`); failed++; continue; }
-    // expect:'yes' asserts must come back NO on a wrong answer; an expect:'no' assert must say YES.
-    const rejects = a.expect === 'yes' ? verdict === false : verdict === true;
-    console.log(`  ${rejects ? 'OK     ' : 'VACUOUS'} ${a.id}: judge said ${verdict ? 'YES' : 'NO'}`);
-    if (!rejects) failed++;
+    if (verdict === null) { console.log(`  ??        ${a.id}: judge emitted no verdict`); failed++; continue; }
+    const rejected = a.expect === 'yes' ? verdict === false : verdict === true;
+    if (shouldReject && !rejected) { console.log(`  VACUOUS   ${a.id}: accepted a sample it must catch`); failed++; }
+    else if (!shouldReject && rejected) { console.log(`  OVERREACH ${a.id}: rejected a sample it does not cover`); failed++; }
+    else console.log(`  OK        ${a.id}: ${rejected ? 'rejected' : 'accepted'}, as expected`);
   }
 }
-console.log(failed ? `\n${failed} check(s) failed — a wrong answer got through.` : '\nevery judge assert rejected every wrong answer.');
+console.log('');
+console.log(failed ? `${failed} check(s) failed.` : 'every judge assert caught exactly the samples it covers.');
 process.exit(failed ? 1 : 0);
