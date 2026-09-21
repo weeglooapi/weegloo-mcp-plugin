@@ -85,6 +85,18 @@ git worktrees.
   - `skills/weegloo-api-query-optimization/SKILL.md`
 - **why**: Its absence returns an empty list rather than an error, which the agent reports to the user as "no results". Three sites state it; they must not diverge on whether the header is optional.
 
+### script-advanced-flag
+
+- **fact**: A Script search's `advanced` flag picks which STORE the read runs on: `true` (the default) reads a synced copy that trails the writes by about a second; `false` reads the store the writes land in, which has no `fields.*` index. So a search that must see a row written moments ago takes `advanced: false` — **whoever wrote it**, including another Script.
+- **owner**: `skills/weegloo-script/references/queries-and-iteration.md`
+- **mentions**: `advanced: (true|false)`
+  - `rules/weegloo-global-rules.mdc`
+  - `skills/weegloo-script/SKILL.md`
+  - `skills/weegloo-script/references/patterns.md`
+  - `skills/weegloo-script/references/queries-and-iteration.md`
+- **forbidden**: `see a just-written row[^.]{0,90}writes based on what it read` — scopes the exception to a row THIS execution wrote. The *Script A writes → Script B searches for it* case then reads as an ordinary query, stays on the default path, and answers **empty on a clean 200** — no error anywhere, and B looks innocent because B wrote nothing. Present at `da14b30`, fixed at `6a0d2b1`.
+- **why**: Four sites state the flag and only the owner states the mechanism (two stores, one lagging). If they diverge on *who* the write came from, every cross-Script and Webhook-triggered read silently loses its row while reading as correct.
+
 ### acma-contents-nested
 
 - **fact**: On ACMA every Content operation is nested under its ContentType; the flat `/contents` path does not exist there. CMA, CDA and ACDA expose both forms.

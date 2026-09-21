@@ -59,6 +59,9 @@ const DEFECT_AT = {
   'read-fallback-is-opt-in': 'c6397c1',
   'media-file-url-shape': 'c6397c1',
   'script-writes-default-bucket': 'c6397c1',
+  // `da14b30` is this branch's tip before the `advanced` two-store rewrite: its corpus still
+  // scopes the exception to a row the same execution wrote.
+  'script-advanced-flag': 'da14b30',
 };
 
 const NOT_CORPUS = new Set(['FACT-OWNERS.md', 'GATE-INVENTORY.md']);

@@ -177,6 +177,15 @@ All reads take **`from`**: **`Current`** (live draft, what CMA/ACMA read; **defa
 > (with **`:self`** = the executing caller). Same rules for `order` — `"-fields.score"`,
 > `"-sys.createdAt"`. Leave **`advanced`** at its `true` default.
 
+> **The one search that must NOT stay on the default: one looking for a row written moments ago.**
+> `advanced: true` reads a **synced copy** that trails the writes by about a second; `false` reads
+> the store the writes land in. So a search for a just-written row answers **empty on a clean 200**,
+> never an error — and **who wrote it does not matter**: *Script A writes → Script B searches for it*
+> is the same window, even though B wrote nothing. That one search takes **`advanced: false`**.
+> Better still, avoid the search: pass the **`sys.id`** the write returned and read it with
+> **`ResourceRead`**, which never takes the indexed path. Both sides in full, with the cost of
+> `advanced: false` on a `fields.*` query: **`references/queries-and-iteration.md`**.
+
 ### Resource writes (`requiredAction` per action)
 
 - **`ResourceCreate`** — `resource`, `contentType` (**required** for Content; only `sys.id`), `fields`.
