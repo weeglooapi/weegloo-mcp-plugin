@@ -289,11 +289,11 @@ async function main() {
       ide = await select({
         message: 'Select your IDE:',
         choices: [
-          { name: 'Cursor', value: 'cursor' },
           { name: 'Claude Code', value: 'claude' },
           { name: 'Codex', value: 'codex' },
           { name: 'Antigravity', value: 'antigravity' },
           { name: 'Android Studio', value: 'androidstudio' },
+          { name: 'Cursor', value: 'cursor' },
           { name: `Xcode`, value: 'xcode' },
         ],
       });

@@ -188,7 +188,7 @@ The mapping sticks to the install — `--update` reapplies it automatically. To 
 In interactive mode the CLI asks the following questions in order (a flag from [CLI options](#cli-options) can pre-fill any of them, skipping that prompt):
 
 1. **Install location** - Global (`~/.cursor/`) or current project (`.cursor/`)
-2. **IDE** - Cursor / Claude Code / Codex / Antigravity / Android Studio
+2. **IDE** - Claude Code / Codex / Antigravity / Android Studio / Cursor / Xcode
 3. **Personal Access Token** - Generate from the Weegloo console
 4. **MCP server group** - `default` / `core` / `extra` / `all`
 5. **Skills** - Select skills to install (multi-select)
