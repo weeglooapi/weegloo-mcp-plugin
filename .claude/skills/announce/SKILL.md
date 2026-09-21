@@ -123,9 +123,12 @@ copy.)
 Ask the user for the **Weegloo CMA Bearer token** (production). 
 - Take it as runtime input only. **Never** write it to a file, commit it, store it in
   memory, or echo it back in your response.
-- The token is the ONLY thing to ask for. `WEEGLOO_CMA_BASE`, `WEEGLOO_SPACE_ID`, and
-  `WEEGLOO_CONTENT_TYPE_ID` are fixed production defaults baked into the script — do NOT
-  ask about them.
+- The token is normally the ONLY thing to ask for. `WEEGLOO_CMA_BASE` defaults to production,
+  and the POST target — `WEEGLOO_SPACE_ID` / `WEEGLOO_CONTENT_TYPE_ID` — is read from the
+  environment or from the **gitignored repo-root `.env`** (this repo is public, so the ids are
+  not committed; `.env.example` shows the shape). If the script stops saying one of them is not
+  set, ask the user for that value and pass it on the command line for this run — do NOT guess
+  an id, and do NOT commit it.
 
 ### 4. Create + publish
 Optionally dry-run first to show the exact payload without sending:

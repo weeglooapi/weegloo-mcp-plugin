@@ -12,27 +12,65 @@
  * exits 0 without posting, so a typo-only / internal push never creates an empty
  * announcement in Weegloo.
  *
- * Env:
- *   WEEGLOO_CMA_TOKEN   (required)  Bearer token for CMA. Provided via GitHub Secret.
+ * The POST TARGET is not hardcoded. This repository is public, so the announcement Space and
+ * ContentType ids live outside it: in the environment, or in a gitignored `.env` at the repo
+ * root (same convention as `installer-cli/scripts/release.mjs` and its NPM_TOKEN). They are
+ * not secrets — a write still needs the token — but a public default publishes the exact
+ * coordinates of the production announcement feed, which is free to avoid. `.env.example`
+ * shows the shape. Missing ⇒ the script refuses rather than posting somewhere arbitrary.
+ *
+ * Env (or the same keys in a gitignored repo-root `.env`, except the token):
+ *   WEEGLOO_CMA_TOKEN   (required)  Bearer token for CMA. Runtime input only — never a file.
+ *   WEEGLOO_SPACE_ID    (required)  Announcement Space id.
+ *   WEEGLOO_CONTENT_TYPE_ID (required) Announcement ContentType id.
  *   ANNOUNCEMENT_PATH   (optional)  Path to the announcement JSON. Default announcement.json
  *   WEEGLOO_CMA_BASE    (optional)  CMA base URL. Default production.
- *   WEEGLOO_SPACE_ID    (optional)  Space id. Default production announcement space.
- *   WEEGLOO_CONTENT_TYPE_ID (optional) Content type id. Default production announcement type.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const CMA_BASE = process.env.WEEGLOO_CMA_BASE || 'https://cma.weegloo.com/v1';
-const SPACE_ID = process.env.WEEGLOO_SPACE_ID || '42EhgutI';
-const CONTENT_TYPE_ID = process.env.WEEGLOO_CONTENT_TYPE_ID || '3trmXRN5fEtDh8odpgvtQdZeNlImcH';
-const ANNOUNCEMENT_PATH = process.env.ANNOUNCEMENT_PATH || 'announcement.json';
-const TOKEN = process.env.WEEGLOO_CMA_TOKEN;
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function fail(msg) {
   console.error(`[post-announcement] ${msg}`);
   process.exit(1);
 }
 
+/** `KEY=value` from the gitignored repo-root `.env`; optional quotes, optional `export `. */
+function fromEnvFile(key) {
+  const envPath = path.join(REPO_ROOT, '.env');
+  if (!existsSync(envPath)) return null;
+  let text;
+  try {
+    text = readFileSync(envPath, 'utf-8');
+  } catch {
+    return null;
+  }
+  const m = text.match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.+?)\\s*$`, 'm'));
+  if (!m) return null;
+  let val = m[1].trim();
+  if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+    val = val.slice(1, -1);
+  }
+  return val || null;
+}
+
+/** Env wins over `.env`; absent ⇒ stop with the name of what to set (never a guessed target). */
+function requiredSetting(key, what) {
+  const value = process.env[key] || fromEnvFile(key);
+  if (!value) fail(`${key} is not set — ${what}. Put it in the environment or in a gitignored .env at the repo root (see .env.example).`);
+  return value;
+}
+
+const CMA_BASE = process.env.WEEGLOO_CMA_BASE || fromEnvFile('WEEGLOO_CMA_BASE') || 'https://cma.weegloo.com/v1';
+const ANNOUNCEMENT_PATH = process.env.ANNOUNCEMENT_PATH || 'announcement.json';
+const TOKEN = process.env.WEEGLOO_CMA_TOKEN;
+
 if (!TOKEN) fail('WEEGLOO_CMA_TOKEN is not set');
+
+const SPACE_ID = requiredSetting('WEEGLOO_SPACE_ID', 'the announcement Space id');
+const CONTENT_TYPE_ID = requiredSetting('WEEGLOO_CONTENT_TYPE_ID', 'the announcement ContentType id');
 
 let ann;
 try {
