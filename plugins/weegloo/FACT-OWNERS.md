@@ -23,6 +23,14 @@ repo means `tests/fixtures/routing/` (that is what caught the teardown order). *
 row that earns its keep**: every drift fixed here becomes a permanent regression guard, verified
 against the commit where the defect existed. Checked by `installer-cli/test/fact-owners.test.js`.
 
+**A `forbidden` pattern is only a guard if it has been watched failing.** One that matches nothing
+passes the suite perfectly, forever, and reads identically to a row that was deleted — which is
+what `scheduler-version-header` did for two phases, with the two halves of its pattern in the
+opposite order to the sentence it was written against. `tests/fact-owners-control.mjs` runs every
+pattern against a pinned commit whose corpus still holds that defect and fails the row if it stays
+silent. Run it whenever a row is added or a pattern is edited; it is not in CI because it builds
+git worktrees.
+
 ---
 
 ### teardown-order
@@ -47,7 +55,7 @@ against the commit where the defect existed. Checked by `installer-cli/test/fact
   - `skills/weegloo-resource-deletion/SKILL.md`
   - `skills/weegloo-scheduler/SKILL.md`
   - `skills/weegloo-script/SKILL.md`
-- **forbidden**: `x-weegloo-version[^.]{0,60}(any|every|all) resource` — the always-loaded rule once required the header on "any resource" while the Scheduler skill correctly said a Scheduler takes none. Present at `3809087`, fixed during Phase 1.
+- **forbidden**: `updating (any|every|all) resource[^.\n]{0,80}x-weegloo-version` — the always-loaded rule required the header when "updating any resource" while the Scheduler skill correctly said a Scheduler takes none. Still present on `develop` (`weegloo-global-rules.mdc:159`), fixed during Phase 1. The first pattern written here (`x-weegloo-version[^.]{0,60}(any|every|all) resource`) had the two halves in the opposite order to the real sentence and so never matched the defect — an inert row scores exactly like a deleted one, which is why every row is now run against the commit that holds its defect.
 - **why**: A header sent where it is not accepted, or omitted where it is required, fails at the call — but the agent debugs the payload rather than the header, because the rule told it the header was universal.
 
 ### accept-header-does-not-406
@@ -88,3 +96,77 @@ against the commit where the defect existed. Checked by `installer-cli/test/fact
   - `skills/weegloo-api-query-optimization/references/master-detail-and-media.md`
   - `skills/weegloo-default-locale/SKILL.md`
 - **why**: The 404 reads as "the Content is missing" rather than "the path is wrong", so the agent goes looking for data that is there. Five sites state it, including a `references/` file that a spine reader may never open.
+
+### put-is-full-replacement
+
+- **fact**: A `PUT` update is ALWAYS a full replacement on CMA and ACMA — a key left out is wiped on a 200. Partial edits go through `PATCH`.
+- **owner**: `rules/weegloo-api-endpoints.mdc`
+- **mentions**: `full replacement|FULL REPLACEMENT|Partial updates are not supported`
+  - `rules/weegloo-api-endpoints.mdc`
+  - `rules/weegloo-global-rules.mdc`
+  - `skills/weegloo-cma-json-patch/SKILL.md`
+  - `skills/weegloo-create-content-type/SKILL.md`
+  - `skills/weegloo-scheduler/SKILL.md`
+  - `skills/weegloo-script/SKILL.md`
+  - `skills/weegloo-service-login-client/references/native-apps.md`
+  - `skills/weegloo-space-access-token/SKILL.md`
+- **forbidden**: `PUT[^.\n]{0,140}([Pp]artial[^.\n]{0,60}contract|contract[^.\n]{0,60}[Pp]artial)` — the phrasing that was there: present in 2 file(s) at `c6397c1`, 0 after the fix. `tests/fact-owners-control.mjs` re-checks that it still fires on that commit — a pattern matching nothing passes the suite exactly like a correct one.
+- **why**: The wrong side was an ALWAYS-loaded rule, so it sat in every session beside the rule it contradicted — and it sent the agent to Swagger to decide, where the `required` arrays (`metadata` and `displayField` omitted) appear to grant exactly the licence it promised. Settled against the OpenAPI specs: 32/39 body-carrying CMA PUTs and 2/2 ACMA PUTs state "Partial updates are not supported"; none states the opposite.
+
+### acma-patch-content-only
+
+- **fact**: PATCH applies to ContentType, Content and Media on CMA, but on ACMA to Content only — ACMA Media has no update endpoint and ContentType is not an ACMA resource.
+- **owner**: `skills/weegloo-cma-json-patch/SKILL.md`
+- **mentions**: `PATCH[^\n]{0,80}ACMA|ACMA[^\n]{0,80}PATCH`
+  - `rules/weegloo-api-endpoints.mdc`
+  - `skills/weegloo-cma-json-patch/SKILL.md`
+- **forbidden**: `^(?![^\n]*\bCMA\b)[^\n]*\*\*ContentType\*\*, \*\*Content\*\* and \*\*Media\*\* support partial updates` — the phrasing that was there: present in 1 file(s) at `c6397c1`, 0 after the fix. `tests/fact-owners-control.mjs` re-checks that it still fires on that commit — a pattern matching nothing passes the suite exactly like a correct one.
+- **why**: The rule listed all three under a section headed "CMA / ACMA" with no plane qualifier, so an ACMA Media PATCH returns 404/405 — which this corpus separately teaches to read as a wrong path or a missing row, sending the agent to debug the URL instead of the plane.
+
+### locale-presence-scoped-by-required
+
+- **fact**: Create-time locale presence is scoped by the field's `required` flag, not by whether the field is populated: a required field needs every non-optional locale, a non-required one has no requirement.
+- **owner**: `rules/weegloo-default-locale.mdc`
+- **mentions**: `non-optional locale|locale-presence|WGL400006`
+  - `rules/weegloo-default-locale.mdc`
+  - `skills/weegloo-create-content-type/SKILL.md`
+  - `skills/weegloo-default-locale/SKILL.md`
+  - `skills/weegloo-script/SKILL.md`
+- **forbidden**: `default locale[^.]{0,60}(mandatory|required)[^.]{0,40}when[^.]{0,25}(the field is populated|you populate)` — the phrasing that was there: present in 1 file(s) at `c6397c1`, 0 after the fix. `tests/fact-owners-control.mjs` re-checks that it still fires on that commit — a pattern matching nothing passes the suite exactly like a correct one.
+- **why**: Both halves fail silently in opposite directions — "just the default" is rejected when a second non-optional locale exists, and a valid optional-field payload carrying only `ko-KR` is refused by the agent that believes the default is always mandatory.
+
+### read-fallback-is-opt-in
+
+- **fact**: A delivery read falls back only through the requested locale's own `fallbackCode` chain. There is no automatic backfill from the space default; with no `fallbackCode` the value comes back empty.
+- **owner**: `rules/weegloo-default-locale.mdc`
+- **mentions**: `fallbackCode|default-locale fallback`
+  - `rules/weegloo-default-locale.mdc`
+  - `skills/weegloo-create-content-type/SKILL.md`
+  - `skills/weegloo-default-locale/SKILL.md`
+  - `skills/weegloo-platform-integration/SKILL.md`
+  - `skills/weegloo-resource-deletion/SKILL.md`
+- **forbidden**: `(?:subject to|applies|applied|apply|relies on)[^.\n]{0,40}\bdefault[- ]locale fallback\b` — the phrasing that was there: present in 1 file(s) at `c6397c1`, 0 after the fix. `tests/fact-owners-control.mjs` re-checks that it still fires on that commit — a pattern matching nothing passes the suite exactly like a correct one.
+- **why**: `cma_CreateLocale` does not require `fallbackCode`, so omitting it is the frictionless default. The page then ships with blank fields on every non-default locale, with no status code and no log line — and the wrong copy told the agent that fallback could not be the cause.
+
+### media-file-url-shape
+
+- **fact**: A Media file URL is flat `fields.file.url` on a default delivery read (CDA/ACDA), and a per-locale bucket `fields.file.{locale}.url` on management (CMA/ACMA) or with `locale=*`.
+- **owner**: `skills/weegloo-default-locale/SKILL.md`
+- **mentions**: `fields\.file\.url|fields\.file\[locale\]|shape depends on the plane`
+  - `rules/weegloo-default-locale.mdc`
+  - `skills/weegloo-api-query-optimization/references/master-detail-and-media.md`
+  - `skills/weegloo-default-locale/SKILL.md`
+- **forbidden**: `file URL from[^\n]{0,40}fields\.file\.\{locale\}` — the phrasing that was there: present in 1 file(s) at `c6397c1`, 0 after the fix. `tests/fact-owners-control.mjs` re-checks that it still fires on that commit — a pattern matching nothing passes the suite exactly like a correct one.
+- **why**: Stated without its plane in the one file that owns the Refer→Media→URL pattern, it yields `undefined` on delivery — the page ships a broken img src and `undefined/style3` thumbnails, and the same file points onward at the Media lifecycle, which is the wrong trail.
+
+### script-writes-default-bucket
+
+- **fact**: A Content / Media write puts values in the space default-locale bucket for `localized: false` AND `localized: true` fields alike — a Script included; a required localized field additionally needs every other non-optional locale.
+- **owner**: `rules/weegloo-default-locale.mdc`
+- **mentions**: `default[- ]locale\*{0,2} bucket|fields\.text\.en-US`
+  - `rules/weegloo-default-locale.mdc`
+  - `skills/weegloo-create-content-type/SKILL.md`
+  - `skills/weegloo-default-locale/SKILL.md`
+  - `skills/weegloo-script/SKILL.md`
+- **forbidden**: `default[- ]locale\*{0,2} bucket[\s\S]{0,80}unless[\s\S]{0,40}localized: ?true` — the phrasing that was there: present in 1 file(s) at `c6397c1`, 0 after the fix. `tests/fact-owners-control.mjs` re-checks that it still fires on that commit — a pattern matching nothing passes the suite exactly like a correct one.
+- **why**: The skill carved out an exception for exactly the class where the default bucket is mandatory, and contradicted its own two cookbook examples. On a non-required field the create then SUCCEEDS and every delivery read returns empty.
