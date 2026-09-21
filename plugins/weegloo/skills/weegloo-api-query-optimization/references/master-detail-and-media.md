@@ -44,8 +44,11 @@ only as the anchor for the rendering rules below.) Two ways to get the real reso
 ### Rendering a referenced Media (image / file fields)
 
 - On the **detail** fetch, expand the reference (`?include=1`) — or follow up with a Media fetch —
-  and read the file URL from the **Media's** `fields.file.{locale}` per-locale bucket (default-locale
-  rules: **`weegloo-default-locale`**). Confirm the Media is deliverable first
+  and read the file URL from the **Media's** `fields.file`, whose **shape depends on the plane**: on a
+  **delivery** read (CDA / ACDA, default) it is **flat** — **`fields.file.url`**; on a **management**
+  read (CMA / ACMA), and on delivery with `locale=*`, it is a **per-locale bucket** —
+  **`fields.file.{locale}.url`**. Indexing `[locale]` on a default delivery read yields `undefined`
+  (**`weegloo-default-locale`**). Confirm the Media is deliverable first
   (**`weegloo-media-lifecycle`**).
 - **Do NOT assume the list response already carries usable image URLs.** List-level expansion is not
   guaranteed to resolve every Refer→Media into a deliverable URL, and pulling all rows' media up

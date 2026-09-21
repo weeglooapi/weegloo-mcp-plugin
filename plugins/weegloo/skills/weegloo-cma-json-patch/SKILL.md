@@ -1,6 +1,6 @@
 ---
 name: weegloo-cma-json-patch
-description: Weegloo CMA/ACMA updates - prefer HTTP PATCH with RFC 6902 JSON Patch over PUT for smaller payloads; PUT full or contract-based partial bodies when appropriate. Use when implementing or reasoning about document updates.
+description: Weegloo CMA/ACMA updates - prefer HTTP PATCH with RFC 6902 JSON Patch over PUT for smaller payloads; PUT is always a full replacement, never partial. Use when implementing or reasoning about document updates.
 ---
 
 # Weegloo CMA / ACMA - JSON Patch and document updates
@@ -27,11 +27,11 @@ description: Weegloo CMA/ACMA updates - prefer HTTP PATCH with RFC 6902 JSON Pat
   - **`path`** (and **`from`** where required) use **JSON Pointer** ([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901)).
 - Confirm the **`PATCH`** URL and any extra headers (e.g. version) per resource in **OpenAPI** (canonical API doc URLs live only in **`weegloo-api-endpoints`** - do not duplicate them here).
 
-## PUT - full document or partial by contract
+## PUT - always a full replacement
 
 - **`PUT`** remains valid for updates.
-- You may send the **full** resource value (typical “replace the representation” style).
-- Alternatively, **`PUT`** may accept a **partial** payload when the **API contract** for that endpoint allows it - send **only the parts you intend to change**, as documented in Swagger for that operation.
+- Send the **full** resource value — the whole representation, every time.
+- **`PUT` is never partial on Weegloo.** Every CMA / ACMA update operation states *"Partial updates are not supported"*: a key you omit is wiped, with a **200** and no warning — including keys Swagger leaves out of `required` (`metadata`, `displayField`). Send the full value, or use `PATCH`.
 - For **small or localized edits**, still **prefer `PATCH` + JSON Patch** (see **Prefer `PATCH` over `PUT`**) so the client sends **explicit operations** rather than a larger **`PUT`** body when **`PATCH`** can express the same change.
 
 ## Practical notes

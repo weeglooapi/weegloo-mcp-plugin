@@ -363,8 +363,9 @@ it. One Script does the whole thing.
 > 10 MiB `Http` cap and make the call throw. Prefer a provider mode that returns a **URL** (a tiny
 > JSON response) and hand that URL to the Media ingest with `encoding: "url"`.
 
-Write Content/Media fields under the **default locale** bucket (`fields.text.en-US`) unless the field
-is `localized: true` — `weegloo-default-locale`.
+Write Content/Media fields under the space **default-locale** bucket (`fields.text.en-US`) — for a
+`localized: false` field that is the only bucket there is, and a `localized: true` one still needs it
+on create, alongside every **other non-optional locale** the space defines — `weegloo-default-locale`.
 
 ## References
 

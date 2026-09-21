@@ -104,7 +104,7 @@ rules:
 
   - section: CMA / ACMA document updates (PATCH, PUT)
     items:
-      - **ContentType**, **Content** and **Media** support partial updates via **`PATCH`** with **RFC 6902 JSON Patch**, and those requests **must** send **`Content-Type: application/json-patch+json`**, not plain `application/json`. **`PUT`** takes the full body, or a partial one where the OpenAPI contract allows.
+      - **On CMA**, **ContentType**, **Content** and **Media** support partial updates via **`PATCH`** with **RFC 6902 JSON Patch**; **on ACMA only Content does** — ACMA **Media** is create/read/delete with **no update endpoint**, and **ContentType** is not an ACMA resource at all. Those `PATCH` requests **must** send **`Content-Type: application/json-patch+json`**, not plain `application/json`. **`PUT` is ALWAYS a FULL REPLACEMENT** — every CMA / ACMA update operation states *"Partial updates are not supported"*, so a key you leave out is wiped on a **200**, including keys Swagger omits from `required` (`metadata` on `UpdateContentDto`, `displayField` on `UpdateContentTypeDto`). Partial edits go through `PATCH`.
 
   - section: CMA Media list — filter by `mimeGroups` (logical asset type)
     items:
