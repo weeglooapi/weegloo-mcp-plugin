@@ -9,7 +9,7 @@ it does today**. That is a claim about behavior, so bytes cannot verify it: a by
 satisfied identically by "we deleted a duplicate" and by "we deleted a gate".
 
 This runner puts a real prompt in front of a real agent and asserts on what the agent
-**decides**. 20 fixtures / 61 asserts today, 13 Korean and 7 English — the corpus is written
+**decides**. 23 fixtures / 69 asserts today, 17 Korean and 6 English — the corpus is written
 in the languages users actually write in, because a routing trigger that only fires in
 English is a gate that does not fire.
 
