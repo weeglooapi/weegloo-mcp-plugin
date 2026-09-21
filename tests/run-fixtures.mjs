@@ -146,11 +146,26 @@ function corpusProvenance() {
     }
   } catch { /* the stamp is a convenience, never a requirement */ }
 
+  // WHICH ACCOUNT ANSWERED. The corpus is not the only thing that can differ between two
+  // scorecards: `claude -p` resolves its model and its rate limits from the organization its
+  // OAuth login is bound to, and that binding lives outside this repo. A run taken under a
+  // different org is a different INSTRUMENT, so a per-assert comparison across the two is only
+  // as trustworthy as that difference is small — which cannot be judged if it is not recorded.
+  // (Observed: the CLI kept a profile cached from hours earlier and kept answering as the old
+  // org long after the account had been switched.) Name only — no uuid, no email.
+  let agentOrg = null;
+  try {
+    const cfg = path.join(process.env.USERPROFILE || process.env.HOME || '', '.claude.json');
+    if (existsSync(cfg)) agentOrg = JSON.parse(readFileSync(cfg, 'utf-8'))?.oauthAccount?.organizationName ?? null;
+  } catch { /* provenance, never a requirement */ }
+
   return {
     gitRef: sh('git rev-parse --abbrev-ref HEAD'),
     gitSha: sh('git rev-parse --short HEAD'),
     gitDirty: sh('git status --porcelain') ? true : false,
     installedRef: installed?.ref ?? null,
+    agentOrg,
+    agentModel: process.env.ANTHROPIC_MODEL ?? null,
     installedVersion: installed?.version ?? null,
     ruleBytes: bytes('plugins/weegloo/rules', (n) => n.endsWith('.mdc')),
     skillBytes: bytes('plugins/weegloo/skills', (n) => n.endsWith('.md')),
