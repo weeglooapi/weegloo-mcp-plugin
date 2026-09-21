@@ -96,6 +96,16 @@ folds it back in.
    warning means the merged card describes no single corpus — re-run the whole suite.
 3. **A judge assert is stochastic.** A single failure is not a regression: the runner re-runs the
    fixture (`--confirm-retries`, default 4) and takes the majority, reporting a split as FLAKY.
+4. **Do not pipe the runner.** `run-fixtures.mjs … | tail -60` hands you `tail`'s exit status, so
+   the one signal the runner exists to produce — non-zero for "this cannot support a no-regression
+   claim" — is thrown away, and the shell reports success. Run it bare, or `set -o pipefail`. The
+   run of 2026-09-21 hit the account's session limit on **all 23** fixtures, measured nothing, and
+   came back exit 0 for exactly this reason; the prose verdict was right there in the output.
+5. **A session limit wipes a run silently-ish.** Every fixture fails with a 55-character reply
+   (`MIN_RESPONSE_CHARS` catches it as an ERROR, not a score — that guard works). Check the clock
+   against the reset time before starting; a full suite is 23 fixtures plus up to 4 confirm-retries
+   each. Delete the scorecard such a run writes — a file named `run.<name>.json` that measured
+   nothing will be read later as evidence that it did.
 
 ---
 
@@ -193,9 +203,12 @@ Codex needs `codex login` before its half of the probe can run.
 
 ## What is left
 
-1. **Re-run the fixtures against the drift fixes.** The six edits are content changes and nothing
-   content-shaped ships unmeasured (*How to measure*, above). They are corrections to always-loaded
-   rules, so a regression is unlikely but not excluded — the Phase 4 one was also "obviously safe".
+1. **Re-run the fixtures against the drift fixes — this is the one thing blocking the PR.**
+   Attempted 2026-09-21 and **measured nothing**: the account's session limit errored all 23
+   fixtures (traps 4 and 5 above). The six edits are content changes and nothing content-shaped
+   ships unmeasured (*How to measure*, above). They correct always-loaded rules, so a regression is
+   unlikely but not excluded — the Phase 4 one was also "obviously safe". The install was restored
+   to `develop` afterwards, so the branch must be installed again before the re-run.
 2. **Open the PR.** Target **`develop`** — never `latest`/`main`
    ([`.claude/rules/git-workflow.md`](.claude/rules/git-workflow.md)). 24 commits are pushed and
    unmerged.

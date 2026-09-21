@@ -41,18 +41,18 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /**
  * row id -> a ref whose corpus STILL HOLDS the defect.
  *
- * Every value here must be IMMUTABLE — a pinned sha, or `develop` because this branch never
- * commits there. Never `HEAD` or a branch name that this work advances: the ref would follow the
- * fix, the defect would vanish from under the control, and all it would report is INERT. That is
- * the same silent-success this file exists to catch, one level up.
+ * Every value must be a PINNED SHA — never `HEAD`, never a branch name. A branch follows the fix:
+ * the defect disappears from under the control and every row reads INERT, which is the same silent
+ * success this file exists to catch, one level up. That includes the integration branch — `develop`
+ * looks immutable from here only until this work merges into it, so it is written as the sha it
+ * resolves to today. The check below refuses anything that resolves to a branch tip.
  *
- * `develop` is the integration baseline this branch departs from, so it is the right ref for a
- * defect this branch fixed in a commit of its own; a `<sha>` / `<sha>^` for one this branch both
- * introduced and fixed, or one fixed in a working tree whose last commit was that sha.
+ * Pick the sha of a commit whose corpus still HOLDS the defect: `3809087` is develop's tip before
+ * this branch, and `900812e` / `c6397c1` are commits on it from before the respective fix.
  */
 const DEFECT_AT = {
-  'teardown-order': '1971888^',
-  'scheduler-version-header': 'develop',
+  'teardown-order': '900812e',
+  'scheduler-version-header': '3809087',
   'put-is-full-replacement': 'c6397c1',
   'acma-patch-content-only': 'c6397c1',
   'locale-presence-scoped-by-required': 'c6397c1',
@@ -112,13 +112,17 @@ const git = (...a) => execFileSync('git', a, { cwd: REPO, stdio: ['ignore', 'pip
 
 let failures = 0;
 try {
-  // A ref that moves with this work resolves to the FIXED corpus once the fix lands, and the
-  // control then reports INERT for a row that is perfectly sound. Refuse it up front rather than
-  // let it read as a finding.
-  const branch = git('rev-parse', '--abbrev-ref', 'HEAD').toString().trim();
+  // A ref that moves resolves to the FIXED corpus once the fix lands, and the control then reports
+  // INERT for a row that is perfectly sound. Refuse every non-sha up front rather than let it read
+  // as a finding — including `develop`, which stops being immutable the moment this work merges.
+  const heads = new Set(
+    git('for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes')
+      .toString().trim().split(/\r?\n/).filter(Boolean),
+  );
   for (const [id, ref] of Object.entries(DEFECT_AT)) {
-    if (ref === 'HEAD' || ref.replace(/\^+$/, '') === branch) {
-      throw new Error(`DEFECT_AT['${id}'] = '${ref}' moves with this branch — pin it to a sha`);
+    const bare = ref.replace(/[\^~]\d*$/, '');
+    if (ref === 'HEAD' || heads.has(bare)) {
+      throw new Error(`DEFECT_AT['${id}'] = '${ref}' follows a branch — pin it to a sha`);
     }
   }
 
