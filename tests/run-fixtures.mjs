@@ -34,6 +34,7 @@ import { spawn } from 'node:child_process';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { buildJudgePrompt, parseVerdict } from './judge.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -45,13 +46,27 @@ const FIXTURE_DIR = path.join(__dirname, 'fixtures', 'routing');
  */
 const MIN_RESPONSE_CHARS = 200;
 
-/** Appended to every fixture prompt so a run never mutates a real Weegloo Space. */
+/**
+ * Appended to every fixture prompt so a run never mutates a real Weegloo Space.
+ *
+ * The no-questions clause exists so a fixture gets a full plan to score instead of a one-line
+ * question back. It carries an EXCEPTION for irreversible actions, and that exception is not a
+ * convenience — without it this wrapper contradicts the rule it is trying to measure.
+ * `weegloo-resource-deletion` requires the agent to "confirm before deleting anything the user
+ * did not name"; a blanket "do not ask the user anything" makes the correct behavior
+ * unreachable, and the fixture then scores the model for obeying the harness. Measured: the
+ * space-teardown confirm assert flipped 2 of 5 runs on an UNCHANGED corpus, and reading the
+ * responses showed the model confirming in three separate places and still being graded NO.
+ * An instrument that punishes the behavior it is testing for cannot detect a regression in it.
+ */
 const PLAN_ONLY_SUFFIX = `
 
 ---
 (이 요청은 자동화된 회귀 테스트입니다. 실제로 리소스를 만들거나 수정하지 말고, MCP 도구도 호출하지 마세요.
 어떤 Weegloo 기능·API·역할·필드를 어떻게 쓸 것인지 **계획과 근거만** 구체적으로 적어주세요.
-Organization/Space 선택이나 추가 정보를 사용자에게 되묻지 말고, 필요하면 가정을 명시하고 계획을 끝까지 작성하세요.)`;
+Organization/Space 선택이나 추가 정보를 사용자에게 되묻지 말고, 필요하면 가정을 명시하고 계획을 끝까지 작성하세요.
+단, 삭제·파기처럼 **되돌릴 수 없는 동작에 대한 확인**은 이 제한의 예외입니다 — 그건 물어도 되고, 물어야 합니다.
+그 경우에도 계획 자체는 생략하지 말고 끝까지 작성하세요.)`;
 
 function parseArgs(argv) {
   const out = { only: null, out: null, compare: null, merge: null, verbose: false, concurrency: 4, agentCmd: null, dryRun: false, confirmRetries: 4 };
@@ -217,24 +232,13 @@ function runAgent(agentCmd, prompt, timeoutMs = 600_000) {
  * get worse"), so prose judgements are judged and only structural facts stay regex.
  */
 async function runJudge(agentCmd, response, question) {
-  const prompt = `You are grading one answer against one criterion. Reply with exactly one word: YES or NO.
-
-CRITERION: ${question}
-
-Judge only what the ANSWER below actually says. Warning against a practice, or explicitly
-ruling it out, is NOT doing or recommending it — that is the opposite, and must be graded as
-such. If the answer neither does nor recommends the thing in the criterion, the criterion is
-not met.
-
---- ANSWER BEGINS ---
-${response}
---- ANSWER ENDS ---
-
-One word. YES or NO.`;
-  const raw = (await runAgent(agentCmd, prompt, 300_000)).trim();
-  const m = raw.toUpperCase().match(/\b(YES|NO)\b/);
-  if (!m) throw new Error(`judge returned no verdict: ${JSON.stringify(raw.slice(0, 160))}`);
-  return m[1] === 'YES';
+  const raw = (await runAgent(agentCmd, buildJudgePrompt(response, question), 300_000)).trim();
+  const verdict = parseVerdict(raw);
+  // No parseable verdict is a MISSING measurement, not a NO. Reading it as NO would invent a
+  // failing assert out of a judge that rambled, which is the same false-signal bug as scoring a
+  // truncated response — the caller turns this into an errored fixture instead.
+  if (verdict === null) throw new Error(`judge returned no verdict: ${JSON.stringify(raw.slice(0, 160))}`);
+  return verdict;
 }
 
 async function evaluate(fixture, response, agentCmd) {
