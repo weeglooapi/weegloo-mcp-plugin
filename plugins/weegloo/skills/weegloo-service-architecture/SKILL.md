@@ -11,32 +11,13 @@ description: Picks the right Weegloo API + login + role combination for a produc
 - Reviewing an existing app to confirm it uses the **right combination** of APIs, tokens, and roles for its access model.
 - Disambiguating **CDA vs ACDA**, **CMA vs ACMA**, and when **ServiceLogin** is - or is not - required.
 
-Base URLs, Accept headers, and OpenAPI links live in **`weegloo-api-endpoints`** (do not duplicate URLs here).
+Base URLs, Accept header, and OpenAPI links live in **`weegloo-api-endpoints`** (do not duplicate URLs here).
 
-## Two login models (read first)
+## Two identities decide every row below
 
-Every API choice below depends on **which of the two Weegloo identities** is calling.
+**Weegloo User** (platform account — Space owner or **invited** member; PAT or console FE login popup) drives **CMA / Upload / CDA**. **Service User** (an end-user of the product, **open sign-up** through ServiceLogin) drives **ACMA / ACDA / Upload**. Tokens never cross; **Upload** is the one shared surface, and the Media create that follows stays on the plane matching the uploader (CMA vs ACMA).
 
-- **Weegloo User** — a Weegloo platform account (self sign-up); works a Space as its **owner** or an **invited** member (joining someone else's Space is invite-only). Token (PAT or console FE login) hits **CMA / Upload / CDA**. Details: **`weegloo-user-login`** skill.
-- **Service User** — an end-user of the product the Space ships; **anyone may sign up** through a ServiceLogin OAuth provider. Token (issued via `auth.weegloo.com`) hits **ACMA / ACDA**, plus **Upload** for member-contributed media (followed by **ACMA** Media create — never CMA Media). Details: **`weegloo-service-login`** skill.
-
-These identity systems are **completely separate**: a Service User is **not** a Weegloo platform account and cannot reach **CMA / CDA**; a Weegloo User is **not** a Service User of the product and is not the right identity for end-user features. **Upload** is the one shared surface — both Bearers are accepted there; the follow-up Media create stays on the matching plane (CMA for Weegloo Users, ACMA for Service Users).
-
-## Mental model (one sentence per API)
-
-- **CMA** — full CRUD as a **Weegloo User**. Bearer from console FE login (or a Personal Access Token).
-- **Upload** — file uploads. Accepts both a **Weegloo User** Bearer (followed by **CMA** Media create) and a **Service User** Bearer (followed by **ACMA** Media create). Same upload endpoint, two follow-up planes that match the caller's identity. **REST mechanics (endpoints, Upload id → Media/WebHosting create payloads) live in `weegloo-upload-api`** — invoke it when implementing a product's upload feature. Do not confuse it with the `weegloo-upload` MCP, which is only for the agent uploading local files.
-- **CDA** — public, cache-friendly **reads** of **published** resources. Production sites use a **DeliveryAccessToken** bound to a least-privilege `SpaceRole`; a Weegloo User Bearer also authorizes CDA but is over-privileged for browser distribution.
-- **ACMA** — CRUD as a **Service User**; scoped to **the member's own** resources. Requires a **Bearer Token from ServiceLogin**.
-- **ACDA** — **reads** for a Service User; scoped to **resources assigned to that member**, customizable per-member via `ServiceUser.roleOverride`. Requires a **Bearer Token from ServiceLogin**.
-
-Detailed semantics:
-
-- **Weegloo User login (PAT + console FE login popup):** **`weegloo-user-login`** skill.
-- **ServiceLogin / ServiceUser / ServiceUserRole:** **`weegloo-service-login`** skill.
-- **Delivery token provisioning:** **`weegloo-delivery-access-token`** skill.
-- **Space-scoped write token (role-governed):** **`weegloo-space-access-token`** skill.
-- **Publish model (write → publish → readable on CDA / ACDA):** **`weegloo-cda-publish`** skill.
+The invite-only nature of Space membership is the architectural consequence: **product end-users are never Weegloo Users**, so anything with open sign-up needs ServiceLogin. Identity mechanics and token scopes are already loaded — `weegloo-api-endpoints` ("Two login models", "SpaceRole & ServiceUserRole", "ACMA — member CRUD scope"). This skill decides only **which plane each path of the product uses**.
 
 ## Recipes by service type
 
@@ -51,8 +32,6 @@ Pick the row that matches the product. Each recipe lists the **client-side** API
 - **Writes:** done in the **Weegloo console** by the team — **no** client-side write path.
 - **ServiceLogin:** **not required**.
 
-Pitfalls: don't bind the token to **Administrator** or any write-capable role - see **`weegloo-delivery-access-token`**.
-
 ### 2. Public service with an admin editing page
 
 > "Public blog readable to anyone; the team logs in to a custom admin UI on the same domain (or a sibling) to publish posts."
@@ -62,7 +41,7 @@ Pitfalls: don't bind the token to **Administrator** or any write-capable role - 
 - **ServiceLogin:** **not required** — admins are **Weegloo Users** on this Space, not Service Users.
 - **Roles:**
   - **`SpaceRole`** for the DeliveryAccessToken (read-only, scoped to the published `ContentType`s).
-  - The admin's effective rights come from their **Space membership** (per **`weegloo-global-rules`** / **`weegloo-user-login`** Space-membership check).
+  - The admin's effective rights come from their **Space membership** (gate it with the `/me/space-memberships` check in **`weegloo-user-login`**).
 
 ### 3. Members-only **read** service
 
@@ -84,8 +63,7 @@ Pitfalls: don't bind the token to **Administrator** or any write-capable role - 
 - **Member writes:** **ACMA** - a `ServiceUser` is scoped by the effective `ServiceUserRole` and nothing else, so the default role needs **`createdBy :self`** to keep members on their own rows. Promote moderators with a role that omits that filter, attached via **`ServiceUser.roleOverride`**. See **`weegloo-service-login`**.
 - **Member media uploads:** **Upload** with the ServiceLogin Bearer, then **ACMA** Media create with the same Bearer (the Media is owned by that ServiceUser). Do **not** route member media through CMA Media — that is Weegloo-User-only.
 - **Member reads:** **ACDA** for resources scoped to the member.
-- **Mixed-visibility resources:**
-  - For content that **everyone** (members and non-members) may read, expose it via **CDA** with a **DeliveryAccessToken** - same constraints as recipe 1.
+- **Mixed-visibility resources:** content that **everyone** (members and non-members) may read is exposed via **CDA** with a **DeliveryAccessToken** - same constraints as recipe 1.
 - **Required role configuration:**
   - **`SpaceRole`** for the **DeliveryAccessToken** (read-only, scoped) - for any CDA path.
   - **`ServiceUserRole`** for the default member, plus overrides for tiered/moderator members - for ACMA / ACDA.
@@ -93,7 +71,6 @@ Pitfalls: don't bind the token to **Administrator** or any write-capable role - 
   - **Author:** set **`publishWithAuthor: true`** on any member-generated `ContentType` whose author you will **display or filter by** (posts, comments, reviews, profiles) so `sys.createdBy` is delivered (`include=1` for the byline); do **not** add a manual author field. `false` by default — set it before members post. Details: **`weegloo-create-content-type`** → *`publishWithAuthor`*.
   - **Relationships:** model reply → parent and comment → post as **`Refer`** fields (self-reference for reply chains), not id strings. Normalize by default; see **`weegloo-create-content-type`**.
   - **Read + render:** ACDA returns the member's own/assigned posts; CDA serves any publicly readable ones. With `publishWithAuthor`, both carry `createdBy` for rendering the author.
-- **Anti-pattern:** do **not** route member writes through CMA from the browser; CMA writes from clients require a Weegloo **console** session, not a member token.
 
 ### 5. Composite / multi-tier service
 
@@ -105,7 +82,7 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 - **Service User reads (private/personal content):** **ACDA** with **ServiceLogin** Bearer Token.
 - **Service User writes (their own resources):** **ACMA** with the same ServiceLogin Bearer Token.
 - **Weegloo User / staff editing (any resource in the Space):** **Weegloo User login** → **CMA** / **Upload** (**`weegloo-user-login`**).
-- **Owner / admin dashboard reading or editing *all* members' data** (e.g. a salon owner's full booking schedule, an ops console): this is **cross-member** access → **Weegloo User login → CMA** (**`weegloo-user-login`**), built as an **in-app admin UI by default**. It is **not** a public **CDA** read (that would leak every member's data to anyone holding the browser token) and **not** **ACDA** (which is per-member). A `ServiceUserRole` that omits `createdBy :self` could read across members on ACMA, but an owner / ops surface belongs on CMA behind a Weegloo User — keep the member app's role scoped instead. Do not implement the owner view as a client-side role-switch in the member app.
+- **Owner / admin dashboard reading or editing *all* members' data** (e.g. a salon owner's full booking schedule, an ops console): this is **cross-member** access → **Weegloo User login → CMA**, built as an **in-app admin UI by default** — see checklist step 2 for the full verdict and the native-app exception.
 - **Role budget (must be configured):**
   - **`SpaceRole`** (least-privilege) for the **DeliveryAccessToken** used by CDA.
   - **`ServiceUserRole`** (least-privilege) for app-managed members used by ACMA / ACDA, with per-member overrides as needed.
@@ -131,49 +108,43 @@ Combine recipes - every path uses the API that matches the **caller's identity**
 ## Anti-patterns to refuse
 
 - **Calling CMA from a browser that does not have a Weegloo User session.** A Service User's ServiceLogin Bearer Token does **not** authorize CMA — use ACMA. The Weegloo User login flow for static admin UIs is **`weegloo-user-login`**.
-- **Putting a Personal Access Token in client-side code.** PATs are Weegloo User credentials meant for servers, CI, and developer scripts. For browser admin UIs, use the console FE login popup (Mechanism B in **`weegloo-user-login`**).
-- **Exposing a broad-role `SpaceAccessToken` in a public client.** A SpaceAccessToken embedded in a browser is only as safe as its bound role — fine with a **narrowly-scoped** role (e.g. anonymous create-only), but **never** with Administrator or a broad write role. If the client only **reads**, use a read-only **`DeliveryAccessToken`** instead. See **`weegloo-space-access-token`**.
-- **Reusing one DeliveryAccessToken for member-private reads.** CDA tokens are public; never bind them to anything more than the least-privilege public read scope. Use **ACDA** for per-member content.
-- **Granting Administrator (or any broad write) on a CDA DeliveryAccessToken** — strictly forbidden per **`weegloo-delivery-access-token`**.
-- **Onboarding product end-users as Weegloo Space members.** Working *your* Space as a Weegloo User means owning it or being **invited** to it — so making every product user a member would mean inviting each one. End-user sign-up belongs to **ServiceLogin**. If you find yourself inviting every product user to the Space, you are using the wrong identity model.
 - **Routing Service User writes through CMA + Weegloo User login.** That makes every writing member a Weegloo platform account on the Space — the wrong identity model. Use ACMA via ServiceLogin. (Member-contributed media is the same story: **Upload → ACMA** Media create with the ServiceLogin Bearer, never CMA Media.)
+- **Onboarding product end-users as Weegloo Space members.** Working *your* Space as a Weegloo User means owning it or being **invited** to it — so making every product user a member would mean inviting each one. End-user sign-up belongs to **ServiceLogin**. If you find yourself inviting every product user to the Space, you are using the wrong identity model.
+- **Reusing one DeliveryAccessToken for member-private reads.** CDA tokens are public; never bind them to anything more than the least-privilege public read scope. Use **ACDA** for per-member content.
+- **Exposing a member's private data on a public CDA path** because it was easier than wiring ACDA — a browser-held DeliveryAccessToken shows every row it can read to everyone.
 - **Treating a moderator role as Weegloo-admin.** A `ServiceUserRole` reaches Content / Media on ACMA and ACDA only. It never lets the member manage the Space itself.
-- **Leaving `createdBy :self` off the default role.** That silently lets every member edit and delete every other member's rows. Scope the default role; widen only through `roleOverride`.
-- **Putting work on Weegloo that the client can do.** A Script that only sums, sorts, groups or formats data the caller already holds spends the Organization's monthly execution allowance for nothing; a `summary`/`stats` Content rewritten on every change is a second source of truth. Equally wrong in the other direction: pulling a whole collection to the client so it can filter locally. Server narrows, client derives — **`weegloo-minimal-load`**.
+- **Implementing the owner/admin view as a client-side role-switch inside the member app.** The member app's own role stays scoped; the cross-member surface is a separate Weegloo-User path (checklist step 2).
 
 ## LLM checklist
 
 When planning an architecture, answer these in order:
 
 1. **Anonymous read?** → CDA + DeliveryAccessToken with a least-privilege `SpaceRole`.
-2. **Does the product have an owner / admin / staff surface (dashboard, settings, moderation, back-office, or any screen that reads/edits *all* members' data)?** → default to an **in-app admin UI**: Weegloo User login (console FE popup) → CMA / Upload. See **`weegloo-user-login`**. This is the default for any admin/owner surface — **do not silently drop it to "the team uses the Weegloo Console,"** and do **not** expose it as a public CDA read or a client-side role-switch. Console-only is an explicit alternative the user must request, not a default. **This assumes a browser admin surface** — Weegloo User login is browser-only (**`weegloo-user-login`**), so a native Android / iOS admin app cannot use it: either keep that surface on the web, or model the operators as Service Users on a wider `ServiceUserRole` reached through **`ServiceUser.roleOverride`**.
+2. **Does the product have an owner / admin / staff surface (dashboard, settings, moderation, back-office, or any screen that reads/edits *all* members' data)?** → default to an **in-app admin UI**: Weegloo User login (console FE popup) → CMA / Upload. See **`weegloo-user-login`**. This is the default for any admin/owner surface — **do not silently drop it to "the team uses the Weegloo Console,"** and do **not** expose it as a public CDA read (that leaks every member's data to anyone holding the browser token), as ACDA (which is per-member), or as a client-side role-switch. Console-only is an explicit alternative the user must request, not a default. A `ServiceUserRole` without `createdBy :self` *could* read across members on ACMA, but an owner / ops surface belongs on CMA behind a Weegloo User. **This assumes a browser admin surface** — Weegloo User login is browser-only (**`weegloo-user-login`**), so a native Android / iOS admin app cannot use it: either keep that surface on the web, or model the operators as Service Users on a wider `ServiceUserRole` reached through **`ServiceUser.roleOverride`**.
 3. **Per-end-user accounts in the product itself (open sign-up)?** → enable **ServiceLogin**, define `ServiceUserRole`(s), set `ServiceLogin.sys.defaultRole`. See **`weegloo-service-login`**.
 4. **Service User writes?** → ACMA with Bearer Token. Give the default role **`createdBy :self`**; moderators get a role without it through `roleOverride`.
 5. **Service User reads of personal/assigned content?** → ACDA with the same Bearer Token.
 6. **Service User uploads media (avatar, attachment, etc.)?** → **Upload** with the ServiceLogin Bearer, then **ACMA** Media create with the same Bearer. Never route member media through CMA.
-7. **For each screen: what is the smallest read that answers it, and where does the computation belong?** Scope and filter server-side, project with `select`, page on demand — then derive totals, sorting, grouping and formatting on the **client**. Keep on Weegloo only what needs its authority (secrets, authorization and amount/signature verification, atomic or concurrency-safe writes, privilege delegation, queries over data the client must not hold). See **`weegloo-minimal-load`**.
+7. **For each screen: what is the smallest read that answers it, and where does the computation belong?** Apply **`weegloo-minimal-load`** (already loaded): narrow server-side, derive on the client, keep only what needs Weegloo's authority on Weegloo.
 
 If the product covers more than one row, ship all matching paths - they coexist (recipe 5).
 
 ## After the architecture — model the content (do these next)
 
-Choosing the API / login / role combination is only step 1. **Before** writing any code, payloads, or asking the user to decide content-shape questions, invoke the content-modeling skills in order — do **not** design ContentTypes or Content from memory or from the rule summaries:
+Choosing the API / login / role combination is only step 1. **Before** writing code, payloads, or asking the user content-shape questions, walk this chain in order — never design ContentTypes from memory:
 
-1. **`weegloo-create-content-type`** — define each `ContentType`'s fields, `localized` flags, **ShortText / LongText / RichText** choice (search semantics drive this), validations, `publishWithAuthor`, and `Refer` relationships. A field-type question (e.g. "store the body as LongText or RichText?") is **answered here first**, then only the genuine product trade-off goes to the user.
-2. **`weegloo-default-locale`** — whenever any field is multi-locale: per-locale bucket rules, read fallback, and the mandatory default-locale value on every Content create.
-3. **`weegloo-delivery-access-token`** — provision the least-privilege DeliveryAccessToken for any CDA path (never Administrator / first list item).
+1. **`weegloo-create-content-type`** — fields, `localized` flags, ShortText / LongText / RichText, validations, `publishWithAuthor`, `Refer`. A field-type question is answered there first; only the genuine product trade-off goes to the user.
+2. **`weegloo-default-locale`** — whenever any field is multi-locale.
+3. **`weegloo-delivery-access-token`** — provision the least-privilege DeliveryAccessToken for any CDA path.
 
-This chain is the intended path: pick the architecture here, then walk skills 1–3 before implementation.
+Plus **`weegloo-service-login`** (+ **`weegloo-service-login-client`** for the OAuth wiring) whenever recipe 3, 4 or 5 put ServiceLogin in the plan.
 
 ## Related
 
-- **`weegloo-api-endpoints`** — base URLs, Accept header, vendor JSON, OpenAPI links, ACMA/ACDA ownership invariants.
-- **`weegloo-minimal-load`** — rule: fetch the minimum, compute on the client, and what must stay server-side.
-- **`weegloo-upload-api`** — Upload REST API → Media / WebHosting create (the two-step file-upload flow for product code), and the Upload-API-vs-`weegloo-upload`-MCP distinction.
-- **`weegloo-user-login`** — Weegloo User login (PAT + console FE popup) for CMA / Upload / CDA. The admin-side identity model.
-- **`weegloo-service-login`** — ServiceLogin / ServiceUser / ServiceUserRole mechanics and Bearer Token scope. The end-user identity model.
-- **`weegloo-service-login-client`** — OAuth wire protocol on `auth.weegloo.com` and the official browser SDK for ServiceLogin.
-- **`weegloo-delivery-access-token`** — least-privilege DeliveryAccessToken creation for CDA.
-- **`weegloo-space-access-token`** — Space-scoped read+write token whose power is set by a bound `SpaceRole`.
-- **`weegloo-space-role`** — SpaceRole / ServiceUserRole permission filters (`createdBy`, `:self`).
-- **`weegloo-cda-publish`** — publish model that gates what CDA / ACDA actually return.
+- **`weegloo-api-endpoints`** — base URLs, Accept header, ACMA/ACDA ownership invariants.
+- **`weegloo-user-login`** — the admin-side identity: PAT + console FE popup for CMA / Upload / CDA.
+- **`weegloo-service-login`** / **`weegloo-service-login-client`** — the end-user identity and its OAuth flow.
+- **`weegloo-space-role`** — role filters (`createdBy`, `:self`, `self`) behind every token above.
+- **`weegloo-space-access-token`** — Space-scoped read+write token whose power is its bound `SpaceRole`.
+- **`weegloo-upload-api`** — Upload REST → Media / WebHosting create, for product code.
+- **`weegloo-cda-publish`** — the publish model that gates what CDA / ACDA actually return.

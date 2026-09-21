@@ -65,7 +65,7 @@ Then summarize it inline, with the real `{spaceId}` already filled into the redi
    *not* pick the "Android" or "iOS" type. Weegloo's redirect URI is `https://auth.weegloo.com/…` (a
    web URL), so from Google's side the OAuth client is always a web app — a native app receives its
    token through its own registered deep link, not a Google native client (see
-   **`weegloo-service-login-client`** → *Native apps (Android / iOS)*).
+   **`weegloo-service-login-client`**, which routes on to its native-app page).
 4. Under **Authorized redirect URIs**, **Add URI** and paste **exactly** the redirect URI above (with
    the real `{spaceId}`). **No "Authorized JavaScript origins" are needed** — the browser navigates to
    `auth.weegloo.com`, never to Google directly.

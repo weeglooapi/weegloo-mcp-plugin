@@ -9,9 +9,15 @@ description: SpaceRole and ServiceUserRole permission rules — scope ContentTyp
 
 - Creating or updating a **`SpaceRole`** (`cma_CreateSpaceRole`, `cma_UpdateSpaceRole`) for **Weegloo Users** (CMA / CDA / `DeliveryAccessToken`).
 - Creating or updating a **`ServiceUserRole`** (`cma_CreateServiceUserRole`, …) for **Service Users** (ACMA / ACDA).
-- Scoping permissions so a caller may only see or change **resources they created** (private notes, drafts, per-member data).
-- **Script `Execute`** for a caller (usually `Allow: []`), or **async external-API job** ContentTypes — open **Create**, **Read / Edit / Delete** with **`:self`** only (**`weegloo-script`**).
+- Scoping permissions so a caller may only see or change **resources they created** (private notes, drafts, per-member data) — the main path, below.
 - Pinning access to **one specific creator** by user id (audit, delegation, or a fixed service account).
+
+**Two branches live in `references/` — read the one your task is on:**
+
+| Read | When |
+|---|---|
+| **`references/settings-axis.md`** | The role must **configure the Space** — Webhook, Locale, ServiceLogin, WebHosting, Tag, token issuance, SpaceMembership, EmailAccount, app install, usage monitoring, Scheduler. It carries the complete `SETTING_*` action-name table. |
+| **`references/script-permissions.md`** | The role touches **Script** — granting `Execute` (any / own / one specific), the `self` `Refer` filter's JSON shape, the Scheduler owner's grant, or the async external-API **job** ContentType recipe. |
 
 Canonical API reference (overview + structure): **`weegloo-api-endpoints`** rule → *Weegloo documentation* → **SpaceRole**.
 
@@ -48,38 +54,30 @@ alias of `Edit`), `Delete`, `Publish`, `Unpublish`, `Archive`, `Unarchive`, `All
 | `contentType` | Limit to one **ContentType** (`Refer` with `targetType: "ContentType"`) |
 | `createdBy` | Limit to resources **created by** a given user (`:self` for the caller) |
 | `tag` | Limit by **Tag** |
-| `self` | Limit to **one specific resource by `Refer`** — pins the rule to exactly that entity (`Refer<Entity>`), e.g. one specific **Script**. **Valid only on the `contentType` and `script` maps** (rejected on `content` / `media` at save with `WGL400020`). |
+| `self` | Limit to **one specific resource** by direct `Refer` (`sys.id` + `sys.targetType`) — "this exact entity", regardless of who created it. **Valid only on the `contentType` and `script` maps** (rejected on `content` / `media` at save with `WGL400020`). JSON shape and uses: **`references/script-permissions.md`**. |
 
 An **empty `Allow` list `[]`** means the action applies to **all** resources of that kind (no filter). ⚠️ An **empty `Deny` list `[]` is NOT the mirror image — it denies *everything* of that kind** (blocks the action entirely), so `[]` does not universally mean "no filter."
 
 > **⚠️ `self` (filter) is NOT `:self` (the `createdBy` sentinel) — don't confuse them.**
-> `createdBy.sys.id: ":self"` = "resources created by **whoever is calling**". The **`self`** filter
-> is a **direct `Refer` to one specific resource** (by `sys.id` + `targetType`) — "**this exact
-> entity**", regardless of who created it. See *`self` — pin to one specific resource* below.
+> `createdBy.sys.id: ":self"` = "resources created by **whoever is calling**" (dynamic, by author).
+> The **`self`** filter is a **direct `Refer` to one named resource** (fixed, by id) — independent of
+> author. Same word, different mechanism; picking the wrong one saves a role that silently scopes
+> something else.
 
 > **On the `script` map, `createdBy` and `self` are the meaningful filters** — `contentType` and
 > `tag` do **not** apply to Scripts. Empty `Allow: []` = **all** Scripts; `createdBy :self` = only
-> Scripts the **caller created**; **`self`** = **one specific Script** (its `Refer`), e.g. "may
-> `Execute` **exactly this** Script and no other."
+> Scripts the **caller created**; **`self`** = **one specific Script**. Recipes:
+> **`references/script-permissions.md`**.
 
 Combine filters in one rule object when needed — e.g. restrict **Read** on **Content** of a given **ContentType** **and** only when **created by** the caller.
 
----
+**The `settings` axis is a fourth field, not a map.** A **`SpaceRole`** also carries **`settings`**: a
+plain array of `SETTING_*` action names — **no `Allow`/`Deny`, no filters** — gating everything that
+*configures* the Space. A role with full Content rights still cannot touch it, and a `403` there is
+**never** fixed by widening `content` / `media`.
 
-## `settings` — the Space-configuration axis (a flat list, not a map)
-
-A **`SpaceRole`** carries one more field beside those maps: **`settings`**. It is a **plain array of
-action names** — **no `Allow`/`Deny`, no filter rules.** `contentType` / `createdBy` / `tag` / `self`
-do **not** apply. Listing an action grants it; omitting it withholds it.
-
-```jsonc
-{ "name": "editor",
-  "content":  { "…": { "Allow": [ … ] } },     // maps, with filters
-  "settings": [ "SETTING_WEBHOOK", "SETTING_EMAIL_ACCOUNT" ] }   // flat list
-```
-
-**This is what gates every "configure the Space" resource** — the things a role with full Content
-permissions still cannot touch:
+**The complete set — `settings` accepts these names only; anything else is rejected at save.**
+Four sibling skills send readers here for an exact name, so it stays in the spine:
 
 | Action | Gates |
 |---|---|
@@ -94,33 +92,12 @@ permissions still cannot touch:
 | `SETTING_ROLE` | **SpaceRole** |
 | `SETTING_WEB_HOSTING` | **WebHosting**, **CustomDomain** |
 | `SETTING_SERVICE_LOGIN` | **ServiceLogin**, **ServiceUser**, **ServiceUserRole** |
-| `SETTING_EMAIL_ACCOUNT` | **EmailAccount** (the SMTP sender — `weegloo-send-email`) |
+| `SETTING_EMAIL_ACCOUNT` | **EmailAccount** (the SMTP sender) |
 | `SETTING_MONITORING` | **usage & metrics** — Space monthly reports, network / storage usage |
-| `SETTING_SCHEDULER` | **Scheduler** (+ its run history) — the cron entries that run a Script (`weegloo-scheduler`) |
-| `SETTING_ALL` | all of the above — **avoid**; grant only the specific actions the caller needs |
+| `SETTING_SCHEDULER` | **Scheduler** (+ its run history) |
+| `SETTING_ALL` | all of the above — **avoid**; grant only what the caller needs |
 
-That table is the complete set. `settings` accepts these names only — anything else is rejected at save.
-
-**Two traps:**
-
-- **A settings action is not a Content permission.** A `403` on creating a Webhook or an EmailAccount
-  needs the **settings** action added — widening `content` / `media` will never fix it.
-  - ⚠️ **`SETTING_SCHEDULER` alone is not enough to create a Scheduler.** That endpoint checks a
-    **second** grant on the same role: **`script`** → **`Execute`** covering the Script the Scheduler
-    will run (scope it with the `self` filter below). And it is not a create-time formality — the
-    Scheduler's **creator** must keep that Execute grant, because it is re-checked before every run and
-    a Scheduler whose creator has lost it is **deactivated**. So narrowing a role's `script` map can
-    silently stop the Schedulers its members own — see **`weegloo-scheduler`**.
-- **A settings action is necessary but not sufficient — the *token type* is a second gate.** The whole
-  `settings` axis is reachable **only by a console login session or a Personal Access Token**. Every
-  other Weegloo credential is refused on **every** row above, no matter what the role says:
-  a **`SpaceAccessToken`** (confined to the Space-**data** plane), a **`DeliveryAccessToken`**
-  (read-only CDA), a **Space-scoped console token** (issued when the login popup runs on a
-  WebHosting origin), and a **`ServiceUser`** token (ACMA/ACDA — Space settings always evaluate to
-  `false` for it). So putting `SETTING_WEBHOOK` on a role bound to a `SpaceAccessToken` does **not**
-  make webhooks manageable by that token — it changes nothing. Grant `settings` on the roles held by
-  **people** (Space members) and by PATs; scope SpaceAccessToken roles with the `content` / `media` /
-  `contentType` / `script` maps instead. See **`weegloo-space-access-token`**.
+Traps, the token gate and worked settings roles: **`references/settings-axis.md`**.
 
 ---
 
@@ -177,43 +154,6 @@ Use the reserved value **`:self`** in **`createdBy.sys.id`**:
 
 ---
 
-## `self` — pin a rule to one specific resource (`Refer`)
-
-Separate from **`createdBy`**, the **`self`** filter scopes a rule to **exactly one named resource**,
-by direct reference — regardless of who created it. Its value is a **`Refer`** to that entity
-(`Refer<Entity>`): set `sys.id` to the resource's id and `sys.targetType` to its type.
-
-```json
-"self": {
-  "sys": {
-    "type": "Refer",
-    "id": "<resourceId>",
-    "targetType": "Script"
-  }
-}
-```
-
-- **Primary use — Script.** On the `script` map, `self` pins the action to **one specific Script**.
-  e.g. `script.Execute.Allow = [ { "self": { "sys": { "id": "<scriptId>", "type": "Refer", "targetType": "Script" } } } ]`
-  lets the caller **`Execute` that one Script and no other** — the least-privilege way to expose a
-  single backend endpoint to a group of users without granting "execute any Script."
-- **On the `contentType` map — pin to one ContentType.** To scope a `contentType`-map action (e.g.
-  `Read`/`Edit` on ContentType definitions) to a **single** ContentType, use `self` (a `Refer` with
-  `targetType: "ContentType"`). On the `contentType` map the **`contentType` *filter* is rejected** —
-  `self` is the way to narrow it to one type.
-- **Contrast with `createdBy`:** `createdBy :self` = "any resource **I created**" (dynamic, by
-  author); `self` = "**this one resource**" (fixed, by id) — independent of author.
-- **Contrast with `contentType`** (on Content): `contentType` scopes to a whole **type**; `self`
-  scopes to a **single instance**.
-- **Valid only on the `contentType` and `script` maps** — using `self` on `content` or `media` is
-  rejected at save (`WGL400020`). On `script` it is one of the two meaningful filters (with `createdBy`);
-  on `contentType` it pins the rule to one specific ContentType.
-
-> Reminder: **`self`** (this filter, a `Refer` to an entity) ≠ **`:self`** (the reserved
-> `createdBy.sys.id` value meaning the current caller). Same word, different mechanism.
-
----
-
 ## Recipe — per-user private Content (Weegloo User)
 
 **Need:** Each console/API user may **read (and optionally edit)** only **their own** entries of a given **ContentType** — e.g. private notes.
@@ -251,73 +191,9 @@ Example shape (illustrative — add other actions/maps as required):
 }
 ```
 
-For **`Create`**, use a **contentType-only** rule (no **`createdBy`**) when anyone permitted by the role may add new rows — see **Webhook job** recipe below.
-
----
-
-## Recipe — async external-API job Content (Script-written)
-
-When a **ContentType** carries async **request** + **response** for an external API (written by a
-**`weegloo-script`**):
-
-| Action | `createdBy` filter |
-|--------|-------------------|
-| **`Create`** | **Omit** — allow new job rows for the job **ContentType** |
-| **`Read`**, **`Edit`**, **`Delete`**, … | **`":self"`** + job **ContentType** `Refer` |
-
-End users submit jobs (**Create**); they may only **read / change / delete their own** job Content.
-A **Script** (running with its author's delegated authority) writes **`response`** platform-side
-after the external API succeeds — the user's own role never needs `Edit` on the `response` field, so
-they cannot forge a completed job.
-
----
-
-## Recipe — Script `Execute` (let a caller run a Script)
-
-Grant the caller the right to call a Script's `/execute`, without letting them author Scripts.
-
-- On the caller's role (**`ServiceUserRole`** for ServiceLogin → ACMA execute; **`SpaceRole`** for
-  Weegloo User / `DeliveryAccessToken`), add a **`script`** map granting **`Execute`**. Scope it:
-  - `Allow: []` → may Execute **any** Script (broad);
-  - `createdBy :self` → only Scripts the **caller created**;
-  - **`self` → exactly one specific Script** (recommended for exposing a single endpoint).
-  Do **not** grant `Create`/`Edit`/`Delete` unless the caller should author Scripts.
-
-```json
-"script": {
-  "Execute": {
-    "Allow": [
-      { "self": { "sys": { "type": "Refer", "id": "<scriptId>", "targetType": "Script" } } }
-    ]
-  }
-}
-```
-
-Use `"Execute": { "Allow": [] }` instead to allow executing **every** Script in the Space.
-
-**`Execute` is also what a Scheduler owner needs.** Creating a **Scheduler** (`weegloo-scheduler`)
-requires `script.Execute` covering the target Script — the `self` form above is the right scope — on
-top of `SETTING_SCHEDULER`. Unlike an `/execute` call, this grant is **re-checked before every
-scheduled run**: revoke it and the Scheduler is deactivated (and not rescheduled when it comes back).
-
-**Why this is powerful (privilege delegation):** because the Script's inner writes run with the
-**author's** authority, granting a caller `Execute` (and nothing else) lets them perform **one
-specific privileged operation** they otherwise can't. e.g. end users have **no** write on a `Log`
-ContentType, but `Execute` on a `recordEvent` Script lets them **append** log entries through it —
-without gaining `content.Create`/`Edit` on `Log` at all. Scope with `self` so it's exactly that one
-Script. Full patterns: **`weegloo-script`**.
-
-> **Authoring gotcha (not a filter thing):** a Script runs its inner Content/Media ops with its
-> **author's** authority, not re-checked per statement at run time. So the **author's** role must
-> hold an **unconditional `Allow`** (no `contentType`/`createdBy`/`tag` filter) for **each**
-> Content/Media action the Script performs, or the save is rejected (`WGL403015`). **One exception:**
-> Content **`Create`** may be a **`contentType`-scoped** `Allow` — an author who can create only
-> ContentType A may author a Script that creates type-A Content (a `createdBy`/`tag` filter on that
-> Create still rejects; Media `Create` has no ContentType, so it must stay unconditional). The same
-> gate covers a Script's `ResourceCount`, on whichever map it counts — a **ContentType** count needs
-> an unconditional `Read` `Allow` on the role's **`contentType`** map, which a Content/Media-only role
-> does not carry. Author
-> Scripts as a broadly-permissioned admin; keep end users to `Execute` only. Detail: **`weegloo-script`**.
+For **`Create`**, use a **contentType-only** rule (**omit `createdBy`**) when anyone permitted by the
+role may add new rows — the caller is the creator of whatever they create, so `:self` on `Create`
+buys nothing and only narrows `Read`/`Edit`/`Delete` afterwards.
 
 ---
 

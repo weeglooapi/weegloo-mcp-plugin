@@ -5,45 +5,58 @@ description: Create or design a Weegloo ContentType: content modeling, schema/fi
 
 # Weegloo Create ContentType
 
-## When to use
+Use this when creating a `ContentType` (MCP `cma_CreateContentType` — **auto-publishes on create**),
+when designing a schema, or when picking a field's type / `localized` flag.
 
-- When creating a new `ContentType` in Weegloo (via MCP `cma_CreateContentType` — auto-publishes on create).
-- When deciding **`localized: true` vs `false`** per field (and how that affects **Content** payloads).
+## Core workflow
 
-## Validations are not optional by default
-
-**Do not default every field to `validations: []`.** **Infer** constraints from the field's meaning and
-name (`start`, `url`, `sku`, …), then check **`FieldValidation`** and the soft guidance below. Add
-constraints when the product meaning is clear; omit or keep them loose when formats are locale- or
-product-dependent. For **Refer → Media**, consider **file size / mime / dimensions** when the product
-requires it.
-
-**MCP tool schemas for `validations` surface only part of the API** (`message`, `dateRange`, …). The
-full list is in **CMA OpenAPI** - get the canonical **API docs** URL **only** from
-**`weegloo-api-endpoints`**, then look up **`CreateContentType`** and **`FieldValidation`** there
-(**do not** paste doc links in this skill).
+1. Before any `Content`, create the `ContentType`.
+2. For **each field**, decide **`localized: true` vs `false`** — *before* types and validations.
+3. Assign the **text type** by **search semantics**, not by the words "short"/"long"/"rich", then
+   check the copy against **Hard limits** — a `ShortText` stops at **64** characters.
+4. Add **`validations`** where the product meaning is clear; leave them off where it is not.
+5. Set **`displayField`** to the `apiName` of a `ShortText` field. Do not leave it out.
+6. Decide **`publishWithAuthor`** now — it is not retroactive.
+7. `cma_CreateContentType` / `cma_UpdateOneContentType` / `cma_PatchOneContentType` all
+   **auto-publish on success** — no separate `cma_PublishOneContentType` call in the standard
+   create/edit flow. Call it directly only to recover a non-Published type (after an explicit
+   `Unpublish`, or a Draft left by a create/edit whose chained publish failed).
 
 ---
 
-## Default rule (read this first)
+## Text type: ShortText vs LongText vs RichText — search semantics
 
-**Default text field type: RichText.**
+**Default text field type: `RichText`.** These three types do **not** differ by how long the copy is.
+They differ by **how CDA indexes and lets you query** the field. The question is always:
+***will this Space ship a product that runs Weegloo full-text search on this field?***
 
-Pick **LongText** only if the user has explicitly said the product will run
-CDA full-text search on this field in real features (site search, discovery,
-admin search, etc.).
+### Decision (in order)
 
-Do NOT pick LongText because:
-- the field stores long content
-- the field is called "body" / "description" / "article"
-- "blogs usually need search"
+1. **`LongText`** — **only** when the product **will** run **CDA full-text search** (`match`-style /
+   full-text similarity) **on this field** in real features (site search, discovery, admin search).
+   No planned full-text search over this field via Weegloo ⇒ **`LongText` is the wrong type**, even
+   for paragraphs, bios or "about" copy.
+2. **`RichText`** — long or long-ish copy that is **loaded by id/locale and never full-text queried**:
+   article bodies, descriptions, "About" sections. **`RichText` does not mean "Markdown" and does not
+   require markup** — it means *non-searchable text* in the API sense. Editor formatting is incidental.
+3. **`ShortText`** — short values needing **exact or prefix** matching (codes, slugs, one-line labels,
+   emails-as-identifiers), and tiny identifier-like strings even when never searched. For unstructured
+   paragraphs prefer `RichText`; for very short strings `ShortText` stays clearer.
 
-These rationalizations contradict the skill. If you are about to use one,
-stop and either ask the user "will you run CDA full-text search on this field?"
-or default to RichText.
+### Do NOT pick LongText because
 
-Migration RichText → LongText is possible later. Defaulting to LongText
-without need burns API capacity and forces re-migration.
+- the field stores long content;
+- the field is called "body" / "description" / "article";
+- "blogs usually need search".
+
+These rationalizations contradict this skill. If you are about to use one, stop and either ask the
+user *"will you run CDA full-text search on this field?"* or default to `RichText`. Migration
+RichText → LongText is possible later; defaulting to LongText without need burns API capacity and
+forces a re-migration.
+
+**Before finalizing:** list every `LongText` field and confirm *"we will run CDA full-text queries
+against this field."* If no → change it to `RichText` (or `ShortText` if it is really a short
+exact/prefix field).
 
 ---
 
@@ -65,10 +78,10 @@ Hangul and other CJK characters count as **one** each. A value limit applies **p
 
 **What this forces on the design**
 
-- **Picking a text type is two questions, not one** — search semantics (*ShortText vs LongText vs
-  RichText* below) **and** whether the copy fits. Copy that can exceed **5,120** characters cannot be
-  `LongText` however badly the product wants full-text search on it: it becomes **`RichText`** (and
-  is then unsearchable), or it gets split across fields or entries.
+- **Picking a text type is two questions, not one** — search semantics (above) **and** whether the
+  copy fits. Copy that can exceed **5,120** characters cannot be `LongText` however badly the product
+  wants full-text search on it: it becomes **`RichText`** (and is then unsearchable), or it gets
+  split across fields or entries.
 - **A `size` validation can only tighten these, never raise them.** `{"size": {"max": 500}}` on a
   ShortText is a valid narrowing; `{"max": 5000}` does **not** buy a 5,000-character ShortText.
 - **80 fields is a modeling ceiling, and a type nearing it is usually several types.** Split it and
@@ -78,221 +91,166 @@ Hangul and other CJK characters count as **one** each. A value limit applies **p
 
 ---
 
-## Core workflow
+## The other field types
 
-1. Before any `Content`, create the `ContentType`.
-2. For **each field**, decide **`localized: true` vs `false`** (see **`localized` flag** section next)-before types and validations.
-3. **Assign `ShortText` / `LongText` / `RichText` using the search-semantics section below** - not by gut feel from the words “short”, “long”, or “rich”. Then check the value against **Hard limits** above — a `ShortText` stops at **64** characters.
-4. **Design fields → add `validations` only where it clearly helps** (see soft guidance below + `FieldValidation` reference).
-5. **Set `displayField`** to the `apiName` of a `ShortText` field (see the section below) - do not leave it out when the type has one.
-6. `cma_CreateContentType` / `cma_UpdateOneContentType` / `cma_PatchOneContentType` all **auto-publish on success** — no separate `cma_PublishOneContentType` call needed in the standard create/edit flow. Call `cma_PublishOneContentType` directly only when the ContentType is in a non-Published state — typically after an explicit `Unpublish`, or to recover a Draft left over from a create/edit whose chained publish step failed.
+| Type | Search behaviour | Notes |
+|---|---|---|
+| **Boolean** | searchable | |
+| **Long** | searchable | integer |
+| **Number** | searchable | supports decimals |
+| **Date** | searchable | see value format below |
+| **Refer** | searchable by target id | points at `Content` or `Media` |
+| **Location** | geo search (`near`, `within`) | latitude / longitude |
+| **Array** | per element type | element type goes under **`items`**; per-element rules in **`items.validations`** |
+| **Json** | **not indexed, not searchable** | |
+
+(Text types and every max are in **Hard limits** above — do not restate them per type.)
 
 ---
 
-## Per-field `localized` (ContentType) - affects Content creation
+## Per-field `localized` — decide it first
 
-This flag is part of the **ContentType** field definition. It tells Weegloo whether the field stores **one value per locale** or **a single space-wide value** (always authored under the **default locale** only).
+This flag is part of the **ContentType** field definition: it says whether the field stores **one
+value per locale** or **a single space-wide value** authored under the **default locale** only.
 
-### When to use `localized: false`
+**The design-time question:** *"Could this field ever legitimately differ between `en-US` and
+`ko-KR`?"* **No → `localized: false`.**
 
-- The value is **logically identical in every locale**: stable **identifiers** (codes, UUID-like strings), or a **single global reference** that does not vary by language.
-- Typical examples: internal **`id`**-like ShortText shown the same everywhere; **one profile photo** (**Refer → Media**) shared across locales; a global **attachment** that is not translated.
-- **In this repo**, **`resumeProfile.profileImage`** is a good candidate for **`localized: false`**: one thumbnail, not per-locale artwork-today’s app still works with **`localized: true`**, but **`false`** avoids duplicating the same refer into every locale bucket.
+Choose **`localized: false`** for values that are **logically identical in every locale**: stable
+identifiers (codes, UUID-like strings, slugs), and a **single global reference** that is not
+translated — one profile photo or attachment as a **`Refer → Media`** shared across locales. Copying
+the *same* Media refer into every locale bucket is the anti-pattern `localized: false` exists to stop;
+it inflates every payload and multiplies authoring mistakes.
 
-### Semantics for Content / Media writes
+Choose **`localized: true`** only where the value is genuinely translated copy.
 
-- **`localized: false`**: when creating or updating entries, put the value **only in the default locale** key for that field. The API **does not** allow additional locale buckets for that field-**non-default locale values are rejected** (or invalid). This is stricter than “fallback”: there is simply **no** per-locale map for that field.
-- **`localized: true`**: per-locale buckets; the **default locale** value is **required** when the field is populated; other locales are optional overrides. A missing override reads **empty** unless that `Locale` carries a **`fallbackCode`** chain reaching a locale that holds a value — Weegloo does **not** fall back to the default on its own (see **`weegloo-default-locale`** rule/skill).
-
-### LLM checklist
-
-- Ask: *“Could this field ever legitimately differ between `en-US` and `ko-KR`?”* **No** → strongly consider **`localized: false`**.
-- Avoid **`localized: true`** + copying the **same** Media refer into every locale if **`localized: false`** fits-reduces payload size and authoring errors.
+> The **write and read semantics** of both settings (default-locale bucket rules, what `required` +
+> `localized` demands on Content create, `fallbackCode` behaviour) are already stated in the
+> always-loaded locale rule — `plugins/weegloo/rules/weegloo-default-locale.mdc:13-16` — and in full
+> in the **`weegloo-default-locale`** skill. Do not re-derive them here.
 
 ---
 
 ## Field flags: `required` and `disabled` (top-level, not validations)
 
-Beyond `type` / `localized` / `validations`, each field definition carries two **top-level booleans** (siblings of `type`, **not** entries in `validations`):
+Beyond `type` / `localized` / `validations`, each field definition carries two **top-level booleans**
+(siblings of `type`, **not** entries in `validations`):
 
-- **`required`** (default `false`) — makes the field **mandatory**. There is **no "required" validation type**; mandatoriness is this flag. For a `required` **localized** field, Content create must supply a value for **every non-optional locale** (the space default is always non-optional) — see **`weegloo-default-locale`**. A non-`required` field has **no** locale-presence requirement.
+- **`required`** (default `false`) — makes the field **mandatory**. There is **no "required"
+  validation type**; mandatoriness is this flag. For a `required` **localized** field, Content create
+  must supply a value for **every non-optional locale** (see `weegloo-default-locale`). A
+  non-`required` field has **no** locale-presence requirement.
 - **`disabled`** (default `false`) — disables the field without deleting it.
 
 ---
 
 ## `displayField` — the console label (stop omitting it)
 
-`displayField` is a **top-level string on the ContentType** (sibling of `name` / `fields` / `publishWithAuthor`), and its value is the **`apiName`** of the field the console shows as each entry's label. It is **optional in the schema — which is exactly why it keeps getting left out**, leaving an entry list the user cannot read at a glance.
+`displayField` is a **top-level string on the ContentType** (sibling of `name` / `fields` /
+`publishWithAuthor`), and its value is the **`apiName`** of the field the console shows as each
+entry's label. It is **optional in the schema — which is exactly why it keeps getting left out**,
+leaving an entry list the user cannot read at a glance.
 
-**Rule:** if the ContentType has any **`ShortText`** field, set `displayField` to that field's `apiName`. With several, pick the one that names the entry (`title`, `name`, …); otherwise take the first `ShortText` field. Omit `displayField` **only** when the type has **no** `ShortText` field.
+**Rule:** if the ContentType has any **`ShortText`** field, set `displayField` to that field's
+`apiName`. With several, pick the one that names the entry (`title`, `name`, …); otherwise take the
+first `ShortText` field. Omit `displayField` **only** when the type has **no** `ShortText` field.
 
-Resend it on every edit — `cma_UpdateOneContentType` is **full replacement**, so an update that drops `displayField` clears the label.
-
----
-
-## Validations: default rule
-
-For each field, ask:
-
-1. Is the value **meant to match a known format** (date span, URL, code, phone, enum-like token)?
-2. Is **length**, **numeric range**, **allowed reference targets**, or **media constraints** part of the product meaning?
-
-If **yes** → add one or more objects to **`validations`** (and for **Array**, use **`items.validations`** for per-element rules).
-
-If the user explicitly says “free text, any string” → you may leave `validations` empty for that field.
+Resend it on every edit — `cma_UpdateOneContentType` is **full replacement**, so an update that drops
+`displayField` clears the label.
 
 ---
 
-## `FieldValidation` (CMA API) - supported keys
+## Validations — when, and the shape that trips everyone
 
-Authoritative shape: **OpenAPI `FieldValidation`** for **`CreateContentType`** (see **`weegloo-api-endpoints`** → CMA). A single validation object may include **`message`** (user-facing) plus **one or more** of:
+**Do not default every field to `validations: []`, and do not bolt a generic regex onto everything
+either.** Infer constraints from the field's meaning and name (`start`, `url`, `sku`, …), then:
 
-| Key | Purpose | Payload shape (summary) |
-|-----|---------|---------------------------|
-| **`regexp`** | Value must match a regex (**ShortText / LongText** only) | `{ "pattern": "..." (required, ≤ 256 chars), "flags": "..." (subset of `imus` only) }` |
-| **`prohibitRegexp`** | Value must **not** match (**ShortText / LongText** only) | Same as `regexp` |
-| **`size`** | Length **or element count** — String char length (**ShortText / LongText / RichText**), **Array** element count, or **Json** (not text-only). Can only **narrow** the type’s own maximum (see **Hard limits**), never raise it | `{ "min": int64, "max": int64 }` (Long; bounded to the JS safe-integer range ±9007199254740991) |
-| **`in`** | Allow-list of permitted values (**ShortText / LongText / Long / Number** — includes **numeric** allow-lists, not just text) | JSON array of allowed values (strings for text fields, numbers for Long / Number) |
-| **`range`** | Numeric bounds | `{ "min": number, "max": number }` - for **Number** / **Long** |
-| **`dateRange`** | Instant bounds | `{ "min", "max", "after", "before" }` as **date-time** strings - for **Date** |
-| **`unique`** | Uniqueness constraint (**ShortText / Long / Number / Date** only — **rejected** on LongText / RichText) | `true` / `false` |
-| **`mediaMimetypeGroup`** | Allowed media categories | Array of enum: `Attachment`, `Plaintext`, `Image`, `Audio`, `Video`, `RichText`, `Presentation`, `Spreadsheet`, `PdfDocument`, `Archive`, `Code`, `Markup` |
-| **`mediaImageDimensions`** | Image width/height bounds | `{ "width": { "min", "max" }, "height": { "min", "max" } }` (int32) |
-| **`mediaFileSize`** | File size in bytes | `{ "min": int64, "max": int64 }` |
-| **`referContentType`** | **Refer → Content** may only point at these types | Array of `{ "sys": { "type": "Refer", "id": "<contentTypeId>", "targetType": "ContentType" } }` |
+- **Add** one when the intent is **clear and stable** — enum-like choices (`in`), numeric bounds on
+  Number/Long (`range`), date bounds on Date (`dateRange`), a team-agreed code format, uniqueness, or
+  a `Refer` restriction.
+- **Leave it loose** when the format varies by **locale, convention or legal rules** (phone numbers
+  are the classic) — validate in the app instead, unless the user defined an explicit format.
+- If unsure, stay conservative (`size` only, or nothing) and let the spec tighten it later.
+- If the user says "free text, any string", `validations` stays empty for that field.
 
-**Typed variant:** Swagger also defines **`FieldValidationReferContentType`**: extends typed validation with **required** `referContentType` (+ `message`). Use the same `referContentType` array shape as above when the API expects this DTO.
+### The keys
 
-Combine constraints in **one** `validations[]` element when they share the same `message`, or use **multiple** objects if you need different messages per rule.
+| Key | Applies to | Payload |
+|---|---|---|
+| **`size`** | ShortText / LongText / RichText / Array / Json | `{ "min", "max" }` — char length or element count; **narrows only** |
+| **`in`** | ShortText / LongText / Long / Number | array of allowed values (strings **or** numbers) |
+| **`range`** | Number / Long | `{ "min", "max" }` |
+| **`dateRange`** | Date | `{ "min", "max", "after", "before" }` as date-time strings |
+| **`unique`** | ShortText / Long / Number / Date | `true` / `false` — **rejected** on LongText / RichText |
+| **`regexp`** / **`prohibitRegexp`** | ShortText / LongText | `{ "pattern": "...", "flags": "..." }` — **an object, see below** |
+| **`referContentType`** | Refer → Content | array of ContentType refer objects |
+| **`mediaMimetypeGroup`** / **`mediaFileSize`** / **`mediaImageDimensions`** | Refer → Media | see `references/field-validations.md` |
 
----
+Any validation object may also carry **`message`** (user-facing). Combine constraints in **one**
+`validations[]` element when they share a message; use separate objects for different messages.
 
-## `regexp` - API shape (common mistake)
-
-**Wrong** (400 from API):
+### `regexp` is an OBJECT, not a string
 
 ```json
-{ "regexp": "^\\d{4}\\.\\d{2}$", "message": "…" }
+{ "regexp": "^\\d{4}\\.\\d{2}$", "message": "…" }                      // ❌ 400 from the API
+
+{ "regexp": { "pattern": "^\\d{4}\\.\\d{2}$" },                        // ✅
+  "message": "Use YYYY.MM only (e.g. 2022.02)." }
 ```
 
-**Correct:**
+Escape backslashes in JSON (`\\d`, not `\d`). For an **enum-like** ShortText prefer `in` over a
+regex — it accepts the empty string as a permitted value:
 
 ```json
-{
-  "regexp": { "pattern": "^\\d{4}\\.\\d{2}$" },
-  "message": "Use YYYY.MM only (e.g. 2022.02)."
-}
+{ "in": ["", "employment", "activity"],
+  "message": "Leave empty, or choose employment or activity." }
 ```
 
-- Escape backslashes in JSON: `\\d` not `\d`.
-- Optional **`flags`** on `regexp` / `prohibitRegexp` — only the characters **`i`, `m`, `u`, `s`** are allowed, and `pattern` is capped at **256 chars**. `regexp` / `prohibitRegexp` apply to **ShortText / LongText** fields only.
-
-**Optional ShortText** (empty **or** `YYYY.MM`):
+`referContentType` is likewise an array of **Refer objects**, not of id strings:
 
 ```json
-{
-  "regexp": { "pattern": "^$|^(\\d{4}\\.\\d{2})$" },
-  "message": "Leave empty or use YYYY.MM (e.g. 2022.02)."
-}
+{ "referContentType": [
+    { "sys": { "type": "Refer", "id": "<contentTypeId>", "targetType": "ContentType" } } ] }
 ```
 
----
+> **Read `references/field-validations.md`** when you need the exact payload of a key not spelled out
+> above — in practice: constraining a **`Refer → Media`** field (mime group / file size / image
+> dimensions), writing a **`referContentType`** restriction, an **optional** regex field, `flags` and
+> the `pattern` length cap, or `items.validations` on an Array. Everything the ordinary create needs
+> is already on this page.
 
-## `in` - allow-list (console: **Accept only specified values**)
-
-For **enum-like** ShortText (including **empty string** as a permitted value), prefer **`in`** over **`regexp`**. `in` also accepts **numeric** allow-lists on **Long / Number** (and works on **LongText**), so it is not ShortText-only.
-
-**Example** - optional kind: empty, `employment`, or `activity`:
-
-```json
-{
-  "in": ["", "employment", "activity"],
-  "message": "Leave empty, or choose employment or activity."
-}
-```
+**MCP tool schemas for `validations` surface only part of the API.** The authoritative shape is the
+CMA OpenAPI `FieldValidation` / `CreateContentType` — get the API-docs URL from
+**`weegloo-api-endpoints`**, never from a pasted link.
 
 ---
 
-## When to consider validations (soft guidance)
+## Field value formats (for the Content you create next)
 
-Fields support **`validations`**; the CMA accepts the kinds summarized in **`FieldValidation`** above (and the full OpenAPI schema). Use them when they **match the product**-not as a checklist of generic regexes.
+- **RichText**: value is a **string**. Any string content (plain text, markdown, HTML — product's
+  choice). Do **not** send a JSON object such as `{ "type": "doc", "content": [...] }`.
+- **Date**: an **ISO 8601 datetime string in UTC** — `"2026-05-28T00:00:00.000Z"`. Only the `Z`
+  suffix is accepted. Not a date-only string (`"2026-05-28"`), not a timestamp (`1716854400000`), not
+  an offset (`+09:00`).
+- **Location**: `{ "latitude": <number>, "longitude": <number> }` — **full** keys; `lat` / `lng` /
+  `lon` are **rejected**. e.g. `{ "ko-KR": { "latitude": 37.5662, "longitude": 126.9910 } }`.
+- **Refer**: `{ "sys": { "type": "Refer", "id": "<id>", "targetType": "Content" | "Media" } }` —
+  **not** a bare id string.
 
-- **Avoid** strict **`regexp`** (or other format locks) for values that **vary by locale, convention, or legal rules** (e.g. **phone numbers**). Prefer leaving the field loose in the ContentType, or validate in the app, unless the user defines an explicit format.
-- **Consider** validations when the intent is **clear and stable**: e.g. something that is obviously **email-like**, a **team-agreed date or code format**, **enum-like** choices (**`in`**), **numeric bounds** on **Number** / **Long** (**`range`**), **date bounds** on **Date** (**`dateRange`**), or **Refer** rules (**`referContentType`**, **`mediaMimetypeGroup`** / **`mediaFileSize`** / **`mediaImageDimensions`**) when the product needs them.
-- If unsure, stay **conservative** (e.g. **`size`** only, or no pattern) and let the user or product spec tighten later.
-
----
-
-## ShortText vs LongText vs RichText - **search semantics, not English words**
-
-**Do not** choose these types from the everyday meaning of “short”, “long”, or “rich”. In Weegloo, they differ by **how CDA indexes and lets you query** the field. Ask: **will this Space ship a product that uses the Weegloo API to search this field?**
-
-### Decision (use in order)
-
-1. **`LongText`** - Use **only** when the product **will** run **CDA full-text search** (`match`-style / full-text similarity) **on this field** in real features (site search, discovery, admin search, etc.).  
-   - If there is **no** planned full-text search over this field via Weegloo, **`LongText` is the wrong type** - even for paragraphs, bios, or “about” copy.
-
-2. **`RichText`** - Use for **text that must not be full-text indexed** for Weegloo search: long copy, descriptions, article bodies, **“About” sections**, anything loaded by id/locale and **never** queried with CDA full-text on that field.  
-   - **`RichText` does not mean “Markdown” or “must contain markup”** - it means **non-searchable long (or long-ish) text** in the API sense. Rich formatting in the editor is incidental.
-
-3. **`ShortText`** - Use for values that are **short** and/or need **exact or prefix** matching in CDA (codes, slugs, one-line labels, emails-as-identifiers, etc.).  
-   - If the app **never** needs keyword/prefix/exact indexing but the string is tiny and acts like an identifier, **`ShortText`** is still appropriate.  
-   - If indexing/search is **never** needed and the shape is not “short identifier-like”, prefer **`RichText`** over **`ShortText`** only when **`ShortText`** would be a poor fit (e.g. unstructured paragraphs); for **very short** strings, **`ShortText`** usually stays clearer.
-
-### Anti-patterns LLMs must avoid
-
-- **Wrong:** “It’s a long paragraph → **`LongText`**.”  
-  **Right:** “We only display it / fetch by key → **`RichText`** (unless full-text search is a real requirement).”
-
-- **Wrong:** “**`RichText`** = Markdown field.”  
-  **Right:** “**`RichText`** = **no Weegloo full-text search** on that field; naming is historical.”
-
-- **Resume-style sites:** e.g. **`aboutBody`**, long **`description`** shown on a page with **no** CDA full-text search feature → use **`RichText`**, not **`LongText`**.
-
-### Quick check before you finalize the `ContentType`
-
-- List every **`LongText`** field and confirm: **“We will run CDA full-text queries against this field.”** If **no** → change design to **`RichText`** (or **`ShortText`** if it’s really a short exact/prefix field).
-
----
-
-## Field value formats (Content create/update)
-
-- **RichText**: value is a **string**. Any string content is accepted (plain text, markdown, HTML — depends on the product). Do NOT send a JSON object (e.g. `{ "type": "doc", "content": [...] }`).
-- **Date**: value is an **ISO 8601 datetime string in UTC** (e.g. `"2026-05-28T00:00:00.000Z"`). Only UTC (`Z` suffix) is accepted. Do NOT send date-only strings (`"2026-05-28"`), timestamps (`1716854400000`), or non-UTC offsets (`+09:00`).
-- **Location**: `{ "latitude": <number>, "longitude": <number> }` — use the **full** keys; **`lat`/`lng`/`lon` are rejected**. Example: `{ "ko-KR": { "latitude": 37.5662, "longitude": 126.9910 } }`.
-- **Refer**: the Refer shape `{ "sys": { "type": "Refer", "id": "<id>", "targetType": "Content" | "Media" } }` — **not** a bare id string.
-
-**The canonical, complete field-value spec lives in the API reference — read it rather than relying on this list:** https://docs.weegloo.com/api/reference/cma/content (the `fields` per-locale map and `Refer` shape; locale-key rules in **`weegloo-default-locale`**). The notes above are only the high-frequency gotchas, not the full spec.
-
----
-
-## Field types (reminder)
-
-- **Array**: Stores multiple values in an array format. **Max 64 items.**
-- **Boolean**: Stored values can be used for search.
-- **Date**: Stored values can be used for search.
-- **Long**: Stored values can be used for search.
-- **Number**: Stored values can be used for search; supports decimal numbers.
-- **Refer**: Stored values can be used for search.
-- **Json**: Stored values are **not indexed** and cannot be searched. **Max 5,120 chars serialized.**
-- **ShortText** (**max 64 chars**): **Exact and prefix** search in CDA. Use for short identifiers, labels, codes-when that query style matches the product. See **ShortText vs LongText vs RichText** above-not every non-search field should default here if **`RichText`** fits better.
-- **LongText** (**max 5,120 chars**): **Full-text search** in CDA. Use **only** when the product **requires** full-text search on this field via the API; otherwise use **`RichText`**. Do not use **`LongText`** “because the copy is long.”
-- **RichText** (**max 204,800 chars**): **Not** full-text indexed; **not searchable** via Weegloo full-text. Use for long (or structured) body copy **without** CDA full-text search-**not** synonymous with Markdown/markup as a type rule.
-- **Location**: Stored values support geographic searches such as `near` or `within`; suitable for storing latitude and longitude coordinates.
-
-**Mapping types → `validations` (each validation has its own allowed types):** For **Array**, define element type under **`items`**; per-element rules go in **`items.validations`**. Use: **`dateRange`** on **Date**; **`range`** on **Number / Long**; **`regexp` / `prohibitRegexp`** on **ShortText / LongText**; **`size`** on **ShortText / LongText / RichText / Array / Json**; **`in`** on **ShortText / LongText / Long / Number**; **`unique`** on **ShortText / Long / Number / Date**; on **Refer** use **`referContentType`** (→ Content) or **`mediaMimetypeGroup` / `mediaFileSize` / `mediaImageDimensions`** (→ Media). See **`FieldValidation`** above and **`weegloo-api-endpoints`** for CMA schema links.
+These are the high-frequency gotchas, not the full spec; the complete field-value contract is the CMA
+`content` API reference (path via **`weegloo-api-endpoints`**), locale-key rules in
+**`weegloo-default-locale`**.
 
 ---
 
 ## Model relationships as Refer (normalize by default)
 
-When one entry relates to another - reply → parent, comment → post, post → author -
-model the link as a **`Refer` field**, not a `ShortText` that stores the other
-entry's id by hand. `Refer` is typed and first-class: restrict it with
-`referContentType`, resolve it server-side with `include`, and filter by target
-id. A `ShortText` id is an opaque string the platform cannot validate, resolve,
-or traverse. `Refer` supports **self-reference** (a ContentType referencing
-itself) for trees and threads - reply chains, category parents, nav menus.
+When one entry relates to another — reply → parent, comment → post, post → author — model the link as
+a **`Refer` field**, not a `ShortText` holding the other entry's id by hand. `Refer` is typed and
+first-class: restrict it with `referContentType`, resolve it server-side with `include`, and filter by
+target id. A `ShortText` id is an opaque string the platform cannot validate, resolve or traverse.
+`Refer` supports **self-reference** (a ContentType referencing itself) for trees and threads — reply
+chains, category parents, nav menus.
 
 | Relationship | ✅ Refer | ❌ Anti-pattern |
 |--------------|---------|-----------------|
@@ -300,50 +258,59 @@ itself) for trees and threads - reply chains, category parents, nav menus.
 | comment → post | `post` (Refer) | `postId` (ShortText) |
 | post → many related | `Array` of `Refer` | comma-joined ids in a `ShortText` |
 
-**Denormalize only with a stated reason** - a deliberately frozen *snapshot at
-write time* (author name as it was, a cached count) or a performance-driven
-denormalized read. Default to the reference; make the snapshot the explicit
-exception, with the reason recorded. Don't reach for a flat id "because it's
-simpler" - that is the rationalization this section exists to stop.
+**Denormalize only with a stated reason** — a deliberately frozen *snapshot at write time* (author
+name as it was, a cached count) or a performance-driven denormalized read. Default to the reference;
+make the snapshot the explicit exception, with the reason recorded. Don't reach for a flat id
+"because it's simpler" — that is the rationalization this section exists to stop.
 
-Full reference model (single / array / bidirectional / self / circular +
-`include` resolution) and the normalize principle live in the Weegloo docs:
-**Reference** and **Content modeling** core-concept pages
-(`docs.weegloo.com/getting-started/core-concepts/common/reference.md`,
-`docs.weegloo.com/getting-started/core-concepts/content-and-media/content-modeling.md`).
+Full reference model (single / array / bidirectional / self / circular + `include` resolution) lives
+in the Weegloo docs: the **Reference** and **Content modeling** core-concept pages.
+
+---
 
 ## Don't model what the platform provides
 
-- **Author / `createdBy`**: expose the author via **`publishWithAuthor`** and the built-in **`sys.createdBy`** — do **not** add a separate author field (a Comment ContentType needs no `author` field). See the **`publishWithAuthor`** section below for when and how (it is `false` by default and not retroactive).
-- **Timestamps**: `sys.createdAt`, `sys.updatedAt` are automatic. Create a separate Date field only for user-controlled dates (e.g. a publish date the author picks).
-- **ID**: `sys.id` is auto-generated. Do not create an id field.
+- **Author / `createdBy`** — expose it via **`publishWithAuthor`** and the built-in `sys.createdBy`.
+  Do **not** add a separate author field (a Comment ContentType needs no `author` field).
+- **Timestamps** — `sys.createdAt` / `sys.updatedAt` are automatic. Add a Date field only for a
+  user-controlled date (a publish date the author picks).
+- **ID** — `sys.id` is auto-generated. Do not create an id field.
 
 ---
-
 
 ## `publishWithAuthor` — expose the author on the delivery plane
 
-`publishWithAuthor` is a boolean on the **ContentType** (not a field). It decides whether **publishing** bakes the author — `sys.createdBy` (and `sys.updatedBy`) — into the **published snapshot**. It is **`false` by default**.
+`publishWithAuthor` is a boolean on the **ContentType** (not a field). It decides whether
+**publishing** bakes the author — `sys.createdBy` (and `sys.updatedBy`) — into the **published
+snapshot**. It is **`false` by default**.
 
-Set it whenever the **delivered** content needs to know **who created it**, and use the built-in `sys.createdBy` rather than a manual author field. It is the single switch behind all of:
+Set it whenever the **delivered** content needs to know **who created it**:
 
-- **Author byline / display** on delivered content — "posted by X", a comment's author, a profile owner, an avatar next to a post.
-- **`createdBy` / `:self` permission filters** on the delivery plane — a member seeing only their own rows (see **`weegloo-space-role`**).
-- **Author-based grouping or moderation** — anything that reads `sys.createdBy` off a delivered resource.
+- **Author byline / display** on delivered content — "posted by X", a comment's author, a profile
+  owner, an avatar next to a post.
+- **`createdBy` / `:self` permission filters** on the delivery plane — a member seeing only their own
+  rows (see **`weegloo-space-role`**).
+- **Author-based grouping or moderation** — anything reading `sys.createdBy` off a delivered resource.
 
-**Why the default bites (footgun).** With `publishWithAuthor: false`, the **CDA / ACDA published snapshot carries no `sys.createdBy`**, so every author-dependent feature above silently returns **empty** — a blank byline, a `:self` `Allow` rule that matches nothing, a `Deny` rule that excludes no one. **Management (CMA / ACMA) is unaffected**, because it reads the **draft**, which always keeps `sys.createdBy`. That asymmetry is the trap: it works in the console and on ACMA, and only breaks on the delivered read.
+**Why the default bites (footgun).** With `publishWithAuthor: false`, the **CDA / ACDA published
+snapshot carries no `sys.createdBy`**, so every author-dependent feature above silently returns
+**empty** — a blank byline, a `:self` `Allow` rule that matches nothing, a `Deny` rule that excludes
+no one. **Management (CMA / ACMA) is unaffected**, because it reads the **draft**, which always keeps
+`sys.createdBy`. That asymmetry is the trap: it works in the console and on ACMA, and only breaks on
+the delivered read.
 
-**Applied at publish time, not retroactive.** Turning it on later does **not** restore authors on already-published entries — you must **re-publish** each one. So enable it **when you model the ContentType, before any Content is authored/published**.
-
-This is load-bearing for **ServiceLogin** products, where member posts/comments are written and read back through ACDA. Mechanism + recovery: Weegloo docs → *Content modeling* (Author exposure) and *System properties (sys)*.
+**Applied at publish time, not retroactive.** Turning it on later does **not** restore authors on
+already-published entries — each must be **re-published**. Enable it **when you model the
+ContentType, before any Content is authored/published**. This is load-bearing for **ServiceLogin**
+products, where member posts and comments are written and read back through ACDA.
 
 ---
 
+## Editing a ContentType later
 
-## Important
-
-- **Locale model** (default locale, fallback, `localized: false` writes): **`weegloo-default-locale`** rule and skill.
-- A `ContentType` must be **published** before creating `Content`; `cma_CreateContentType` already publishes on success.
-- **Updates** are **full replacement** (`cma_UpdateOneContentType`): preserve **field `id`s** and send **all** fields when editing.
-- Stricter validations may break **existing** entries on next save - warn when migrating live data.
-- Changing **`LongText` ↔ `RichText`** (or other type changes) on a live field is a **schema migration**-plan content re-save and app typing, not a silent rename.
+- **Updates are full replacement** (`cma_UpdateOneContentType`): preserve **field `id`s** and send
+  **all** fields, `displayField` and `publishWithAuthor` included.
+- **Stricter validations may break existing entries** on their next save — warn before migrating live
+  data.
+- **Changing `LongText` ↔ `RichText`** (or any other type change) on a live field is a **schema
+  migration** — plan content re-save and app typing, not a silent rename.

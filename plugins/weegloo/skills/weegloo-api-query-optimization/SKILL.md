@@ -14,18 +14,21 @@ description: Reading Weegloo Content/Media lists. `select` projection is the def
 
 Base URLs and API documentation: **`weegloo-api-endpoints`** (do not duplicate doc links here).
 
+**Read `references/master-detail-and-media.md`** when the task is a **list/sidebar → open an item UI**
+(history list, gallery, inbox, search results → item page), or when you must turn a **`Refer → Media`**
+field into a **displayable image/file URL** or pick a **thumbnail size**. §6 below carries the short
+form; the reference carries the full pattern, the resolution paths and the style-preset table.
+Everything else in this skill is here in the spine.
+
 ---
 
 ## 1. Projection: the `select` query parameter
 
 On **resource list** endpoints, **`select`** names which parts of each item appear in the JSON.
 
-> **Passing it is the default, not a tuning step.** Every read names the fields it needs; an
-> unprojected read is the exception and needs a reason. This holds for **your own MCP calls** as much
-> as for code you generate — `select` is a parameter on the `cma_GetList*` tools, and a bare list call
-> returns whole documents (every locale bucket of every field of every row) straight into your context
-> window. See the *Projection* section of `weegloo-global-rules` for the standing obligation and the
-> per-purpose recipes; this section is the mechanics.
+> **Passing it is the default, not a tuning step** — including on your own `cma_GetList*` MCP calls.
+> The standing obligation and the per-purpose recipes are in the *Projection* section of
+> `weegloo-global-rules`; this section is the mechanics.
 
 ### One `select` per request (comma-separated)
 
@@ -83,14 +86,14 @@ When you **do not** need those linked details:
 
 Otherwise, **`include`** may undo optimization by enlarging the body with nested resource graphs.
 
-### Filtering or sorting a flat `/contents` list by `fields.*` requires scoping the ContentType
+### Scoping the ContentType for a `fields.*` filter or `order`
 
-On the **flat `/contents` list** (**CDA** and **CMA**), to **filter** or **`order`** by any **`fields.*`** param you **must** scope the ContentType with **`sys.contentType.sys.id=<id>`**. A bare **`contentType=<id>`** is **NOT** enough for field queries — the server cannot resolve the field schema and rejects the request.
-
-- **Wrong:** `GET …/contents?contentType=<CT>&fields.status=active&order=-sys.createdAt`
-- **Correct:** `GET …/contents?sys.contentType.sys.id=<CT>&fields.status=active&order=-sys.createdAt`
-
-Apply this whenever a query touches **`fields.*`** (filter **or** sort key). It does **not** apply to the nested **`/content-types/{contentTypeId}/contents`** path, nor to **ACMA/ACDA** (which expose only the nested path) — there the ContentType is already fixed by the URL.
+The flat `/contents` list needs **`sys.contentType.sys.id=<id>`** (not a bare `contentType=<id>`)
+before any `fields.*` filter or sort key, alongside the locale segment — both stated in the
+*Searching `fields.*`* section of `weegloo-global-rules` (`rules/weegloo-global-rules.mdc:106`).
+**The delta that rule does not carry:** the requirement is a property of the **flat** path only. It
+does **not** apply to the nested **`/content-types/{contentTypeId}/contents`** path, nor to
+**ACMA/ACDA** (which expose only the nested form) — there the ContentType is already fixed by the URL.
 
 ---
 
@@ -144,154 +147,56 @@ Filter syntax (**`sys.id`**, **`sys.id[in]`**, delimiters) is defined per API in
 
 ## 5. Media list: filter by logical type (`mimeGroups`)
 
-On **CMA** **`GET .../spaces/{spaceId}/medias`**, add **`fields.file.{locale}.mimeGroups={MimeGroup}`** so the API returns only assets in that **category** (e.g. **`Image`**, **`Video`**, **`Audio`**, **`Code`**)-smaller **`items`** than an unfiltered list. Use the same **`{locale}`** you use for **`fields.file`** (often the space default locale).
-
-**Allowed `MimeGroup` values** and full URL examples: **`weegloo-api-endpoints`** rule → *CMA Media list - filter by `mimeGroups`*.
+Server-side category filter on CMA `GET .../spaces/{spaceId}/medias`, the `{locale}` segment, and the
+twelve allowed `MimeGroup` identifiers are all in `weegloo-api-endpoints`
+(`rules/weegloo-api-endpoints.mdc:109-112`) — always loaded, not repeated here.
 
 ---
 
-## 6. Master/detail UIs: lightweight list + on-select detail fetch (do NOT render a detail from the list)
+## 6. Master/detail UIs and referenced Media — short form
 
 §2–§3 optimize **bulk** loading (one list instead of many GETs). They do **NOT** mean "render a
-detail or image view straight from the list response." A **list/sidebar → open an item** UI
-(history list, gallery, inbox, search results → item page) uses the **opposite** split, and getting
-this wrong is a common mistake:
+detail or image view straight from the list response." A **list/sidebar → open an item** UI uses the
+**opposite** split, and getting this wrong is a common mistake. The four facts you need:
 
-- **List (sidebar): fetch a lightweight projection per row** — `sys.id` plus the human-readable
-  **label field you will display** (e.g. `fields.prompt`, `fields.title`). Use `select` to keep rows
-  small, and **always project and render a meaningful label**, never just an id or a thumbnail. A
-  sidebar/list that shows no title/prompt text is a defect, not an optimization.
-- **Detail (on click): fetch that ONE Content by id, lazily.** Hit the single-Content endpoint for
-  the selected item — `…/content-types/{contentTypeId}/contents/{contentId}` (on ACMA/ACDA always
-  nested under the ContentType; see **`weegloo-api-endpoints`**). This lazy by-id GET is **correct
-  and expected**. The "avoid N GETs" guidance in §3 is about loading a *batch* up front — it is
-  **not** a reason to skip the detail fetch for the *one* item the user actually opened, nor to try
-  to cram every row's full detail into the initial list call.
+- **List rows: lightweight projection + a real label.** `sys.id` plus the human-readable field you
+  will display (`fields.prompt`, `fields.title`). A sidebar showing only an id or a bare thumbnail
+  is a defect, not an optimization.
+- **Detail: fetch that ONE Content by id, lazily, on click.** A by-id GET for the item the user
+  actually opened is **correct and expected** — §3's "avoid N GETs" is about a *batch* up front.
+- **A `Refer → Media` is a stub, never a URL.** Resolve it (follow `sys.id`, or `?include=1` and read
+  `include.Media`) — see the *References are NEVER embedded* rule
+  (`rules/weegloo-global-rules.mdc:93`). Do this on the **detail** fetch, not from the list response.
+- **Thumbnails: append a preset style segment to the Media file URL** — `/style1`…`/style10` =
+  32 / 64 / 128 / 192 / 256 / 320 / 480 / 640 / 960 / 1024 px **max dimension**, aspect preserved,
+  WebP. No arbitrary width/height/quality params. Nothing is re-uploaded.
 
-### Content never embeds a Media — it holds a `Refer` stub (resolve it)
-
-**A Content does not contain the Media (or any other linked resource) inline. A reference field
-always holds only a stub**, never the full document:
-
-```json
-{ "sys": { "id": "abc", "type": "Refer", "targetType": "Media" } }
-```
-
-So `fields.image1`, `fields.file`, an author `Refer → User`, a `Refer → Content`, etc. give you an
-**id + `targetType`**, not the asset's URL or the linked document's fields. Two ways to get the real
-resource — **do not** assume it is already inside the Content:
-
-1. **Follow the id.** Read `…sys.id` from the Refer and fetch the target directly, e.g.
-   `GET /v1/spaces/{spaceId}/medias/{id}` for a `Refer → Media`.
-2. **Expand on read with `?include=1`.** The response then carries every referenced resource in a
-   **sibling, singular `include` object keyed by PascalCase `targetType`** — `include.Media`,
-   `include.Content`, `include.Space`, `include.Organization`, `include.User`, … . Resolve a field's
-   `sys.id` against the matching `include.<Type>` array by id. (Shape detail + a both-shapes accessor:
-   **`weegloo-default-locale`**.)
-
-### Rendering a referenced Media (image / file fields)
-
-A field that points at an asset (e.g. `fields.image1`…`fields.image4`, `fields.file`) is a
-**Refer → Media**, **not** a ready-to-use URL string. To show it you must **resolve the Media to its
-file URL** (per the two paths above):
-
-- On the **detail** fetch, expand the reference (`?include=1`) — or follow up with a Media fetch —
-  and read the file URL from the **Media's** `fields.file.{locale}` per-locale bucket (default-locale
-  rules: **`weegloo-default-locale`**). Confirm the Media is deliverable first
-  (**`weegloo-media-lifecycle`**).
-- **Do NOT assume the list response already carries usable image URLs.** List-level expansion is not
-  guaranteed to resolve every Refer→Media into a deliverable URL, and pulling all rows' media up
-  front defeats the lightweight-list goal above. The reliable place to read image/file fields for
-  rendering is the **detail fetch of the selected item** — exactly the per-item
-  `…/contents/{contentId}` call, reading `fields.image1..N` → Media → file URL.
-
-### Image processing — on-the-fly resize via `/{styleN}`
-
-Once you have an image Media's file URL, **append a preset style name as a path segment** to get a
-**resized, WebP-converted** copy generated on the fly. The original file stays untouched — you do
-**not** re-upload or store a separate thumbnail.
-
-```
-<file URL>/style3        e.g.  https://…/tumbler.png/style3   → 128×128 WebP
-```
-
-Ten presets; each value is the **max dimension** in px and the **original aspect ratio is
-preserved** (the image is scaled so its longest side fits the box). Output is always **WebP at 100%
-quality**:
-
-| style | px | | style | px |
-|---|---|---|---|---|
-| `style1` | 32  | | `style6`  | 320  |
-| `style2` | 64  | | `style7`  | 480  |
-| `style3` | 128 | | `style8`  | 640  |
-| `style4` | 192 | | `style9`  | 960  |
-| `style5` | 256 | | `style10` | 1024 |
-
-There are **only these presets** — no arbitrary `width`/`height`/`quality`/`format` parameters.
-Pick the smallest style that covers the rendered size (e.g. avatars → `style1`/`style2`, list
-thumbnails → `style3`, hero → `style9`/`style10`); requesting a larger style than you display just
-wastes bytes. Use the **plain file URL** (no suffix) only when you genuinely need the untouched
-original (download, exact-fidelity, or a non-image asset).
-
-**Availability:** the styled URL works once the Media is **Published**, which a Media reaches
-**automatically** after its upload finishes processing — there is **no separate publish step** for
-Media (unlike Content). So a normally-uploaded image just works. The only cases where it is not yet
-deliverable: upload processing hasn't completed, or the upload opted out of auto-publish with
-**`X-Weegloo-Ignore-Publish: true`** (see `weegloo-upload-api`).
+**→ `references/master-detail-and-media.md`** has the full pattern: why list-level expansion is not
+a substitute for the detail fetch, both Refer-resolution paths with the `include.<PascalCase>` shape,
+how to read the file URL out of the Media, the style table with per-use-case picks (avatar / list
+thumb / hero), and the two availability cases where a styled URL is not yet live.
 
 ---
 
 ## 7. Search: pick WHERE you search, and use Advanced Search for `fields.*` text
 
-When a UI has a search box, first decide the **locus** of the search — getting this wrong is a
-common, silent bug:
+**Any filter or `order` touching a `fields.*` path needs `X-Weegloo-Advanced-Search: true`.** Without
+it the match is **exact equality**, so a substring query returns an **empty list rather than an
+error**; the header is also what keeps the query off an unindexed scan. Where to search (server-side
+over the whole dataset vs. in-memory over a fully-loaded array), the locale segment, the speed/index
+rationale, the MCP tools' inability to send the header, and RichText/Json being unsearchable are all
+in the *Searching `fields.*`* section of `weegloo-global-rules`
+(`rules/weegloo-global-rules.mdc:101-108`) — always loaded; deleted from here rather than restated.
 
-- **In-memory filtering is correct ONLY when the array you filter already holds the ENTIRE dataset**
-  — a small, fully-loaded set (e.g. one user's handful of items fetched in full). Filtering
-  `items.filter(i => i.title.includes(q))` over a **paginated or partial** list searches **only the
-  rows currently loaded** and silently misses everything not yet fetched. If the list is large,
-  paged, or of **unknown size** (e.g. *all* Media in a Space — the visible thumbnails are not the
-  whole set), in-memory search is **wrong**.
-- **Server-side search hits the list API with filter params** so the **whole** dataset is searched,
-  then page the results with `links.next` (`weegloo-list-pagination`). What is loaded on screen is
-  not the dataset.
+**Deltas that rule does not carry:**
 
-Content data lives in **`fields.*`**, not `sys.*` — search the right place, the right way:
-
-- **Filtering `fields.*` needs the locale segment** (`fields.title.en-US[...]`) — required for **every**
-  field, including non-localized ones — and, on the flat Content list, the **ContentType scope**
-  `sys.contentType.sys.id=<id>` (see the Filter Parameters rule). `sys.*` filters (`sys.id`,
-  `sys.createdAt`) need neither.
-- **Any filter or `order` on `fields.*` needs the Advanced Search header
-  `X-Weegloo-Advanced-Search: true`.** Without it a text field is matched by **exact equality** only —
-  so a substring query returns an **empty list rather than an error**, which is why the omission
-  survives testing. With it, `eq` on a full-text-enabled **LongText** matches items that *contain* the
-  term, and the `regex` and geo `near`/`within` operators become available. Do **not** read that empty
-  result as "no matches" and fall back to filtering in memory.
-- **Send the header for SPEED too, not only for substring matching — it is what keeps a `fields.*`
-  query from timing out.** Without it the request is served from a store indexed on the **system
-  axes** only: the `sys.*` facts every resource carries whatever it holds — Space, ContentType, owner,
-  status, tags, references, recency — plus the `createdBy` convenience. A filter or `order` confined
-  to those is fast. **There is no index for `fields.*`**, so that part of the query becomes a scan:
-  the response gets very slow and then **times out**. The failure grows with how much content the
-  Space holds, so it passes against seed data and surfaces in production, on the endpoint you already
-  shipped. Treat the header as the default for any `fields.*` query and the exception as the thing
-  you justify.
-- **When a `fields.*` filter must run without the header, narrow it with the system axes first** —
-  the ContentType scope plus something like `createdBy` — so the unindexed part runs over a small
-  subset rather than the whole Space.
-- ⚠️ **The header is HTTP-only — the MCP tools cannot send it.** `cma_GetListContents` /
-  `cma_GetListMedias` take `filter`, `select`, `order` and paging, and no header parameter, so a
-  `fields.*` filter issued **over MCP is exact-match only — and unindexed**, which is where your own
-  tool call hangs on a Space with real content. **Prefer `sys.*` filters for your own MCP list
-  calls**, and scope a `fields.*` one by ContentType when you need it. Real text search is application
-  code calling CMA/CDA over HTTP; never conclude from an empty MCP result that the rows are not there.
-- **RichText and Json fields are not searchable.** If a field must be searched, model it as
-  ShortText/LongText with the right search setting **at design time** — search is decided when you
-  model the data, not bolted on after (`weegloo-create-content-type`).
-
-Exact operator list, per-field-type support, and request format are canonical at the query-parameters
-reference (linked from `weegloo-api-endpoints`). Don't guess operators.
+- **What the header unlocks beyond `contains`:** the **`regex`** operator and the geo **`near`** /
+  **`within`** operators only become available with Advanced Search on.
+- **"Unknown size" includes the obvious-looking cases.** *All* Media in a Space is an unknown-size
+  set — the thumbnails on screen are not the whole set, so filtering them in memory is wrong even
+  though it looks complete.
+- Exact operator list, per-field-type support and request format are canonical at the
+  query-parameters reference (linked from `weegloo-api-endpoints`). Don't guess operators.
 
 ---
 

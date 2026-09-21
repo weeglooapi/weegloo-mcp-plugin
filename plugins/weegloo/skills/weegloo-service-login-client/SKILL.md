@@ -7,14 +7,12 @@ description: Add Weegloo ServiceLogin OAuth sign-in (Google, GitHub, Facebook, G
 
 This skill covers the **implementation layer** of Weegloo ServiceLogin: the exact HTTP endpoints on `auth.weegloo.com`, the official browser SDK that wraps them, the native Android / iOS path, and the gotchas that bite first-time integrators.
 
-> **Prerequisite gate:** this is the *implementation* skill. If you have **not** yet invoked **`weegloo-service-login`** (the conceptual model — `ServiceLogin` / `ServiceUserRole` / `ServiceUser`, `defaultRole` / `roleOverride`, ACMA/ACDA scope, the CMA/CDA token boundary), **read it first**. Landing here for a concrete question (e.g. "what redirect URI?") does **not** mean the design decisions are settled — do not create a `ServiceLogin` / `ServiceUserRole` having only read this skill.
-
-For the **conceptual model** - what `ServiceLogin` / `ServiceUserRole` / `ServiceUser` are, how `roleOverride` works, ACMA/ACDA scope rules - see the **`weegloo-service-login`** skill.
+> **Prerequisite gate:** this is the *implementation* skill. The **conceptual model** — `ServiceLogin` / `ServiceUserRole` / `ServiceUser`, `defaultRole` / `roleOverride`, ACMA/ACDA scope, the CMA/CDA token boundary — lives in **`weegloo-service-login`**; **read it first**. Landing here for a concrete question (e.g. "what redirect URI?") does **not** mean the design decisions are settled — do not create a `ServiceLogin` / `ServiceUserRole` having only read this skill.
 
 For Weegloo base-URL conventions and the vendor JSON media type - see the **`weegloo-api-endpoints`** rule.
 
 **Pick the path first - browser or native app.** They differ only in the rows below; every endpoint
-and payload further down this page is identical for both.
+and payload on this page is identical for both.
 
 | | Browser (web) | Native app (Android / iOS) |
 |---|---|---|
@@ -23,12 +21,17 @@ and payload further down this page is identical for both.
 | Extra registration | none | **required** - the app's callback must be in `allowedCallbackUrls` first |
 | PKCE | not used | **required** - `code_challenge` on entry, `code_verifier` on exchange |
 
-A browser integration needs nothing from *Native apps* below. A native one needs that section **and**
-the wire protocol below.
+**Browser is the common path and is complete on this page** — a web integration needs nothing else
+from this skill.
 
-**There is no native SDK.** `weegloo-service-user` is a browser JavaScript package — do not add it to an
-Android or iOS project, and do not look for a Kotlin / Swift equivalent. On those platforms the whole
-integration is the HTTP calls on this page, made with the platform's own HTTP client.
+> 📱 **Building a native Android / iOS app? Read `references/native-apps.md` now, in addition to this
+> page.** It carries the two steps the browser path does not have, and the first is a **hard gate**:
+> the app's deep link (`myapp://login`, an App Link / Universal Link) **must already be registered in
+> `ServiceLogin.allowedCallbackUrls`** or the login entry rejects the request before the user ever
+> sees a sign-in screen. **There is no native SDK** — `weegloo-service-user` is a browser JavaScript
+> package; do not add it to an Android or iOS project and do not look for a Kotlin / Swift
+> equivalent. On those platforms the integration *is* the HTTP calls below, made with the platform's
+> own HTTP client.
 
 ## Recommended path: use the official SDK (browser only)
 
@@ -71,7 +74,7 @@ Minimal usage (latest alias - dev / prototype):
   const res = await auth.fetch(`https://acda.weegloo.com/v1/spaces/${spaceId}/contents`);
 ```
 
-Pinned version (production - replace `<hash>` with the value from `manifiest.json`):
+Pinned version (production - replace `<hash>` with the value from `manifest.json`):
 
 ```html
 <script src="https://weegloo-media.com/static/libs/service-login/service-login.<hash>.min.js"></script>
@@ -89,11 +92,14 @@ const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID', provider: 'goo
 
 **Decision aid:** the SDK is a **browser JavaScript** package — if the integration runs in a browser at all, prefer it. Everywhere else (a native Android / iOS app, a server-to-server token swap, a scripted backfill) there is no SDK to install: implement the wire protocol below directly.
 
-> **Provider selection:** the **`provider`** init option chooses the OAuth provider — its SDK default is **`'google'`**, but that default is the SDK's, not a design default. **Set `provider` explicitly to the one you inferred for the product** (see *Configuration responsibilities*); don't rely on the default, and don't ask the user merely to pick one.
+> **`provider` init option:** the SDK's own default is `'google'`, but **that is the SDK's default, not
+> a design default.** Always set it explicitly to the provider you inferred — see *Provider selection*
+> under *Configuration responsibilities*.
 
 ## OAuth wire protocol on `auth.weegloo.com`
 
-All paths are under `/v1/spaces/{spaceId}/...`. All bodies and responses are JSON.
+All paths are under `/v1/spaces/{spaceId}/...`. All bodies and responses are JSON. The SDK makes these
+calls for you; read them to debug a callback, or to implement the flow where the SDK cannot run.
 
 ### 1. Login entry - the browser navigates here (a native app opens this in the system browser)
 
@@ -101,9 +107,9 @@ All paths are under `/v1/spaces/{spaceId}/...`. All bodies and responses are JSO
 GET https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/{provider}
 ```
 
-- `{provider}` is one of Weegloo's supported providers — currently **`google`**, **`github`**, **`facebook`**, **`gitlab`**, **`line`**, **`kakao`**, **`naver`**. **Infer it from the product; do NOT ask the user to pick a provider, and do NOT treat any provider as the built-in default** (don't reflexively reach for `google`). If the product names/implies a specific one (e.g. a "Sign in with GitHub" button), use that; if nothing indicates a provider, **reason about which fits this product best and choose that** — then **surface the choice when you ask for its `clientId`/`clientSecret`** (that request reveals which provider you picked and lets the user redirect), so no separate "which provider?" question is needed. The only thing to avoid is wiring one provider's flow as another's, or giving Google's console steps for a non-Google product. (Confirm the current set from the `ServiceLogin` schema / docs if unsure.)
+- `{provider}` is one of Weegloo's supported providers — currently **`google`**, **`github`**, **`facebook`**, **`gitlab`**, **`line`**, **`kakao`**, **`naver`**. Which one to use is **inferred, never asked** — see *Provider selection* below. (Confirm the current set from the `ServiceLogin` schema / docs if unsure.)
 - This is a **navigation** target, not an XHR/fetch call - assign it to `window.location` so the browser follows the OAuth redirect chain.
-- After provider sign-in, Weegloo redirects the browser to the `callbackUrl` registered on the `ServiceLogin` resource, appending `?exchangeToken=<one-time-code>`. A native app sends `redirect_uri` here instead and comes back to its own deep link - see *Native apps*.
+- After provider sign-in, Weegloo redirects the browser to the `callbackUrl` registered on the `ServiceLogin` resource, appending `?exchangeToken=<one-time-code>`. A native app sends `redirect_uri` here instead and comes back to its own deep link - see `references/native-apps.md`.
 
 ### 2. Token exchange - first thing on the callback page
 
@@ -131,7 +137,7 @@ Successful response:
 }
 ```
 
-The `accessToken` is the Bearer Token usable against ACMA / ACDA - **not** CMA / CDA (see **`weegloo-service-login`** for the scope rule).
+The `accessToken` is the Bearer Token usable against ACMA / ACDA / Upload - **not** CMA / CDA (see **`weegloo-service-login`** for the scope rule).
 
 ### 3. Refresh - before `expiresAt`
 
@@ -154,6 +160,13 @@ Content-Type: application/json
 ```
 
 Sending `refreshToken` is **strongly recommended** so the server can revoke it. Calling without a body is permitted but leaves the refresh token usable until natural expiry.
+
+### 5. The signed-in member
+
+`GET https://acma.weegloo.com/v1/me` with that Bearer — e.g. `auth.fetch('https://acma.weegloo.com/v1/me')`.
+
+*(The `/v1/spaces/{spaceId}/me` trap is stated in the always-loaded `weegloo-api-endpoints` rule and in
+`weegloo-service-login`; not repeated here.)*
 
 ## Critical pitfalls
 
@@ -192,17 +205,7 @@ The official SDK does this strip **synchronously, before** issuing `POST /oauth/
 
 `setTimeout`/`setInterval` are unreliable in suspended/throttled tabs. Refresh on demand (when `getAccessToken()` is called and `Date.now() + leeway >= expiresAt`), not on a wall-clock schedule. The SDK uses a 60-second leeway by default.
 
-### F. Current member on ACMA — **`GET /v1/me`**, not **`/spaces/{spaceId}/me`**
-
-After sign-in, to load the signed-in **`ServiceUser`** (same role as **CMA** **`GET /v1/me`** for console users, but on **ACMA**):
-
-- **Correct:** **`GET https://acma.weegloo.com/v1/me`** with the ServiceLogin Bearer Token (e.g. `auth.fetch('https://acma.weegloo.com/v1/me')` if using the SDK).
-
-**Wrong:** **`GET https://acma.weegloo.com/v1/spaces/{spaceId}/me`**. That path is **not** the ACMA identity endpoint. **`auth.weegloo.com`** uses **`/v1/spaces/{spaceId}/...`** everywhere; **ACMA** does **not** mirror that for **`/me`**—do not interpolate `spaceId` into the URL.
-
-Detail: **`weegloo-service-login`** skill and **`weegloo-api-endpoints`** rule.
-
-### G. Two URLs, two lifetimes — the provider redirect URI is deploy-independent; `callbackUrl` is not
+### F. Two URLs, two lifetimes — the provider redirect URI is deploy-independent; `callbackUrl` is not
 
 A first integrator wiring an **app that is not deployed yet** routinely stalls on "which URL do I give the provider?" — because the OAuth flow has **two** URLs that depend on different things:
 
@@ -213,21 +216,13 @@ A first integrator wiring an **app that is not deployed yet** routinely stalls o
 
 So the deploy chicken-and-egg is only apparent: you can **always** finish the provider side and create the `ServiceLogin` immediately (placeholder `callbackUrl`), then update only `callbackUrl` post-deploy via `cma_UpdateOneServiceLogin` / `cma_PatchOneServiceLogin`. Do **not** block ServiceLogin creation on having a deployed URL, and do **not** put your app's `callbackUrl` into the provider's redirect-URI field (that is pitfall **A** again).
 
-**Because it is deploy-independent, hand it to the user BEFORE you start building — and again when
-you finish.** Registering it is a manual errand in a console you have no access to, and it is knowable
-as soon as the Space and provider are settled, so there is no reason to hold it back. Surface it at
-**both** ends:
+Because it is deploy-independent, **hand the redirect URI to the user up front and again in the
+completion message** — the when/why/green-presentation is owned by `weegloo-service-login` →
+*Tell the user the provider Redirect URI UP FRONT*, and is not repeated here.
 
-| When | What to say |
-|---|---|
-| **Up front** — the moment ServiceLogin enters the plan, before writing code | "Register this as the **Authorized redirect URI** in the `{provider}` console" + the URI with the real `spaceId` and provider filled in, in **green** (`weegloo-global-rules`). The user does that while you build. |
-| **At the end** — in the completion message | The same URI again, plus the now-real `callbackUrl` and the live app URL. The closing message is the record the user scrolls back to. |
+### G. `clientId` / `clientSecret` are blocking, user-only inputs
 
-Announcing early **replaces neither** the end-of-run report **nor** the just-in-time credentials
-request below — those are separate. Rationale and the exact-paste caveat: `weegloo-service-login`
-→ *Tell the user the provider Redirect URI UP FRONT*.
-
-**But `callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` are blocking user-only inputs** — they come from the user's own OAuth client at the chosen provider and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.) **When you ask, don't ask bare** — hand the user the step-by-step console walkthrough for *their* provider, with the real `{spaceId}` filled into the redirect URI. **Every provider has a dedicated skill** — invoke and follow the one for the chosen provider (**`weegloo-service-login-google`** for Google, **`weegloo-service-login-github`** for GitHub, **`weegloo-service-login-facebook`** for Facebook, **`weegloo-service-login-gitlab`** for GitLab, **`weegloo-service-login-kakao`** for Kakao, **`weegloo-service-login-naver`** for Naver, **`weegloo-service-login-line`** for LINE). Do **not** give one provider's steps for another.
+`callbackUrl` is the *only* part you may placeholder. `clientId` / `clientSecret` come from the user's own OAuth client at the chosen provider and nobody else can supply them. Without them the `ServiceLogin` cannot be created and sign-in stays **inert**. So when you reach this step: **stop, ask the user for `clientId` / `clientSecret`, and create the `ServiceLogin`** — do **not** finish with only the `ServiceUserRole` created and the credentials written off as "add later." A role created but no `ServiceLogin` is **blocked-pending-input**: end the turn by *asking for the credentials*, not by reporting the login as done. (This is the just-in-time rule of `weegloo-platform-integration` step 4 — ask at this step, not earlier, not as a closing footnote.) **When you ask, don't ask bare** — invoke the chosen provider's own skill (table below) and hand the user its step-by-step console walkthrough, with the real `{spaceId}` filled into the redirect URI. Do **not** give one provider's steps for another.
 
 ## Configuration responsibilities (provider console + Weegloo Console)
 
@@ -240,7 +235,7 @@ only the console-specific clicks differ — those live in a per-provider skill, 
 1. **Provider's developer console → create an OAuth 2.0 client (Web application).** Register the
    **Authorized redirect URI** = `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}`
    (the `/code/` form — hit by the provider → Weegloo, not the browser; pitfall **A**).
-   **Deploy-independent — set it now** (pitfall **G**). Then copy that provider's `clientId` /
+   **Deploy-independent — set it now** (pitfall **F**). Then copy that provider's `clientId` /
    `clientSecret`.
 2. **Create the `ServiceLogin` yourself** — **`cma_CreateServiceLogin`**, not the user clicking through
    the console. The fields split by who can supply them.
@@ -262,7 +257,8 @@ only the console-specific clicks differ — those live in a per-provider skill, 
    - `defaultRole` → `Refer` to a least-privilege `ServiceUserRole` (create it first).
    - `callbackUrl` → a URL on **your product** that the SDK can intercept (Weegloo will redirect the
      browser there with `?exchangeToken=...`). **Deploy-dependent** — if the app is not deployed yet,
-     set a placeholder and patch it after deploy (pitfall **G**).
+     set a placeholder and patch it after deploy (pitfall **F**).
+   - `allowedCallbackUrls` → **native apps only**; see `references/native-apps.md`.
 
    ⚠️ **Settle the provider list at creation time.** `cma_UpdateOneServiceLogin` has no `providers`
    field, and no MCP tool edits the provider list — so once the `ServiceLogin` exists you cannot add,
@@ -271,99 +267,32 @@ only the console-specific clicks differ — those live in a per-provider skill, 
 3. **Product code:** call the SDK's `auth.handleCallback()` on the callback URL page. Do not roll your
    own exchange unless you cannot use the SDK.
 
-**Per-provider console steps (every provider has one):**
+### Provider selection — infer it, never ask
+
+**Infer the provider from the product — do not ask the user to pick one** (per `weegloo-platform-integration`'s
+no-scoping-questions policy), and **do not treat any provider as the built-in default** (don't reflexively
+reach for `google` — the SDK's `provider` default is the SDK's, not a design default). If the product
+names or implies one (e.g. a "Sign in with GitHub" button), use that; if nothing indicates one,
+**reason about which fits this product best and choose it.** The choice is surfaced — and stays
+correctable — when you ask for that provider's `clientId` / `clientSecret` (pitfall **G**), so no
+separate "which provider?" question is needed. The only thing to avoid is wiring one provider's flow
+as another's, or giving one provider's console steps for a different product.
+
+### Per-provider console steps (every provider has one)
 
 | Provider | `{provider}` | Console-setup skill |
 |---|---|---|
-| Google   | `google`   | **`weegloo-service-login-google`** (detailed walkthrough) |
-| GitHub   | `github`   | **`weegloo-service-login-github`** (detailed walkthrough) |
-| Kakao    | `kakao`    | **`weegloo-service-login-kakao`** (detailed walkthrough) |
-| Naver    | `naver`    | **`weegloo-service-login-naver`** (detailed walkthrough) |
-| LINE     | `line`     | **`weegloo-service-login-line`** (detailed walkthrough) |
-| Facebook | `facebook` | **`weegloo-service-login-facebook`** (detailed walkthrough) |
-| GitLab   | `gitlab`   | **`weegloo-service-login-gitlab`** (detailed walkthrough) |
+| Google   | `google`   | **`weegloo-service-login-google`** |
+| GitHub   | `github`   | **`weegloo-service-login-github`** |
+| Kakao    | `kakao`    | **`weegloo-service-login-kakao`** |
+| Naver    | `naver`    | **`weegloo-service-login-naver`** |
+| LINE     | `line`     | **`weegloo-service-login-line`** |
+| Facebook | `facebook` | **`weegloo-service-login-facebook`** |
+| GitLab   | `gitlab`   | **`weegloo-service-login-gitlab`** |
 
-**Each provider skill also carries the illustrated guide to hand the user** —
-`https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/{provider}`,
+Invoke and follow the one for the chosen provider. **Each provider skill also carries the illustrated
+guide to hand the user** — `https://docs.weegloo.com/getting-started/core-concepts/service-users/service-login/{provider}`,
 keyed by the same `{provider}` value as the table.
-
-**Infer the provider from the product — do not ask the user to pick one** (per `weegloo-platform-integration`'s
-no-scoping-questions policy). If the product names/implies a specific provider, use it; if it doesn't,
-**reason about the best-fit provider for this product and choose it — there is no built-in default, so
-don't reach for Google by reflex.** The choice is surfaced — and stays correctable — at the
-`clientId`/`clientSecret` ask, so you needn't ask separately. For Google, follow
-`weegloo-service-login-google`; for GitHub, `weegloo-service-login-github`; for Kakao,
-`weegloo-service-login-kakao`; for Naver, `weegloo-service-login-naver`; for LINE,
-`weegloo-service-login-line`; for Facebook, `weegloo-service-login-facebook`; for GitLab,
-`weegloo-service-login-gitlab`.
-
-## Native apps (Android / iOS)
-
-ServiceLogin is **not browser-only**. A native app is returned **straight into its own deep link** and
-runs the exchange itself. Two steps are required that the browser path does not have.
-
-**1. Register the app's callback** in `ServiceLogin.allowedCallbackUrls`. **A `redirect_uri` that
-is not registered is rejected at the login entry**, so do this before the first sign-in attempt.
-
-- **Creating the `ServiceLogin` now** - put `allowedCallbackUrls` in the create body.
-- **A `ServiceLogin` already exists** - the usual case, because the web product shipped first. **You
-  must update it.** Prefer `cma_PatchOneServiceLogin` to append one entry. `cma_UpdateOneServiceLogin`
-  is a full replacement: `allowedCallbackUrls` and `approvalRequired` are the two fields that default
-  when omitted, so a PUT that leaves them out silently clears the callback list and turns approval
-  off - resend the whole resource.
-
-```json
-"allowedCallbackUrls": [
-  { "url": "myapp://login", "refreshTokenTtlInSec": 2592000 }
-]
-```
-
-`url` is an absolute URI of any scheme - a custom scheme (`myapp://login`) and an App Link / Universal
-Link (`https://app.example.com/cb`) are equally accepted - with no fragment; at most 10 entries.
-`refreshTokenTtlInSec` is optional and sets the refresh-token lifetime for logins returning through
-that callback, which mobile sessions usually want longer than the platform default. Unlike
-`callbackUrl` this value does not depend on a deploy address (pitfall **G**), so register it as soon as
-the Space exists.
-
-**2. Drive the flow with `redirect_uri` + PKCE.** Open the entry URL in the **system browser** (Android
-Custom Tabs, iOS `ASWebAuthenticationSession`); providers block in-app `WebView`.
-
-```
-GET https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/{provider}
-      ?redirect_uri=myapp://login
-      &code_challenge=<BASE64URL(SHA256(code_verifier)), unpadded>
-      &code_challenge_method=S256
-      &state=<opaque value the app generates>
-```
-
-`code_verifier` is 43-512 chars and freshly generated per attempt. `state` is optional and comes back
-untouched. Weegloo then returns to the registered `redirect_uri`:
-
-```
-myapp://login?exchangeToken=<one-time-code>&state=...           success
-myapp://login?error=<reason>&contact=<support email>&state=...  failure
-```
-
-`error` is one of `signup_limit_exceeded`, `approval_required`, `email_conflict`, `email_required`,
-`server_error`. Branch on it and write your own copy - Weegloo sends no localized text.
-
-**3. Exchange** exactly as wire-protocol step 2, carrying the verifier:
-
-```json
-{ "exchangeToken": "...", "codeVerifier": "..." }
-```
-
-- **The provider's OAuth client stays a "Web application" type - even for a native app.** The OAuth
-  redirect targets `auth.weegloo.com`, not your app, so where a provider console asks for an
-  application type, pick **Web**; do not create an "Android" / "iOS" client for this flow. (Google
-  specifics: **`weegloo-service-login-google`**.) Provider SDK / app-to-app sign-in is not part of this
-  flow.
-- **Prefer verified deep links** (Android **App Links**, iOS **Universal Links**) over a bare custom
-  scheme - an unverified scheme can be claimed by another installed app, and `exchangeToken`, though
-  single-use, is a bearer secret in transit. Registering either is app-side OS config, unrelated to
-  Weegloo.
-- **Provider-agnostic.** Nothing here depends on which OAuth provider the Space uses.
-- Implement the calls above with the platform's own HTTP client; the security posture in *When the SDK cannot be used* below applies unchanged.
 
 ## When the SDK cannot be used
 
@@ -374,10 +303,16 @@ If a server, CLI, or native app needs to exchange tokens, follow the wire protoc
 - On logout, send the `refreshToken` so it is revoked server-side.
 - Treat the Bearer Token as ACMA / ACDA / Upload only - never send it to CMA or CDA. Member-contributed media goes through Upload then ACMA Media create (see **`weegloo-service-login`**).
 
+## References (read only when the branch applies)
+
+- **`references/native-apps.md`** — read it **whenever the client is a native Android or iOS app**
+  (and not otherwise). Carries the `allowedCallbackUrls` registration gate, the `redirect_uri` + PKCE
+  entry parameters, the deep-link error returns, and the "Web application" OAuth-client-type rule.
+
 ## Related
 
 - **Conceptual model (ServiceLogin / ServiceUserRole / ServiceUser, permission rules):** **`weegloo-service-login`** skill.
-- **Per-provider console setup (the clicks to obtain `clientId`/`clientSecret`):** **`weegloo-service-login-google`** (Google), **`weegloo-service-login-github`** (GitHub), **`weegloo-service-login-facebook`** (Facebook), **`weegloo-service-login-gitlab`** (GitLab), **`weegloo-service-login-kakao`** (Kakao), **`weegloo-service-login-naver`** (Naver), **`weegloo-service-login-line`** (LINE).
+- **Per-provider console setup:** the table above.
 - **Role filters (`createdBy`, `:self`):** **`weegloo-space-role`** skill.
 - **Base URLs and Accept-header rules:** **`weegloo-api-endpoints`** rule.
 - **Picking the right API per service type:** **`weegloo-service-architecture`** skill.

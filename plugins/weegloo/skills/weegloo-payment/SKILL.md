@@ -72,7 +72,7 @@ publishable key at all — it exists here only for Stripe.js / Elements.
 - **Shape B (webhook receiver) cannot run on it** — registering an endpoint and getting a
   `whsec_…` requires dashboard access to an account you own. Build **shape A** (§6c) on the sample
   keys; a webhook receiver waits for the user's own account (§8). It is not something you stop and
-  ask for.
+  ask for. **So the default path never reads `references/callback-receiver.md`.**
 
 ### 2. Read the docs first — they outrank this file
 
@@ -97,10 +97,9 @@ trying nearby paths.
 
 ### 3. What to ask the user for — **nothing**
 
-There is no credential question in the default path. The keys are in §1, `success_url` /
-`cancel_url` resolve from your own deployed origin (§6a), and the product details came with the
-request. Asking for a key, a Stripe account, or a provider preference is the failure mode this
-section exists to prevent — the user finds out what shipped from the §7 disclosure, after it works.
+There is no credential question in the default path: the keys are in §1, `success_url` / `cancel_url`
+resolve from your own deployed origin (§6a), and the product details came with the request. The user
+finds out what shipped from the §7 disclosure, after it works.
 
 ### 4. The test cards
 
@@ -141,8 +140,6 @@ without scrolling, next to the pay button, not in a tooltip or a collapsed secti
 Write it in the product's own language, and style it as a real callout — a bordered, tinted block —
 not as fine print. **Remove this block when live keys arrive** (§8); a test-card panel on a live
 checkout is worse than no panel at all.
-
----
 
 ## The flow — hosted Checkout
 
@@ -284,18 +281,15 @@ The moment the flow works, say three things plainly, in the user's own language:
    to a contracted PG/MoR, is the swap in §8. **State that it is available; do not ask for
    credentials.** If they want it, they will say so.
 
-**Put point 2 in red.** It is the one fact whose omission actually costs the user money-handling
-confidence, so it gets the must-know colour (`weegloo-global-rules` → *Highlight what the user must
-act on or must know*) — a `diff` fence, `- ` prefix, in the user's own language:
+**Put point 2 in red** — it is the must-know fact here. Mechanics of the `diff` fence, the `+ ` /
+`- ` markers and keeping the two blocks separate are owned by `weegloo-global-rules` → *Highlight what
+the user must act on or must know*; this is the sentence:
 
 ```diff
 - Payments run in Stripe TEST mode — nothing is ever charged, and real cards are refused.
 ```
 
-The `- ` is the red-rendering marker, not part of the sentence, and the block **never replaces** saying
-it in prose — state the caveat either way, so a plain-text or no-colour surface loses nothing. Points
-1 and 3 stay plain text; the live checkout URL, if you have one, is **green** (`+ `) in its own
-separate block so the two do not read as one diff.
+Points 1 and 3 stay plain text; the live checkout URL, if you have one, is the **green** block.
 
 This is a **disclosure about what shipped, not a request** — it asks for nothing, so it does not
 collide with `weegloo-platform-integration`'s ban on "give me these and I'll continue" wrap-ups.
@@ -323,7 +317,8 @@ credentials list. **Never let a test-mode checkout pass for production-ready by 
 **A different provider** is a replacement, not a layer:
 
 1. **Read that provider's docs first** — shape, signature scheme, callback-header support
-   (§*Two shapes*, B-1, B-3). Do not assume it behaves like Stripe.
+   (§*Two shapes*; if it pushes, `references/callback-receiver.md`). Do not assume it behaves
+   like Stripe.
 2. **Remove the Stripe integration entirely**: the session-creating Script, the confirm Script, the
    redirect code, the success and cancel handling, the webhook receiver, the test-card panel, and
    **every `pk_test_…` / `sk_test_…` / `whsec_…` string left in the tree**.
@@ -334,6 +329,9 @@ credentials list. **Never let a test-mode checkout pass for production-ready by 
 
 ---
 
+
+---
+
 ## Two shapes — pick by whether you can *ask* the PG
 
 | | **A. Confirm (pull)** | **B. Callback (push)** |
@@ -341,15 +339,26 @@ credentials list. **Never let a test-mode checkout pass for production-ready by 
 | Trigger | your frontend, after the PG SDK / redirect returns | the PG POSTs to you |
 | Truth comes from | an `Http` call to the PG's verify/confirm API | the request body + its signature |
 | Inside the Script | an outbound `Http` to the PG, then the write | verify + write only, no outbound call |
-| Endpoint | `…/execute` (your frontend holds a token) | `…/execute` with a token, or `…/execute/anonymous` with none — see B-1 |
+| Endpoint | `…/execute` (your frontend holds a token) | `…/execute` with a token, or `…/execute/anonymous` with none |
 | Use for | checkout approval, "did this payment really go through" | refunds, disputes, subscription renewals, delayed settlement, anything you cannot pull |
 
 **Prefer A whenever the answer can be pulled.** It needs no signature verification, no inbound
-authentication, and no idempotency key — you are asking the authoritative source directly. §6c is A.
+authentication, and no idempotency key — you are asking the authoritative source directly. §6c is A,
+and the whole Stripe-test-mode default path is A — it is complete above, in this file.
 
 **Add B when the money can move without your frontend being there** — a subscription renewal, a
 dispute, an async payment method that settles minutes later. A buyer who closes the tab before the
 redirect is the ordinary case B covers.
+
+> ### ➜ Building shape B? Read `references/callback-receiver.md` before designing the flow.
+> It is the only place with: which of `…/execute` and `…/execute/anonymous` the provider posts to and
+> what authenticates each, the signature check as the first statement (Stripe's `Stripe-Signature`
+> scheme statement by statement, and the shape→statement table for mapping any other provider's
+> scheme), the replay window, and idempotency against provider retries. **A product does A or B, not
+> both** — if you are not receiving a push from the provider, do not open it.
+>
+> It is also **not reachable on the §1 sample keys** — registering a webhook endpoint needs the
+> user's own Stripe account, so the default build does not go there.
 
 ---
 
@@ -372,177 +381,6 @@ redirect is the ordinary case B covers.
 
 ---
 
-## B. Callback — the PG POSTs to a Script
-
-### B-1. Which endpoint the PG posts to (read this before designing the flow)
-
-There are two, and one question picks for you:
-
-> **Can this provider send a custom HTTP header with its webhook?**
-
-**Answer it from the provider's own webhook/notification documentation, per integration.** Do not
-assume, and do not trust a list — the answer differs by provider, by product line within a provider,
-and changes over time.
-
-**For Stripe the answer is no.** A Stripe webhook endpoint is a bare URL; the dashboard offers no
-custom headers or basic auth. So a Stripe receiver uses the **anonymous** row below, and its
-signature check is the only thing authenticating the call.
-
-| If it can… | Register this URL | What authenticates the call |
-|---|---|---|
-| send a **custom header** | `https://script.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute` | a **`SpaceAccessToken`** in `Authorization: Bearer …` **and** the Script's signature check |
-| only POST to a **bare URL** (Stripe) | `https://script.weegloo.com/v1/spaces/{spaceId}/scripts/{scriptId}/execute/anonymous` | the Script's **signature check alone** |
-
-The URL you paste into the provider's console is the **full** one above — Script execution is served by
-`script.weegloo.com`, not the CMA host (`weegloo-api-endpoints`).
-
-**Prefer the token path whenever the provider supports it** — two independent gates beat one, and an
-endpoint that answers only to a known token never runs on someone else's traffic at all.
-
-**Token path.** Bind the token to a **`SpaceRole` whose only grant is `script.Execute` scoped with the
-`self` filter** to that one Script, so a leaked callback token buys nothing but the right to invoke
-that one endpoint. See `weegloo-space-access-token` and `weegloo-space-role`.
-
-```jsonc
-// the SpaceRole bound to the callback token — nothing else granted
-"script": { "Execute": { "Allow": [ { "self": { "sys": {
-    "id": "<scriptId>", "type": "Refer", "targetType": "Script" } } } ] } }
-```
-
-**Anonymous path.** Set **`anonymousCallEnabled: true`** on the Script and register
-`…/execute/anonymous`. No token is involved — a presented one is ignored — so:
-
-- ⚠️ **The signature check IS the authentication.** Not a precaution: it is the only thing between the
-  open internet and a Script that runs with its author's authority. Verify first, return `401` on
-  failure, and do nothing before that (B-2).
-- The run is attributed to the **Script's author** (`sys.createdBy` on every write), since there is no
-  caller to attribute to. No role permission is consulted — the flag is the whole decision.
-- The Script may not use the **`:self`** filter — refused when the Script is saved
-  (**`WGL400061`**); with no caller to resolve it to, an ownership filter would widen to the author's
-  own rows. Match on the provider's own reference instead (`client_reference_id`).
-- Anonymous calls still consume the Organization's Script-execution quota and nothing rate-limits
-  them, so do not leave the flag on for a Script that verifies nothing.
-
-Either way the Script's **`directCallEnabled` must be `true`** (the default); `false` means it runs
-only as a Webhook's linked action and both endpoints reject the call with **`WGL422062`**.
-
-**A Weegloo `Webhook` is not this.** That reacts to *Space* events (Content created, …), not to a
-third party calling in. See `weegloo-webhook`.
-
-### B-2. Verify the signature as the FIRST statement
-
-`Signature`, `Hash` and `Regex` are pure computation, so a Script that only verifies and writes answers
-the PG in milliseconds with a genuine `200`. **Keep `Http` out of a callback receiver** — an outbound
-call the provider has to wait for turns a receiver that should be instant into one that can exceed the
-provider's own timeout, and a PG that stopped waiting treats the delivery as failed and retries. If you
-must call out, verify + record here and let a `Webhook` on that write do the rest.
-
-Stripe expects a `2xx` **before** any slow work, and retries a non-`2xx` for up to three days in live
-mode (a few hours in a sandbox).
-
-### B-3. Stripe's scheme, statement by statement
-
-Stripe's `Stripe-Signature` header packs a timestamp and one or more signatures:
-
-```
-Stripe-Signature: t=1492774577,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
-```
-
-- The signed message is **`{timestamp}.{raw body}`** — a literal period between the two.
-- **HMAC-SHA256**, keyed with the endpoint's **`whsec_…` secret used verbatim**, prefix included.
-  Do not strip `whsec_`, and do not hex- or base64-decode it: `secretEncoding` stays **`Utf8`**.
-- The code is **hex**.
-
-```jsonc
-{ "type": "Regex", "name": "sig", "mode": "Capture",
-  "pattern": "t=(\\d+),v1=([0-9a-f]{64})",
-  "value": "{ /headers/stripe-signature }" },
-
-{ "type": "If", "condition": { "!": "{ /sig }" },
-  "then": [ { "type": "Return", "isError": true, "statusCode": 401, "value": "bad signature" } ] },
-
-{ "type": "Signature", "name": "verified", "algorithm": "SHA256",
-  "secret": "whsec_…", "secretEncoding": "Utf8",
-  "value": "{ /sig/1 }.{ /rawPayload }",
-  "expected": "{ /sig/2 }" },
-
-{ "type": "If", "condition": { "!": "{ /verified }" },
-  "then": [ { "type": "Return", "isError": true, "statusCode": 401, "value": "bad signature" } ] }
-```
-
-- ⚠️ **Do not anchor the pattern with `^…$`.** For test events Stripe appends a second, fake `v0=…`
-  scheme, and a rolled secret adds a second `v1=…` — an anchored pattern matches neither, so the
-  receiver rejects every delivery while looking correct. Ignore any scheme that is not `v1`.
-- **Sign `{ /rawPayload }`** — the caller's body exactly as received. A re-serialized object has
-  different bytes and will never match. This is the single most common cause of a failing Stripe
-  signature check.
-- Header names arrive **lower-cased**, whatever case the provider sent: `{ /headers/stripe-signature }`.
-- `Capture` binds a list — index `0` is the whole match, `1..n` the groups — read by pointer. Two
-  pointers in one string already concatenate, so `"{ /sig/1 }.{ /rawPayload }"` needs no `$cat`.
-- **Nothing before the check.** No read, no write, no `SetVar` off the payload.
-
-**Other providers** sign differently. This is the **shape → statement** vocabulary to map onto
-whatever their docs describe — start by extracting four things from their signature documentation:
-which header carries the code, exactly what bytes are signed, hex vs base64 (`Signature` accepts
-either, so this is diagnostic only), and how the secret itself was issued (this one you *must* act on
-via `secretEncoding` — the wrong choice is a different key and never matches).
-
-| The scheme's shape | Statements |
-|---|---|
-| Keyed hash of the raw body, code sits alone in a header | `Signature` |
-| Signing key issued **hex**- or **base64**-encoded | `Signature` + `secretEncoding: "Hex"` / `"Base64"` |
-| Signature header packs several values, e.g. `t=…,v1=…` (Stripe) or `ts=…;h1=…` | `Regex` `Capture` → `Signature` over the assembled message |
-| Signed message joins values from **separate** headers | `Signature` over `"{ /headers/a }.{ /headers/b }.{ /rawPayload }"` |
-| **Keyless** salted digest — a hash of concatenated fields *including* a shared secret | `Hash` + compare with `$===` |
-| Legacy `MD5(…)` digest | `Hash` with `algorithm: "MD5"` |
-| Asymmetric signature (RSA/ECDSA), or a scheme requiring a fetched certificate | **not covered** — `Signature` is keyed-hash only; use shape A instead |
-
-`Hash` has no `secret` field on purpose — schemes put the key in different positions, so write it into
-`value` wherever that scheme puts it. Mind `Hash`'s short **128-character** limit on what `value`
-resolves to; a long concatenation needs `Signature` (65,536) or fewer fields. `Regex` `pattern` is
-capped at 128 characters too.
-
-### B-4. Replay window
-
-Stripe's own libraries reject a delivery whose timestamp is more than **5 minutes** old, and the
-timestamp is inside the signed message so it cannot be tampered with. `/now/seconds` is the run's
-clock (one reading per execution, so two statements cannot disagree):
-
-```jsonc
-{ "type": "If",
-  "condition": { "$<": [ { "$-": [ "{ /now/seconds }", "{ /sig/1 }" ] }, 300 ] },
-  "then": [ … proceed … ],
-  "else": [ { "type": "Return", "isError": true, "statusCode": 401, "value": "stale" } ] }
-```
-
-The captured timestamp is text; the arithmetic coerces it. `/now/millis` and `/now/iso` are the other
-two forms — `iso` is the same rendering as `sys.createdAt`, so it compares against one directly. Never
-use a tolerance of `0`; that disables the check entirely. Note that a Stripe **retry** carries a
-**fresh** timestamp and signature, so the window never rejects a legitimate retry — dedupe is B-5's
-job, not this one's.
-
-### B-5. Idempotency — providers retry
-
-A retried delivery must not charge, credit or fulfil twice. Stripe explicitly does not guarantee
-ordering or exactly-once delivery, so **key on `event.id`** (`evt_…`), not on arrival:
-
-1. `ResourceFind` a receipt Content by that `evt_…` id.
-2. If found ⇒ `Return` `200` immediately (a success, not an error — otherwise the PG keeps retrying).
-3. Otherwise write it, then do the work.
-
-The payload's `data.object` is the resource the event is about — for `checkout.session.completed`, the
-Checkout Session, carrying `client_reference_id`, `amount_total`, `currency` and `payment_status`.
-Verify the amount against your own order row here exactly as in shape A; a verified signature proves
-*Stripe sent this*, not *this is the order you think it is*.
-
-For a counter or balance that two deliveries could race on, pass the row's **`sys.version`** as the
-write's `version` (optimistic lock) and let `Try` handle the conflict — see `weegloo-script`.
-
-Note that a Script's writes are **silent by default** (`propagateEvents: false`): they do not index or
-fire Webhooks. Set `propagateEvents: true` on the write that should trigger downstream work.
-
----
-
 ## Where secrets live
 
 | Secret | Goes in |
@@ -552,18 +390,16 @@ fire Webhooks. Set `propagateEvents: true` on the write that should trigger down
 | Stripe **publishable key** (`pk_…`) | browser code — this one is safe to expose |
 | Callback **auth token** (token path, non-Stripe providers) | the `SpaceAccessToken` you register with the PG, not in the Script |
 
-⚠️ **A `Signature.secret` written into a Script definition is stored as authored and is readable by
-anyone who can read that Script.** Keep Script `Read` off end-user roles, and treat the signing secret
-as compromised if it is not. (`Http.headers` `secret: true` is the encrypted-at-rest slot; there is no
-equivalent flag on `Signature` today.)
+⚠️ **`Http.headers` `secret: true` is the encrypted-at-rest slot; `Signature.secret` has no
+equivalent** — a signing secret is stored as authored and readable by anyone who can read that
+Script, so keep Script `Read` off end-user roles.
 
 ## Never
 
 - **Never ask which PG / MoR to use.** Named provider → integrate that one; none named → integrate
   Stripe in test mode and disclose it. A provider menu is a scoping question.
-- **Never ask the user for Stripe keys at all.** The published sample pair in §1 is what you wire in;
-  a key request — at the start, or as a closing "send me these two values" — is the failure this
-  default exists to remove. And never ship an inert checkout waiting on a key.
+- **Never ask the user for Stripe keys at all** — the published sample pair in §1 is what you wire
+  in. And never ship an inert checkout waiting on a key.
 - **Never finish a test-mode payment flow silently.** The completion message must say that payments
   run in Stripe test mode, are not really charged, and do not accept real cards (§7) — as a
   statement, not a request for credentials. An undisclosed test-mode checkout reads as
@@ -572,8 +408,6 @@ equivalent flag on `Signature` today.)
   cross-origin by design; the number goes in your own UI, prominently (§5).
 - **Never leave a `pk_test_…` / `sk_test_…` / `whsec_…` key, or the test-card panel, in the tree once
   live credentials exist** — going live means removing the test path, not layering over it (§8).
-- **Never reuse a test webhook signing secret in live mode.** Signing secrets are per-endpoint and
-  per-mode; the wrong one fails every delivery with a valid-looking signature error.
 - **Never put the secret key in client code.** The publishable key is the only Stripe key the browser
   may see; `sk_…` lives in `Http.headers` with `"secret": true`.
 - **Never send Stripe parameters in the URL.** They belong in a form-urlencoded `body`, which the
@@ -583,14 +417,9 @@ equivalent flag on `Signature` today.)
   record, or from the PG's API response, in the currency's minor unit.
 - **Never store card data** — PAN, CVC, expiry — in Content, Media, or a Script payload. Use the PG's
   tokenization; that is what it is for.
-- **Never anchor the `Stripe-Signature` pattern with `^…$`** — the extra `v0=` on test events and the
-  second `v1=` during a secret roll both break it (B-3).
-- **Never skip signature verification because the callback URL is secret.** A URL is not a secret, and
-  on Stripe's anonymous endpoint there is no token either.
-- **Never set `anonymousCallEnabled` on a Script that verifies nothing.** That publishes an endpoint
-  which runs with the author's authority to anyone who finds the URL.
 - **Never fulfil in the browser** — grant the entitlement from the Script that established payment.
 - **Never `Return` a PG error verbatim** if it may echo customer data.
+- Shape B adds four more "never"s of its own — they are in `references/callback-receiver.md`.
 
 ## Related
 
