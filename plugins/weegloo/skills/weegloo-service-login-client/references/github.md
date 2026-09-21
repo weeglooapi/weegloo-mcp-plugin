@@ -15,9 +15,6 @@ In the GitHub OAuth App, the **Authorization callback URL** is, with the real `{
 The leading `+ ` is **not part of the URI** — GitHub's **Authorization callback URL** field takes the
 `https://…` text only.
 
-**Tell the user this URI up front, before you build** (`weegloo-service-login` → *Tell the user the
-provider Redirect URI UP FRONT*), not only when you ask for the credentials.
-
 - The `/code/` segment is required — it is the **GitHub → Weegloo** callback, **not** the browser entry
   URL (`…/login/oauth2/github`). Putting `/code/` in the entry URL, or the entry URL in this field,
   breaks sign-in (spine pitfall **A**).

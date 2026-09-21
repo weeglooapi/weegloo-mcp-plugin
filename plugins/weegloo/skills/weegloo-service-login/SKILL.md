@@ -25,39 +25,30 @@ If you are wiring the **product owner's** admin tooling — they already have a 
 - You need a **Bearer Token** that calls **ACMA** / **ACDA** as a specific app-managed member, not as a Weegloo User.
 - Choosing between **per-member default permissions** (`sys.defaultRole`) vs **per-individual overrides** (`roleOverride`), or granting cross-member reach with a role that omits the `createdBy` filter.
 
-## Tell the user the provider Redirect URI UP FRONT — before you build, and again at the end
+## The provider Redirect URI — the user registers it by hand
 
 Registering the Redirect URI is **the user's job, done by hand, in a console you cannot reach.** It is
 also the single most common reason a finished ServiceLogin integration cannot sign anybody in
-(`redirect_uri_mismatch` on the very first attempt). And it does **not** depend on your app being
+(`redirect_uri_mismatch` on the very first attempt). It does **not** depend on your app being
 deployed — the URI is fully determined the moment the **Space** and the **provider** are known:
 
 ```diff
 + https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}
 ```
 
-Both of those are settled **before any code is written**: the Space is a `weegloo-global-rules` hard
-gate, and the provider is *inferred from the product*, not asked (`weegloo-service-login-client`). So the
-moment ServiceLogin enters the plan, **tell the user the URI** — with the real `spaceId` and provider
-already substituted, never the `{…}` template — and name the console field it goes in.
+Both are settled before any code is written: the Space is a `weegloo-global-rules` hard gate, and the
+provider is *inferred from the product*, not asked (`weegloo-service-login-client`). So whenever you
+hand this URI over, hand it **with the real `spaceId` and provider already substituted, never the
+`{…}` template**, and name the console field it goes in.
 
-- **It runs in parallel with your work.** The user clicks through the provider console while you
-  build, instead of discovering a manual errand after you have already said "done".
-- **It is a precondition, not a postscript.** The mismatch failure is entirely prevented by the user
-  having pasted the right URI before the first sign-in attempt.
-
-**Then say it again in the completion message**, next to the now-real `callbackUrl` and the live app
-URL — the closing summary is the durable record the user scrolls back to. Announcing early **replaces
-nothing**; it is an addition, at both ends.
+**Where it reaches the user:** with the credentials ask — the step that needs it, per
+`weegloo-platform-integration` step 4 — and again **in the completion message**, next to the now-real
+`callbackUrl` and the live app URL, which is the durable record the user scrolls back to. The
+provider's own page (`weegloo-service-login-client` → `references/{provider}.md`) carries that
+provider's exact field name and the doc link to hand over with it.
 
 **Presentation:** green, with the exact-paste caveat, per `weegloo-global-rules` → *Highlight what the
 user must act on or must know*. The `+ ` is the green-rendering marker and is **not** part of the URI.
-
-**This is not the credentials ask.** `clientId` / `clientSecret` stay **just-in-time** — requested at
-the step that needs them, per `weegloo-platform-integration` step 4. You may add one sentence noting
-that the same console visit will also yield them, so the user can collect everything in one trip, but
-that is a heads-up: do **not** stop and wait for credentials up front, and do **not** turn this
-message into a secrets checklist.
 
 ## Resource model
 

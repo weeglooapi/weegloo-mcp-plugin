@@ -17,9 +17,6 @@ the real `{spaceId}` substituted:
 The leading `+ ` is **not part of the URI** — LINE's **Callback URL** field takes the `https://…` text
 only.
 
-**Tell the user this URI up front, before you build** (`weegloo-service-login` → *Tell the user the
-provider Redirect URI UP FRONT*), not only when you ask for the credentials.
-
 - The `/code/` segment is required — it is the **LINE → Weegloo** callback, **not** the browser entry
   URL (`…/login/oauth2/line`). Putting `/code/` in the entry URL, or the entry URL in this field,
   breaks sign-in (spine pitfall **A**).

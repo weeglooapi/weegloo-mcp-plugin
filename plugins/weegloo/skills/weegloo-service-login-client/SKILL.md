@@ -216,9 +216,10 @@ A first integrator wiring an **app that is not deployed yet** routinely stalls o
 
 So the deploy chicken-and-egg is only apparent: you can **always** finish the provider side and create the `ServiceLogin` immediately (placeholder `callbackUrl`), then update only `callbackUrl` post-deploy via `cma_UpdateOneServiceLogin` / `cma_PatchOneServiceLogin`. Do **not** block ServiceLogin creation on having a deployed URL, and do **not** put your app's `callbackUrl` into the provider's redirect-URI field (that is pitfall **A** again).
 
-Because it is deploy-independent, **hand the redirect URI to the user up front and again in the
-completion message** — the when/why/green-presentation is owned by `weegloo-service-login` →
-*Tell the user the provider Redirect URI UP FRONT*, and is not repeated here.
+Being deploy-independent means you can hand the user its final value as soon as you need it — **with
+the credentials ask (pitfall G) and again in the completion message**. The why and the
+green-presentation are owned by `weegloo-service-login` → *The provider Redirect URI — the user
+registers it by hand*, and are not repeated here.
 
 ### G. `clientId` / `clientSecret` are blocking, user-only inputs
 
