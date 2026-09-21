@@ -92,9 +92,9 @@ write** — never ask about a host, a port, a security mode, a console label, or
 {
   "name": "Ocean Stay Gmail",
   "endpoint": { "host": "smtp.gmail.com", "port": 587, "security": "StartTls" },
-  "username": "und3rs@gmail.com",
+  "username": "you@gmail.com",
   "password": "<the 16-character App Password>",
-  "fromAddress": "und3rs@gmail.com",
+  "fromAddress": "you@gmail.com",
   "fromName": "Ocean Stay"
 }
 ```
