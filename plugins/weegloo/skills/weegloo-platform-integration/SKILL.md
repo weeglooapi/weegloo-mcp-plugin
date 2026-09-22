@@ -7,9 +7,9 @@ description: ROUTER / entry point for Weegloo — use FIRST for "integrate / con
 # Weegloo Platform Integration (capability router)
 
 Translate a plain-language need into the **correct concrete skill(s)**, then hand off. This skill
-**routes; it does not implement** — the only three things it owns outright, because no downstream
-Weegloo skill covers them, are the **Payments** provider default, the **Maps** embed and the
-**Images** placeholder rule. It does not replace the `weegloo-global-rules` gates: MCP auth, then the
+**routes; it does not implement** — the only four things it owns outright, because no downstream
+Weegloo skill covers them, are the **frontend build order**, the **Payments** provider default, the
+**Maps** embed and the **Images** placeholder rule. It does not replace the `weegloo-global-rules` gates: MCP auth, then the
 Organization/Space choice, then `weegloo-service-architecture` for architecture.
 
 ## Trigger — read before deciding this skill does not apply
@@ -106,7 +106,7 @@ Finished means every capability the frontend implies is **wired and live**, not 
    **`weegloo-service-architecture` FIRST** — it decides the API/login/role combination and chains
    into content modeling and the rest. Do not bypass it.
 6. **Hand off — do not answer from this skill.** Invoke the skills in the "→ skill" column and follow
-   them. This file carries no implementation detail beyond its three owned exceptions.
+   them. This file carries no implementation detail beyond its four owned exceptions.
 
 ## Capability → skill table
 
@@ -144,6 +144,24 @@ target plus what those rules do not say**.
 
 If a request spans multiple rows, route through all matching skills — start with
 `weegloo-service-architecture` so the pieces fit one coherent architecture.
+
+## Frontend build (web site · mobile app) — create resources in dependency waves
+
+Common to every frontend target. Standing up a Space for a frontend is dozens of creates, and only a
+few of them have an ordering constraint. **Work out the dependencies first, then fan out** — issue
+each wave as several MCP calls **in one message**, not one call per turn.
+
+- **ContentTypes.** A type waits only for what **its own** `Refer` fields point at — a
+  `referContentType` restriction needs the target type's `sys.id`. Everything else has **no ordering
+  constraint**: every leaf type (pointing at nothing, or only at `Refer → Media`) goes in **one
+  parallel batch**, then the types pointing at them as the next wave. A circular pair: create both
+  unrestricted, then patch the restriction in.
+- **Content (sample / dummy rows).** Same test, now on the values. A row whose `Refer` fields are
+  empty or hold only Media is a leaf → **one parallel batch**; only a row pointing at another row
+  waits for that row's `sys.id`. Ten seed posts are one batch, not ten sequential creates.
+
+`cma_CreateContentType` auto-publishes, so nothing sits between the waves; CMA **Content** still
+needs its own publish (`weegloo-cda-publish`) — batch those the same way.
 
 ## Maps — Google Maps embed (the key is already here; never ask for one)
 
