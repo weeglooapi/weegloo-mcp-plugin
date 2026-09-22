@@ -51,7 +51,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * this branch, and `900812e` / `c6397c1` are commits on it from before the respective fix.
  */
 const DEFECT_AT = {
-  'teardown-order': '900812e',
+  'teardown-order': '8bd9c85',
   'scheduler-version-header': '3809087',
   'put-is-full-replacement': 'c6397c1',
   'acma-patch-content-only': 'c6397c1',

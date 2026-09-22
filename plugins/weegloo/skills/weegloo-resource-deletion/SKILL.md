@@ -39,8 +39,8 @@ Before any of the three can be deleted:
    **`WGL422031`**. Wait for `fields.file.{locale}.state` to settle (**`weegloo-media-lifecycle`**).
    The same code guards a **WebHosting** whose `sys.state` is still `PENDING` / `PROCESSING`.
 
-**`Archived` is not deleted.** An archived Content or Media is a live row: it still blocks its Space
-and still blocks its ContentType. Archiving is a hiding mechanism, not a teardown step — and archive is
+**`Archived` is not deleted.** An archived Content or Media is a live row: it still blocks its Space,
+and an archived Content still blocks its ContentType. Archiving is a hiding mechanism, not a teardown step — and archive is
 only reachable **from `Draft`** (`WGL422007`), so it is never a shortcut past an unpublish.
 
 **A Script's `ResourceDelete` obeys exactly these rules** — same status check, same busy check, same
@@ -71,23 +71,24 @@ fail on its own preconditions for no reason.
 1. **WebHosting** — independent of everything else; only blocked while a deploy is in flight.
 2. **Content** — unpublish anything `Published`/`Changed`, then delete. Page the list (`links.next`);
    do not assume one page is all of it (**`weegloo-list-pagination`**).
-3. **Media** — unpublish, wait for any processing to settle, delete. **Before the ContentType, not
-   after it**: a Media is a live row that blocks its ContentType exactly as a Content does, so a
-   ContentType attempted first is refused while its Media still exist.
-4. **ContentType** — only now, once **every** Content *and* Media of it is gone (see the double-bind
-   below).
+3. **ContentType** — only now, once **every** Content of it is gone (see the double-bind below).
+4. **Media** — unpublish, wait for any processing to settle, delete. **Independent of the
+   ContentType**: a Media has no ContentType, so it blocks only the Space.
 5. **Space**.
 
-Only WebHosting (step 1) is independent; it may be done at any point. Steps 2 → 3 → 4 are a forced
-chain — both Content and Media block the ContentType, and the ContentType blocks nothing but is
-blocked by both.
+**Content → ContentType (step 2 → 3) is the only forced chain.** WebHosting and Media block nothing
+but the Space, so either may be done at any point before step 5.
 
-## ContentType ← Content and Media: the dependency, and the WGL422010 double-bind
+**Read `references/space-reset.md` when the Space must SURVIVE** — 초기화, emptying a demo Space for
+reuse. That is the opposite problem: nothing cascades, so every row listed above as cascading is one
+the reset must delete itself, in its own order.
 
-`cma_DeleteOneContentType` refuses while **any** Content **or Media** of that type exists —
-**`WGL422010`**. "Any" means any status: `Draft` and `Archived` rows block it exactly like
-`Published` ones do. **Media counts here too** — which is why Media is deleted *before* the
-ContentType (step 3 above), not after it as an independent tail step.
+## ContentType ← Content: the dependency, and the WGL422010 double-bind
+
+`cma_DeleteOneContentType` refuses while **any** Content of that type exists — **`WGL422010`**.
+"Any" means any status: `Draft` and `Archived` rows block it exactly like `Published` ones do.
+**Media is not part of this check** — a Media has no ContentType at all, so it never blocks one; it
+blocks only the Space, and a Tag that is still on it.
 
 **The trap: `cma_UnpublishOneContentType` is blocked by the same check.** So for a *published*
 ContentType that still has Content you cannot unpublish it into a deletable state first — both doors
@@ -95,7 +96,6 @@ are shut by the same condition. The order is forced:
 
 ```
 delete every Content of the type   (unpublish each Published/Changed one first)
-  → delete every Media of the type (unpublish first; wait for files to settle)
   → cma_UnpublishOneContentType    (now allowed; needs X-Weegloo-Version)
   → cma_DeleteOneContentType
 ```

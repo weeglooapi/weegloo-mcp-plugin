@@ -13,19 +13,20 @@
  *    exception); this question was only relaxed from a three-way conjunction to the one decision
  *    that matters. Related conflict: `16-org-space-gate`.
  *
- *  - `bottom-up-order` was failing on a REAL error the criterion had been written to permit. The
- *    answers put Media after the ContentType, because that is what the skill taught (its Teardown
- *    order listed ContentType at 3 and Media at 4 and called them independent) while the same
- *    file's `Archived` paragraph said a Media "still blocks its ContentType". A Media blocks its
- *    ContentType exactly as a Content does, so the order is Content → Media → ContentType. The
- *    corpus was fixed; this assert now names the chain instead of blessing "any order".
+ *  - `bottom-up-order` was rewritten TWICE, and the first rewrite WAS the defect. The skill's
+ *    `Archived` paragraph said a Media "still blocks its ContentType", so the assert was changed
+ *    to REQUIRE Content → Media → ContentType and the corpus was edited to match. The server says
+ *    otherwise: `ContentTypeService.deleteContentType` checks only
+ *    `contentRepo.existsBySpaceAndContentType`, and `core/model/Media.kt` has no `contentType`
+ *    field — a Media blocks the Space, never a ContentType. The chain is Content → ContentType,
+ *    with Media and WebHosting free to fall anywhere before the Space.
  *
- * THE LESSON THIS FIXTURE PAID FOR: an intermediate rewrite of `bottom-up-order` explicitly said
- * independent groups "may be done in any order", which made the assert accept the very defect it
- * exists to catch. It still passed a negative control — because that control's wrong answer was
- * wrong in a DIFFERENT way (it deleted the Space directly). A negative control only proves what
- * its wrong answers actually contain, so `tests/negative-control.mjs` now carries one per failure
- * mode, including a plausible teardown whose only fault is the Media/ContentType order.
+ * THE LESSON THIS FIXTURE PAID FOR, twice over: a judge assert is a claim about the product, and
+ * rewriting one to clear a red light encodes whatever the corpus happened to say. The first
+ * rewrite said independent groups "may be done in any order" and accepted everything; the second
+ * named a chain that was wrong. Neither the byte CI, `--compare`, nor the negative control could
+ * see it — a control only proves what its samples contain. Settle a disputed ordering in the
+ * SOURCE, not in the corpus that is under test.
  */
 export default {
   id: 'space-teardown',
@@ -36,8 +37,8 @@ export default {
       question: 'Does the answer treat the user\'s confirmation as REQUIRED before the first destructive call — either by asking outright, or by making "confirm with the user first" an explicit step of the plan — while stating that the deletion cannot be undone? Asking the user outright and deferring the deletion until they confirm both count as YES; proceeding to delete with no confirmation step anywhere is NO.',
       why: '사용자가 지목하지 않은 것을 지우기 전에 반드시 확인한다 — 삭제는 복구 불가' },
     { id: 'bottom-up-order', kind: 'judge', expect: 'yes',
-      question: 'Does the answer delete the Space LAST, and delete BOTH the Content AND the Media before the ContentType? The required chain is Content → Media → ContentType → Space, because a Media blocks its ContentType exactly as a Content does. Placing the ContentType before the Media — including calling Media an independent step that may come afterwards — is NO. Deleting the Space directly is NO. WebHosting may appear at any point and does not affect this.',
-      why: 'Media 도 자기 ContentType 을 막는다 — ContentType 을 먼저 시도하면 WGL422010 으로 거부된다' },
+      question: 'Does the answer delete the Space LAST, and delete a ContentType only AFTER the Content of that type? The required chain is Content → ContentType → Space. Media and WebHosting block only the Space, so they may appear at any point before it — Media placed after the ContentType, or called independent, is correct and must NOT be marked wrong. Deleting the Space directly is NO. Deleting a ContentType before its Content is NO.',
+      why: 'ContentType 은 자기 Content 가 남아 있으면 WGL422010 으로 거부된다 (Media 는 ContentType 을 막지 않는다)' },
     { id: 'unpublish-first', kind: 'must_match', pattern: /unpublish|게시\s*해제|발행\s*취소|Draft|Archived/i,
       why: 'Published/Changed 상태는 삭제되지 않는다 — 먼저 unpublish 해야 한다 (WGL422009)' },
   ],

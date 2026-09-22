@@ -35,14 +35,15 @@ git worktrees.
 
 ### teardown-order
 
-- **fact**: A teardown runs Content → Media → ContentType → Space; only WebHosting is independent.
+- **fact**: A teardown runs Content → ContentType → Space; Media and WebHosting block only the Space and are independent of the ContentType.
 - **owner**: `skills/weegloo-resource-deletion/SKILL.md`
 - **mentions**: `WGL422024|teardown is bottom-up|Teardown order`
   - `rules/weegloo-global-rules.mdc`
   - `rules/weegloo-resource-deletion.mdc`
   - `skills/weegloo-resource-deletion/SKILL.md`
-- **forbidden**: `Content *(→|->) *ContentType *(→|->) *Space` — drops Media from the chain. A Media blocks its ContentType exactly as a Content does, so a ContentType attempted before its Media is refused with `WGL422010`, and the agent then re-reads, re-pages and re-tries the Content list looking for a row that was never the problem. Present at `900812e`, fixed at `1971888`.
-- **why**: The always-loaded rule is the copy that wins when they disagree, and it was the wrong one.
+  - `skills/weegloo-resource-deletion/references/space-reset.md`
+- **forbidden**: `(Media.{0,60}blocks its ContentType|blocks its Space and its ContentType|Content *(→|->) *Media *(→|->) *ContentType|Media.{0,3}before.{0,3}ContentType)` — puts Media in the ContentType dependency chain. `ContentTypeService.deleteContentType` checks `contentRepo.existsBySpaceAndContentType` and nothing else, and `core/model/Media.kt` carries no `contentType` field at all, so a Media never blocks a ContentType. The claim sends the agent hunting Media rows that were never the blocker. Present at `8bd9c85`.
+- **why**: This error arrived AS a fix — the previous row forbade the correct chain, and `08-space-teardown` had been rewritten to grade the wrong order as required, so every instrument in the repo agreed with it. Only the server source settles it.
 
 ### scheduler-version-header
 
