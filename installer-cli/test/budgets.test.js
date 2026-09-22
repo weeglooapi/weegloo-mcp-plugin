@@ -29,7 +29,7 @@ const read = (p) => readFileSync(p, 'utf-8').replace(/\r\n/g, '\n');
  * these are measured. Do not re-lower them without deleting a gate on purpose.
  */
 const RULE_CAPS = {
-  'weegloo-api-endpoints': 16_900,
+  'weegloo-api-endpoints': 17_700,
   'weegloo-global-rules': 27_700,
   'weegloo-minimal-load': 6_300,
   'weegloo-version': 3_600,
@@ -38,7 +38,7 @@ const RULE_CAPS = {
   // Deliberately untouched by the compression pass: near-100% silent-failure content.
   'weegloo-terms-consent': 6_800,
   'weegloo-web-hosting-rules': 3_300,
-  'weegloo-default-locale': 3_200,
+  'weegloo-default-locale': 3_600,
 };
 
 /** Every session pays for these whether or not the skill is used. */

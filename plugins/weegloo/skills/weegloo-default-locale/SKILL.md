@@ -58,7 +58,7 @@ Use this when the stored value **never differs by locale**-same logical value fo
 > CDA lists" — a detail fetch on ACDA flattens exactly the same way. (Confirmed in the CDA content
 > reference: list and single-content reads share one locale shape.)
 
-Delivery endpoints accept a **`locale`** query parameter that controls **which locale(s)** appear in `fields` **and** the **shape** of `fields` in the response. It applies to Content (list and detail), Media and ContentType — and to nothing else (scope below):
+Delivery endpoints accept a **`locale`** query parameter that controls **which locale(s)** appear in `fields` **and** the **shape** of `fields` in the response. It applies to Content (list and detail) and Media — and to nothing else (scope below):
 
 - **Content:**
   - **`GET /v1/spaces/{spaceId}/contents`** (CDA list)
@@ -66,14 +66,18 @@ Delivery endpoints accept a **`locale`** query parameter that controls **which l
   - **`GET /v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`** (CDA/ACDA **detail** — same shape)
 - **Media list:**
   - **`GET /v1/spaces/{spaceId}/medias`**
-- **ContentType:**
-  - **`GET /v1/spaces/{spaceId}/content-types[/{contentTypeId}]`** (the type's own localized labels)
-
-**Three resource kinds take `locale`, and nothing else does: `ContentType`, `Content`, `Media`.**
-They are the resources that *have* per-locale buckets to choose between. Every other endpoint —
-**`…/locales`**, `…/spaces/{spaceId}`, `…/webhooks`, `…/space-roles`, `…/service-logins`,
+**Two resource kinds take `locale`, and nothing else does: `Content` and `Media`.** They are the
+resources that *have* per-locale buckets to choose between. Every other endpoint — **`…/locales`**,
+**`…/content-types`**, `…/spaces/{spaceId}`, `…/webhooks`, `…/space-roles`, `…/service-logins`,
 `…/scripts`, `…/schedulers`, tokens, memberships — carries no localized `fields`, so `?locale=…`
-there selects nothing.
+there selects nothing. (Confirmed against the CDA and ACDA OpenAPI: the parameter is declared on
+those reads and on no others.)
+
+**And it is OPTIONAL on the two that do take it.** The CDA/ACDA OpenAPI has marked it
+`"required": true` on those reads; omitting it is legal and returns the space default locale (mode 1
+below). Do not read that `required` as "every delivery call needs a `locale`" and build a client
+helper that appends one to everything — **that helper is what produces
+`…/locales?limit=20&locale=ja-JP`**, with the parameter trailing the caller's own `limit`.
 
 The one that shows up constantly is the language switcher's own read:
 **`GET https://cda.weegloo.com/v1/spaces/{spaceId}/locales?locale=en-US` is wrong** — drop the

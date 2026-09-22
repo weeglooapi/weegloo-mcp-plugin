@@ -18,6 +18,9 @@ wrong result?*
 
 ## weegloo-api-endpoints
 
+- `A query parameter is declared PER PATH` — The OpenAPI this same rule calls canonical marks `locale` `required: true` on the CDA/ACDA Content and Media reads. Read as a property of the API rather than of those paths, it produces a delivery helper that appends `locale` to every call, so `…/locales?limit=20&locale=ja-JP` ships with the parameter trailing the caller's own `limit`. The server ignores it; nothing anywhere errors.
+- `belongs to CONTENT and MEDIA reads only` — Without the resource-kind scope the parameter is remembered as a plane property ("it is a CDA read"), which is exactly the generalization the always-loaded read-shape gate encourages.
+
 - `The agent reaches Weegloo through MCP tools, never by calling these URLs directly` — The agent calls CMA/CDA over raw HTTP, gets a correct-looking 200, and reports the work done while bypassing the MCP-only policy — no error ever surfaces.
 - `Tokens do not cross identity boundaries.` — Without it the agent designs a flow that hands a ServiceUser token to CDA or a PAT to a member feature; some calls succeed, so the wrong identity model ships and only shows up as a leak or a 401 much later.
 - `the Media create that follows goes on the plane matching the identity that uploaded` — Upload accepts both Bearers, so the upload half succeeds; creating the Media on the wrong plane (CMA for a Service User) produces a member-contributed asset owned by nobody the role can scope.
@@ -49,6 +52,10 @@ wrong result?*
 - `a server-only env read is silently undefined in the browser` — The build succeeds and the page loads; the CDA token is simply undefined at runtime, surfacing as an empty site rather than a configuration error.
 - `must send Content-Type: application/json-patch+json` — A JSON Patch body sent as application/json is rejected or misinterpreted per operation, and the agent's instinct is to abandon PATCH for a full PUT that overwrites unrelated fields.
 - `The {locale} segment must match that space's fields.file locale key` — A wrong or missing locale segment is not an error — the filter is ignored or matches nothing, returning an empty Media list that reads as "no images in this Space".
+
+## weegloo-default-locale
+
+- `exists only on CONTENT and MEDIA reads` — The rest of this rule is about the SHAPE a value comes back in, per plane; with no scope sentence the agent carries `locale` onto any CDA/ACDA URL, `…/locales` included, and gets a clean 200 with the parameter silently ignored.
 
 ## weegloo-global-rules
 

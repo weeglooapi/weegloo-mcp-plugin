@@ -207,13 +207,15 @@ git worktrees.
 
 ### locale-param-scope
 
-- **fact**: The `locale` query parameter exists only on `ContentType`, `Content` and `Media` reads — the resources that have per-locale buckets. No other endpoint takes it, the switcher's own `GET …/spaces/{spaceId}/locales` included.
+- **fact**: The `locale` query parameter exists only on `Content` and `Media` reads, and is optional there (omitted ⇒ space default). No other endpoint takes it — `…/locales` and `…/content-types` included — and the CDA/ACDA OpenAPI marking it `required: true` does not license a client-wide helper that appends it to every delivery call.
 - **owner**: `skills/weegloo-default-locale/SKILL.md`
-- **canary**: `Three resource kinds take`
-- **mentions**: `resource kinds take .locale., and nothing else|belongs to .ContentType. / .Content. / .Media. reads only`
+- **canary**: `Two resource kinds take`
+- **mentions**: `resource kinds take .locale., and nothing else|belongs to .Content. / .Media. reads only|belongs to CONTENT and MEDIA reads only|exists only on CONTENT and MEDIA reads`
+  - `rules/weegloo-api-endpoints.mdc`
+  - `rules/weegloo-default-locale.mdc`
   - `skills/weegloo-default-locale/SKILL.md`
   - `skills/weegloo-platform-integration/SKILL.md`
-- **why**: The owner documented the three *modes* of `locale` and never its *scope*, so the parameter generalised from "a delivery read" to every delivery read — landing most often on `…/locales`, the one URL the router hands the agent verbatim. An ignored query parameter raises nothing, so the wrong URL survives into the product and teaches the call after it. No `forbidden` row: the corpus never stated the scope wrongly, it stated nothing at all, and a pattern matching nothing scores exactly like a deleted one (see the header).
+- **why**: The owner documented the three *modes* of `locale` and never its *scope*, so the parameter generalised from "a delivery read" to every delivery read — landing most often on `…/locales`, the one URL the router hands the agent verbatim. An ignored query parameter raises nothing, so the wrong URL survives into the product and teaches the call after it. **The skill-only fix did not hold, and the reason is the second half of this fact:** the CDA/ACDA OpenAPI — which `weegloo-api-endpoints.mdc` hands over as canonical for query parameters — declares `locale` `required: true` on the Content and Media reads, so an agent builds one delivery helper that appends it everywhere and `…/locales?limit=20&locale=ja-JP` falls out with the parameter trailing the caller's own `limit`. That inference happens with only the always-loaded rules in context, which is why both rules now carry the verdict and why the scope must be stated as a resource kind, never as a plane. First-party prose was never wrong (`docs.weegloo.com/api/reference/cda/locale.md` says a Locale takes no `locale` parameter); the spec was the sole dissenting artifact. No `forbidden` row: the corpus never stated the scope wrongly, it stated nothing at all, and a pattern matching nothing scores exactly like a deleted one (see the header).
 
 ### locale-switcher-runtime-list
 
