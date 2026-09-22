@@ -320,8 +320,11 @@ products, where member posts and comments are written and read back through ACDA
 
 ## Editing a ContentType later
 
-- **Updates are full replacement** (`cma_UpdateOneContentType`): preserve **field `id`s** and send
-  **all** fields, `displayField` and `publishWithAuthor` included.
+- **Editing only part of it → `cma_PatchOneContentType`** (JSON Patch): send just the paths that
+  change — adding one field, renaming a label, flipping one validation — and nothing else can be
+  dropped.
+- **`cma_UpdateOneContentType` is full replacement**, so use it only to rewrite the whole type:
+  preserve **field `id`s** and send **all** fields, `displayField` and `publishWithAuthor` included.
 - **Stricter validations may break existing entries** on their next save — warn before migrating live
   data.
 - **Changing `LongText` ↔ `RichText`** (or any other type change) on a live field is a **schema

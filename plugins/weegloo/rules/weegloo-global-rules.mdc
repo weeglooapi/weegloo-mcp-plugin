@@ -114,6 +114,7 @@ rules:
 
   - section: Resource Updates
     items:
+      - "**Changing PART of a Content / ContentType / Media → `PATCH` (`cma_PatchOne*`), not `PUT`** — send only the paths that change. `PUT` / `cma_UpdateOne*` replaces the WHOLE document, so reach for it only when that is what you mean."
       - "**Updates are FULL REPLACEMENT: resend ALL fields, not just the changed ones** — anything omitted is wiped, with no error. On a version conflict, GET the resource for the current `sys.version` and retry with that fresh version."
       - When updating a **versioned** resource — **Content**, **Media**, **ContentType** — include the `x-weegloo-version` header with the current `sys.version`. Not every resource is versioned (a **Scheduler** has none and takes no version header), so check the resource's own skill rather than assuming.
       - "**MCP update tools take the version via the parameter named `X-Weegloo-Version`** (exactly as capitalized) — NOT `version` or `xWeeglooVersion`."

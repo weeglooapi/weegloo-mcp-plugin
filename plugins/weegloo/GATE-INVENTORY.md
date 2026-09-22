@@ -88,6 +88,7 @@ wrong result?*
 - `both silently return nothing when wrong` — A missing locale segment or ContentType scope yields an empty list, not a malformed-filter error.
 - `The header is an HTTP-only lever — the MCP tools cannot send it` — An empty MCP list result is read as "the data is absent", and the same call hangs or times out on a real Space.
 - `A list you did not page is not the dataset` — One 15-row page is counted, searched or rendered as the complete set with no error.
+- `Changing PART of a Content / ContentType / Media → PATCH (cma_PatchOne*), not PUT` — The full-replacement warning alone teaches "resend everything", so a one-field edit becomes a whole-document PUT that wipes whatever the agent failed to re-read — locale buckets it never projected, metadata, displayField — on a 200, while the per-resource PATCH tools are never reached.
 - `Updates are FULL REPLACEMENT: resend ALL fields, not just the changed ones — anything omitted is wiped, with no error` — A partial PUT returns 200 and silently erases every field left out.
 - `NOT version or xWeeglooVersion` — A guessed parameter name leaves the version stale, so the agent loops re-reading and retrying a conflict it cannot resolve.
 - `must run in the BROWSER` — SSR or a server-side Weegloo client builds and deploys cleanly to WebHosting and then never executes.

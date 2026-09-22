@@ -38,7 +38,7 @@ description: Weegloo CMA/ACMA updates - prefer HTTP PATCH with RFC 6902 JSON Pat
 
 - Apply **`X-Weegloo-Version`** (or the project’s version header) when the API requires optimistic concurrency - unchanged from other CMA write operations.
 - For **field/locale paths** in pointers or patch targets, follow the **same locale and `fields.*` shapes** as in GET/PUT examples in OpenAPI.
-- **Agents:** use **MCP** `cma_*` / `acma_*` tools when the user asks for console-style operations; use this skill when writing or reviewing **HTTP client code** that calls CMA/ACMA directly.
+- **Agents:** use **MCP** `cma_*` / `acma_*` tools when the user asks for console-style operations; use this skill when writing or reviewing **HTTP client code** that calls CMA/ACMA directly. The same PATCH-over-PUT default applies to those tool calls — a partial edit is **`cma_PatchOneContentOfContentType`** / **`cma_PatchOneContentType`** / **`cma_PatchOneMedia`**, not the matching `cma_UpdateOne*`.
 
 ## Related
 
