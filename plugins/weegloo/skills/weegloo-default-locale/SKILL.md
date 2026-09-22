@@ -165,6 +165,7 @@ The canonical source for “this field has content” remains **default locale +
 
 - Resolve **default locale** first (`cma_GetListLocales`, space settings, or your app’s `cmaResolveDefaultSpaceLocale`).
 - For every **`localized: true`** field you set, ensure **`fields.<id>.<defaultLocale>`** is non-empty when the field is required for your use case. For **`localized: false`**, only **`fields.<id>.<defaultLocale>`** exists for writes.
+- **Write only the locales you were actually given text for.** Do **not** machine-translate to fill the remaining buckets unless the user explicitly asked for a translation — an unwritten locale reads back **empty**, and the fix for that is the locale's `fallbackCode`, not invented copy.
 - When the user edits in **non-default** locale, many apps **copy the same value** into both **active** and **default** buckets on create so CMA always sees a default-locale value-mirror that pattern unless the product explicitly supports true multi-locale copy.
 
 ## This repository (CareerResume)

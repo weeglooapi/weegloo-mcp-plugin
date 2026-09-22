@@ -221,6 +221,23 @@ and requires the one red disclosure line. What this router adds:
   done*).** Do not stop to ask for images and do not hold the turn waiting for them — ship the
   placeholders and carry on.
 
+## Copy — write only the languages you were given; never invent a translation
+
+Same principle as images. A multi-language site does **not** license you to fill the locales the user
+did not supply.
+
+- **Write only the locales whose text the user actually provided.** Copy supplied in Korean goes into
+  the Korean bucket and the English one stays empty. Machine-translating it to look finished ships
+  product names, legal copy, prices and addresses that nobody reviewed, on a real site, with nothing
+  anywhere flagging it as generated.
+- **Translate only when the user asks in so many words** ("영어로도 번역해서 넣어줘"). It is a content
+  decision, not a formatting step — never a gap you close on your own initiative.
+- **An unwritten locale reads back EMPTY; it does not fall back on its own** (`weegloo-default-locale`).
+  Close that gap with the `Locale`'s `fallbackCode` pointing at a locale you did fill, or by letting
+  the UI render the supplied language — never by translating.
+- **Disclose which locales are empty** on the red must-know lines, beside the placeholder-image
+  disclosure.
+
 ## Final reply — keep it SHORT
 
 For the broad "integrate Weegloo" flow this router governs, the closing message is **brief and
