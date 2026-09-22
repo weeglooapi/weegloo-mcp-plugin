@@ -4,7 +4,7 @@ Read this **only when** the chosen provider is Facebook (`facebook`). It assumes
 (`SKILL.md`): the wire protocol, the SDK, `callbackUrl`, `exchangeToken` and the ACMA/ACDA token
 boundary are there, not here.
 
-## Facebook's Valid OAuth Redirect URIs (deploy-independent — register it now)
+## Facebook's Valid OAuth Redirect URIs (deploy-independent — hand it over with the credentials ask)
 
 In the Meta app console the field is **Valid OAuth Redirect URIs**, under the Facebook Login use
 case's **Settings**. Its value, with the real `{spaceId}` substituted:
@@ -19,9 +19,6 @@ the `https://…` text only.
 - The `/code/` segment is required — it is the **Facebook → Weegloo** callback, **not** the browser
   entry URL (`…/login/oauth2/facebook`). Putting `/code/` in the entry URL, or the entry URL in this
   field, breaks sign-in (spine pitfall **A**).
-- It depends only on `auth.weegloo.com` + your `spaceId` + `facebook`, so it is **fully known now** —
-  register it before the app is deployed (spine pitfall **G**). `callbackUrl` is the deploy-dependent
-  one; this is not.
 
 ## Walk the user through it — `clientId` / `clientSecret` are blocking inputs
 

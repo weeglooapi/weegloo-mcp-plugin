@@ -4,7 +4,7 @@ Read this **only when** the chosen provider is Kakao (`kakao`). It assumes the s
 the wire protocol, the SDK, `callbackUrl`, `exchangeToken` and the ACMA/ACDA token boundary are
 there, not here.
 
-## Kakao's Redirect URI (deploy-independent — register it now)
+## Kakao's Redirect URI (deploy-independent — hand it over with the credentials ask)
 
 In the Kakao Developers console, the **Redirect URI** (under **Kakao Login**) is, with the real
 `{spaceId}` substituted:
@@ -19,9 +19,6 @@ text only.
 - The `/code/` segment is required — it is the **Kakao → Weegloo** callback, **not** the browser entry
   URL (`…/login/oauth2/kakao`). Putting `/code/` in the entry URL, or the entry URL in this field,
   breaks sign-in (spine pitfall **A**).
-- It depends only on `auth.weegloo.com` + your `spaceId` + `kakao`, so it is **fully known now** —
-  register it before the app is deployed (spine pitfall **F**, *Two URLs, two lifetimes*).
-  `callbackUrl` is the deploy-dependent one; this is not.
 
 ## Walk the user through it — `clientId` / `clientSecret` are blocking inputs
 

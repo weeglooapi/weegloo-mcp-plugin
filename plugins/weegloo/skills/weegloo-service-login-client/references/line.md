@@ -5,7 +5,7 @@ Read this **only when** the chosen provider is LINE (`line`). It assumes the spi
 boundary are there, not here. What is here is the **LINE Developers** side: creating the **LINE Login
 channel** and producing the `clientId` / `clientSecret` that `ServiceLogin` needs.
 
-## LINE's Callback URL (deploy-independent — register it now)
+## LINE's Callback URL (deploy-independent — hand it over with the credentials ask)
 
 In the LINE Login channel, the **Callback URL** (under the channel's **LINE Login** settings) is, with
 the real `{spaceId}` substituted:
@@ -20,8 +20,6 @@ only.
 - The `/code/` segment is required — it is the **LINE → Weegloo** callback, **not** the browser entry
   URL (`…/login/oauth2/line`). Putting `/code/` in the entry URL, or the entry URL in this field,
   breaks sign-in (spine pitfall **A**).
-- It depends only on `auth.weegloo.com` + your `spaceId` + `line`, so it is **fully known now** —
-  register it before the app is deployed (spine pitfall **F**).
 
 ## Before you ask: build the consent screen and hand over its screenshot
 
