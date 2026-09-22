@@ -14,9 +14,8 @@ skills — not a copy here — are what to read.
   (`myapp://login`, an App Link / Universal Link) and it must be registered in
   **`ServiceLogin.allowedCallbackUrls`** *before* the first sign-in attempt, or the login entry
   rejects the request. The app flow carries `redirect_uri` + **PKCE** and does **not** use the
-  browser SDK. Owner: **`weegloo-service-login-client`**, which carries the native-app branch in
-  full. Read it before writing any of it; nothing about this flow is guessable from the browser
-  version.
+  browser SDK. Owner: **`weegloo-service-login-client`** → its `references/native-apps.md`. Read it
+  before writing any of it; nothing about this flow is guessable from the browser version.
 - **There is no build-time env inlining to imitate.** The web branch bakes config into the bundle
   because WebHosting has no server; an app ships its config in the binary the same way, but the
   delivery token still belongs to a **least-privilege `DeliveryAccessToken`**

@@ -50,7 +50,7 @@ decide whether this deploy works at all, so check them before zipping:
 **Verify #1 after deploying** by hard-refreshing a route at least one segment deep, not just the
 root: the page must come back fully styled and interactive. If it does not, open the failing
 `.js` / `.css` request and read its **response body** — `<!doctype html>` there means the fallback
-answered and the URL is the bug. `weegloo-frontend` carries the full procedure.
+answered and the URL is the bug. Full procedure: `weegloo-frontend`'s `references/web.md`.
 
 ---
 
