@@ -194,3 +194,13 @@ git worktrees.
   - `skills/weegloo-script/SKILL.md`
 - **forbidden**: `default[- ]locale\*{0,2} bucket[\s\S]{0,80}unless[\s\S]{0,40}localized: ?true` — the phrasing that was there: present in 1 file(s) at `c6397c1`, 0 after the fix. `tests/fact-owners-control.mjs` re-checks that it still fires on that commit — a pattern matching nothing passes the suite exactly like a correct one.
 - **why**: The skill carved out an exception for exactly the class where the default bucket is mandatory, and contradicted its own two cookbook examples. On a non-required field the create then SUCCEEDS and every delivery read returns empty.
+
+### parallel-call-batching
+
+- **fact**: Independent Weegloo MCP calls go out in one parallel batch; only an id dependency, a platform precondition, or two writes to the same resource force a sequential wave.
+- **owner**: `rules/weegloo-global-rules.mdc`
+- **canary**: `Order the waves, parallelize inside one`
+- **mentions**: `in PARALLEL|parallel batch|parallel-batch|parallelize inside one`
+  - `rules/weegloo-global-rules.mdc`
+  - `skills/weegloo-platform-integration/SKILL.md`
+- **why**: The two halves fail in opposite directions and neither announces itself. Serialising costs only wall-clock, so nothing ever flags it; batching a wave that has an ordering constraint fails at the call — or, for two writes to one resource, succeeds and drops the loser's fields, since `PUT` is a full replacement. The router states the bootstrap instance (which ContentTypes and rows depend on which); if a third file starts stating the policy itself, read it against the rule before registering it. No `forbidden` row: no drift has been observed yet, and an unwatched pattern scores exactly like a deleted one.

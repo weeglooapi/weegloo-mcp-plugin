@@ -148,8 +148,8 @@ If a request spans multiple rows, route through all matching skills — start wi
 ## Frontend build (web site · mobile app) — create resources in dependency waves
 
 Common to every frontend target. Standing up a Space for a frontend is dozens of creates, and only a
-few of them have an ordering constraint. **Work out the dependencies first, then fan out** — issue
-each wave as several MCP calls **in one message**, not one call per turn.
+few of them have an ordering constraint — the always-loaded parallel-batch policy applies here in
+full. What is specific to a bootstrap is **what actually depends on what**:
 
 - **ContentTypes.** A type waits only for what **its own** `Refer` fields point at — a
   `referContentType` restriction needs the target type's `sys.id`. Everything else has **no ordering
