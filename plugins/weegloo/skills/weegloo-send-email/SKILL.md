@@ -32,7 +32,7 @@ documentation**, and skip the rest of this section.
 
 **If the user named nothing, do not ask "which email service should I use?"** — that is a scoping
 question, and it is answered here: **send through Google (Gmail SMTP).** What you *do* ask for is the
-one thing only the user can produce — the credential.
+pair only the user can produce — the credential **and the address it authenticates as**.
 
 ### Ask for exactly two values, together, at the step that needs them
 

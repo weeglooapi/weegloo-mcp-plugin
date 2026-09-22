@@ -65,6 +65,7 @@ wrong result?*
 - `never ask for the provider's keys` — The agent blocks on a credential that is not a blocking input, or ships an inert checkout that looks wired up.
 - `do not generate, draw, download or upload filler` — Generated or scraped filler images look like real content and get published as the user's assets.
 - `never emit a YOURAPPKEY placeholder or env-var read` — The address widget needs no key; a placeholder key path ships a lookup button that silently never opens.
+- `The password alone is not enough` — On the Gmail default the agent asks for the App Password and never the Google address, so it has no `username`/`fromAddress`: it either stalls a turn asking again, or invents an address and the account silently sends as the authenticated one.
 - `Weegloo delivers a real test message before storing anything` — Creating an EmailAccount actually sends mail from the user's account; the agent otherwise treats the call as inert configuration.
 - `switching to Administrator after WGL422001` — The token creates successfully and works perfectly while being massively over-privileged in a browser.
 - `allowedReferrers (DeliveryAccessToken / SpaceAccessToken) is off by default` — A referrer list set unasked keeps the token looking valid while every call from a new custom domain is refused.
