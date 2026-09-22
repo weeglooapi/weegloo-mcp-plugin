@@ -209,7 +209,9 @@ and requires the one red disclosure line. What this router adds:
 
 - **Look before concluding there are none.** Images the user attached, named a path to, or already
   committed to the frontend repo (`public/`, `assets/`, `static/`) are the assets to use — upload
-  them with the **`weegloo-upload` MCP** and create the Media. Check the Space too:
+  them with the **`weegloo-upload` MCP** (`CreateUpload` needs **both** `spaceId` and an absolute
+  `filePath`; omitting `spaceId` returns a **`403`**, not a parameter error) and create the Media.
+  Check the Space too:
   `cma_GetListMedias` may already hold exactly what the design calls for.
 - **Wire the real path anyway — the placeholder is a fallback, not a substitute.** Keep the
   `Refer → Media` field, keep the UI code that resolves it to a URL (`include=1` —

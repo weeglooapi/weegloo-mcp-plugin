@@ -177,7 +177,7 @@ description: <트리거 문장> … 권한, 역할, 접근 제어, 관리자 권
 
   | rule | cap | | rule | cap |
   |---|---|---|---|---|
-  | `weegloo-global-rules` | 26,000 | | `weegloo-terms-consent` | 6,800 |
+  | `weegloo-global-rules` | 27,300 | | `weegloo-terms-consent` | 6,800 |
   | `weegloo-api-endpoints` | 16,900 | | `weegloo-minimal-load` | 6,300 |
   | `weegloo-resource-deletion` | 4,100 | | `weegloo-version` | 3,600 |
   | `weegloo-web-hosting-rules` | 3,300 | | `weegloo-default-locale` | 3,200 |

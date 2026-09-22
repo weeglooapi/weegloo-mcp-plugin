@@ -76,7 +76,9 @@ does not, by default:
 
 4. **Verify** the export tree stays within the file-count cap (see platform limits — 300 in production, 100 by default/in dev; keeping it **≤ 100** is always safe). Then **compress** the build output into a ZIP. **`index.html` at ZIP root.**
 
-5. **CreateUpload** (MCP) with the ZIP.
+5. **CreateUpload** (MCP) with the ZIP — pass **both** `spaceId` **and** the absolute `filePath`.
+   Omitting `spaceId` comes back as a **`403` permission error**, not a missing-parameter error; it
+   is not a token problem (`weegloo-upload-api`).
 
 6. **CreateWebHosting** or **UpdateOneWebHosting** (MCP) referencing that upload.
 

@@ -31,6 +31,13 @@ These are two completely different things. Pick by **who is uploading and why**.
   WebHosting ZIP during a chat), use the **`weegloo-upload` MCP** + `cma_CreateMedia` MCP — not raw REST.
 - Never present the `weegloo-upload` MCP as the app's runtime upload implementation, and never tell
   the user to call the raw REST upload endpoints "via MCP".
+- **`CreateUpload` takes BOTH `spaceId` and an absolute `filePath`, and its schema marks neither
+  `required`** — so an omitted `spaceId` is not rejected by the client the way a `cma_*` call would
+  be (*"required property … not found"*). It reaches the server, which checks permission before
+  parameters, and answers **`403` — *You do not have permission***. Read that 403 as **your own
+  call**, not the token: resend with both arguments first. Only after the complete call still fails
+  is it a credential question — and even then you cannot see whose account a token belongs to, so
+  do not tell the user it is theirs or anyone else's.
 
 ## Step 1 — Upload the bytes (Upload API)
 
