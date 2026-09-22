@@ -52,12 +52,26 @@ Finished means every capability the frontend implies is **wired and live**, not 
      lists, modals, app state, mock/seed/fixture data, hard-coded samples, `fetch`/API stubs, env
      placeholders, comments/TODOs. Infer: auth, per-user vs shared data, list+detail, search/filter,
      file upload/download, **external API calls** (an AI/LLM/image endpoint behind a key), public vs
-     members-only sharing, deploy. Two surfaces are easy to miss and are **capabilities, not frontend
-     details**: a **language switcher** (an `EN`/`KO` toggle, a flag or globe menu, `/en/…` routes, a
-     `lang` value in state, copy duplicated per language in fixtures) ⇒ *Multi-language*; an
-     **owner / admin / staff / dashboard / back-office** surface (a "manage bookings", settings,
-     moderation or full-data screen, including a prototype's `role`-switch "admin" mode) ⇒ an
-     **in-app admin login**. Never silently assume "the team will use the Weegloo Console".
+     members-only sharing, deploy. Three surfaces are easy to miss and are **capabilities, not
+     frontend details**: a **language switcher** (an `EN`/`KO` toggle, a flag or globe menu,
+     `/en/…` routes, a `lang` value in state, copy duplicated per language in fixtures) ⇒
+     *Multi-language*; an **owner / admin / staff / dashboard / back-office** surface (a "manage
+     bookings", settings, moderation or full-data screen, including a prototype's `role`-switch
+     "admin" mode) ⇒ an **in-app admin login**; and **anything on screen that implies a message
+     leaving the product** ⇒ *Send email* (`weegloo-send-email`). Never silently assume "the team
+     will use the Weegloo Console".
+   - **The email surface is the one most often dropped, because the UI never says "email feature".**
+     It says **"확인 메일을 보내드렸습니다" / "A confirmation email has been sent"** on a success or
+     order-complete screen, a **notification opt-in checkbox** (`알림 수신`, "notify me", "send me
+     updates"), an **email input whose label names a purpose** (`주문 알림용 이메일`, "where should
+     we send the receipt?", a contact form's recipient), a "resend code" / "비밀번호 재설정 메일"
+     button, or an admin toggle for order/booking alerts. **Each of those IS the user asking for
+     mail — the word "메일" / "email" in the request is NOT required**, exactly as a globe menu is a
+     multi-language request. Treat the sentence the UI already promises as a commitment the build
+     must keep: shipping the screen without the send path leaves a product that **tells the user a
+     mail was sent when none was**, and nothing errors. Route it through `weegloo-send-email` (the
+     credential ask is a genuine blocking input — see step 4), and if the screen only *displays*
+     such a line with no real recipient anywhere, say so rather than leaving the claim standing.
    - **b. Which Weegloo resources does each feature imply?** A Google sign-in button + a personal
      "history" list → ServiceLogin + ServiceUser + a per-user-scoped ContentType; a "generate image
      from a prompt" flow calling a third-party API → a **Script** (`Http` + Media ingest / Content
