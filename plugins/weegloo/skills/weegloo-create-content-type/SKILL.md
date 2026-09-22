@@ -13,8 +13,8 @@ when designing a schema, or when picking a field's type / `localized` flag.
 1. Before any `Content`, create the `ContentType`.
 2. For **each field**, decide **`localized: true` vs `false`** — *before* types and validations.
 3. Assign the **text type** by **search semantics**, not by the words "short"/"long"/"rich", then
-   check the copy against **Hard limits** — a `ShortText` stops at **64** characters. Copy you will
-   never see (a provider's id, token or URL) cannot be checked, so it is not a `ShortText`.
+   check the copy against **Hard limits** — a `ShortText` stops at **64** characters, so a length you
+   cannot verify or predict (a provider's id, token or URL) is not a `ShortText`.
 4. Add **`validations`** where the product meaning is clear; leave them off where it is not.
 5. Set **`displayField`** to the `apiName` of a `ShortText` field. Do not leave it out.
 6. Decide **`publishWithAuthor`** now — it is not retroactive.
@@ -42,8 +42,8 @@ They differ by **how CDA indexes and lets you query** the field. The question is
    require markup** — it means *non-searchable text* in the API sense. Editor formatting is incidental.
 3. **`ShortText`** — short values needing **exact or prefix** matching (codes, slugs, one-line labels,
    emails-as-identifiers), and tiny identifier-like strings even when never searched — but **only
-   where the length is yours to control** (*Hard limits* → *a value you do not produce*). For
-   unstructured paragraphs prefer `RichText`; for very short strings `ShortText` stays clearer.
+   where you can verify or predict the length** (*Hard limits*). For unstructured paragraphs prefer
+   `RichText`; for very short strings `ShortText` stays clearer.
 
 ### Do NOT pick LongText because
 
@@ -86,13 +86,13 @@ Hangul and other CJK characters count as **one** each. A value limit applies **p
   split across fields or entries.
 - **A `size` validation can only tighten these, never raise them.** `{"size": {"max": 500}}` on a
   ShortText is a valid narrowing; `{"max": 5000}` does **not** buy a 5,000-character ShortText.
-- **A value you do not produce has no length you can check** — step 3 checks the copy, which only
-  works for copy **you** write. A foreign system sizes its own: a PG session / payment / customer
-  id, an OAuth or webhook token, a signed URL, a hash. Those routinely pass 64, so **such a field is
-  never `ShortText`** unless the provider documents a bound at or under 64 — `LongText` if the
-  product full-text searches it, else `RichText`. **A name ending in `Id` proves nothing about
-  length**, and nothing fails until a real value arrives in production. Size for the string you will
-  never see, not for the example in the provider's docs.
+- **A length you cannot verify or predict is not a `ShortText`.** Step 3 checks the copy, which only
+  works for copy **you** write: a PG session / payment / customer id, an OAuth or webhook token, a
+  signed URL, a hash are sized by someone else. There is **no "the provider's example is short"
+  exception** — a name ending in `Id` proves nothing about length, and a bound the provider may
+  change was never yours. With `ShortText` out, the search question decides the rest: **searched or
+  queried on at all → `LongText`** (the only searchable text type left); **never → `RichText`**.
+  Nothing fails until a real value arrives, in production.
 - **Where `ShortText` holds text a person types, mirror the 64 into the form** — `{"size": {"max":
   64}}` on the field **and** `maxlength` on the input, so it is refused at the keyboard rather than
   as a failed save.

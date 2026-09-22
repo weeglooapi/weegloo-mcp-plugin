@@ -149,7 +149,7 @@ runs the payment on its own page, and a second Script establishes what actually 
 ### The order ContentType — a field the provider fills is not a `ShortText`
 
 Model it before 6a. **`ShortText` stops at 64 characters**, so the split is not "short vs long" but
-**who decides the length** (`weegloo-create-content-type` → *Hard limits*):
+**whether you can predict the length** (`weegloo-create-content-type` → *Hard limits*):
 
 | field | type | why |
 |---|---|---|

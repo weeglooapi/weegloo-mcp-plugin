@@ -112,9 +112,9 @@ git worktrees.
 
 ### shorttext-64-cap
 
-- **fact**: A `ShortText` value stops at **64** characters (LongText 5,120 · RichText 204,800) and a `size` validation can only narrow that — so a value sized by someone else (a provider id, token, URL or hash) cannot be a `ShortText`, whatever its name suggests.
+- **fact**: A `ShortText` value stops at **64** characters and a `size` validation can only narrow that — so a length you cannot verify or predict (a provider id, token, URL or hash) is never a `ShortText`, whatever its name suggests; it goes to `LongText` if anything searches or queries it, else `RichText`.
 - **owner**: `skills/weegloo-create-content-type/SKILL.md`
-- **canary**: `A value you do not produce has no length you can check`
+- **canary**: `A length you cannot verify or predict is not a `ShortText`.`
 - **mentions**: `ShortText[^\n]{0,70}\b64\b|\b64\b[^\n]{0,70}ShortText`
   - `rules/weegloo-global-rules.mdc`
   - `skills/weegloo-create-content-type/SKILL.md`
