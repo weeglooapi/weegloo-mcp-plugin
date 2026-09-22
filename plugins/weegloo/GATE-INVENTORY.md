@@ -62,6 +62,7 @@ wrong result?*
 - `do not approximate a schedule with a Webhook or a frontend timer` — A frontend timer or event Webhook demos convincingly and then never fires when nobody has the page open.
 - `Never wire a product to the MCP, and never call the raw REST endpoints "via MCP"` — Product code written against the agent-only upload MCP compiles and reviews fine and can never run in production.
 - `never emit a YOURAPIKEY placeholder or env-var read — a static build cannot inject one` — The deployed map iframe renders a Google error panel; the page otherwise looks finished, and a static build has no way to fill the placeholder.
+- `a value whose length you do NOT control is never a ShortText` — 64 is far below the 255 most CMSes allow, so the agent never thinks to check: a provider id or URL modelled as ShortText creates cleanly, and the write is first rejected on a real value, in production.
 - `never ask for the provider's keys` — The agent blocks on a credential that is not a blocking input, or ships an inert checkout that looks wired up.
 - `do not generate, draw, download or upload filler` — Generated or scraped filler images look like real content and get published as the user's assets.
 - `never emit a YOURAPPKEY placeholder or env-var read` — The address widget needs no key; a placeholder key path ships a lookup button that silently never opens.

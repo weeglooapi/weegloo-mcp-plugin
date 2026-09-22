@@ -143,7 +143,8 @@ Model the pieces as separate fields (`weegloo-create-content-type`), never one b
 
 - `postcode` — **ShortText**, `data.zonecode`. Never a Number: postcodes carry leading zeros.
 - `address` — ShortText, the composed value above.
-- `addressDetail` — ShortText, what the user typed.
+- `addressDetail` — ShortText, what the user typed. The one freely-filled field here, so give the
+  input a **`maxlength` of 64**: past that the save is refused, not the keystroke.
 - Add `roadAddress` / `jibunAddress` / `sido` / `sigungu` **only** when a screen really filters or
   displays them (`weegloo-minimal-load`).
 

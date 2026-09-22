@@ -109,6 +109,17 @@ git worktrees.
   - `skills/weegloo-default-locale/SKILL.md`
 - **why**: The 404 reads as "the Content is missing" rather than "the path is wrong", so the agent goes looking for data that is there. Five sites state it, including a `references/` file that a spine reader may never open.
 
+### shorttext-64-cap
+
+- **fact**: A `ShortText` value stops at **64** characters (LongText 5,120 · RichText 204,800) and a `size` validation can only narrow that — so a value sized by someone else (a provider id, token, URL or hash) cannot be a `ShortText`, whatever its name suggests.
+- **owner**: `skills/weegloo-create-content-type/SKILL.md`
+- **canary**: `A value you do not produce has no length you can check`
+- **mentions**: `ShortText[^\n]{0,70}\b64\b|\b64\b[^\n]{0,70}ShortText`
+  - `rules/weegloo-global-rules.mdc`
+  - `skills/weegloo-create-content-type/SKILL.md`
+  - `skills/weegloo-payment/SKILL.md`
+- **why**: No `forbidden` pattern — the corpus has never stated the cap wrongly, and a pattern matching nothing scores exactly like a deleted row (see the header). The drift risk is a second site that keeps the "identifier-like strings → ShortText" half without the "whose length you control" half; that teaches the choice that shipped a broken checkout. `weegloo-address-search` is deliberately **not** listed: it names only the `maxlength` consequence, which is what a non-owner mention should look like.
+
 ### put-is-full-replacement
 
 - **fact**: A `PUT` update is ALWAYS a full replacement on CMA and ACMA — a key left out is wiped on a 200. Partial edits go through `PATCH`.

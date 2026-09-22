@@ -146,6 +146,26 @@ checkout is worse than no panel at all.
 Three moving parts: the frontend creates an order and asks a Script for a Checkout Session, Stripe
 runs the payment on its own page, and a second Script establishes what actually happened.
 
+### The order ContentType — a field the provider fills is not a `ShortText`
+
+Model it before 6a. **`ShortText` stops at 64 characters**, so the split is not "short vs long" but
+**who decides the length** (`weegloo-create-content-type` → *Hard limits*):
+
+| field | type | why |
+|---|---|---|
+| `orderId`, `status`, `currency` | `ShortText` | yours, and you keep them short |
+| `amountMinor` | `Long` | the currency's minor unit, never a string |
+| `stripeSessionId` | **`RichText`** | `cs_test_…` runs **66–90** characters — past the cap on its own |
+| `paymentIntentId`, `customerId`, any other provider id | **`RichText`** | `pi_…` is short *today*; the length is Stripe's to change, not yours |
+| `receiptUrl` and any provider URL | **`RichText`** | a signed Stripe URL is hundreds of characters |
+
+`RichText`, not `LongText`: none of these is ever full-text searched — the Script finds the order by
+**your** `orderId`, then reads the provider value by path.
+
+A `ShortText` here breaks nothing until a real buyer presses pay and §6b's `ResourcePatch` answers
+`/stripeSessionId/en-US: must not exceed a maximum length of 64` — after the order row exists and
+**before Stripe is reached**, so there is no payment to reconcile and no checkout either.
+
 ### 6a. Client — create the order, then redirect
 
 ```js
