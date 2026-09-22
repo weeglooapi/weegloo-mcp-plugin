@@ -58,7 +58,7 @@ Use this when the stored value **never differs by locale**-same logical value fo
 > CDA lists" — a detail fetch on ACDA flattens exactly the same way. (Confirmed in the CDA content
 > reference: list and single-content reads share one locale shape.)
 
-Delivery endpoints accept a **`locale`** query parameter that controls **which locale(s)** appear in `fields` **and** the **shape** of `fields` in the response. This applies to Content (list and detail) and Media:
+Delivery endpoints accept a **`locale`** query parameter that controls **which locale(s)** appear in `fields` **and** the **shape** of `fields` in the response. It applies to Content (list and detail), Media and ContentType — and to nothing else (scope below):
 
 - **Content:**
   - **`GET /v1/spaces/{spaceId}/contents`** (CDA list)
@@ -66,6 +66,22 @@ Delivery endpoints accept a **`locale`** query parameter that controls **which l
   - **`GET /v1/spaces/{spaceId}/content-types/{contentTypeId}/contents/{contentId}`** (CDA/ACDA **detail** — same shape)
 - **Media list:**
   - **`GET /v1/spaces/{spaceId}/medias`**
+- **ContentType:**
+  - **`GET /v1/spaces/{spaceId}/content-types[/{contentTypeId}]`** (the type's own localized labels)
+
+**Three resource kinds take `locale`, and nothing else does: `ContentType`, `Content`, `Media`.**
+They are the resources that *have* per-locale buckets to choose between. Every other endpoint —
+**`…/locales`**, `…/spaces/{spaceId}`, `…/webhooks`, `…/space-roles`, `…/service-logins`,
+`…/scripts`, `…/schedulers`, tokens, memberships — carries no localized `fields`, so `?locale=…`
+there selects nothing.
+
+The one that shows up constantly is the language switcher's own read:
+**`GET https://cda.weegloo.com/v1/spaces/{spaceId}/locales?locale=en-US` is wrong** — drop the
+parameter. A `Locale` is a row *describing* a locale, not a document written in one; asking for it
+"in `en-US`" has no meaning, and its `sys.name` is a single label, not a bucket. **Being a delivery
+read is not what makes `locale` valid — the resource kind is**, so do not reach for it on the next
+CDA/ACDA call just because the last one took it. An unknown query parameter that is quietly ignored
+still teaches the call after it, and still ships in the URL that gets pasted into the product.
 
 Three modes, with **the same semantics** for Content and Media:
 
@@ -108,6 +124,45 @@ Example: **`?locale=*`**. The server returns **every locale’s** stored value f
 - **Multi-language UI on one page** (language switcher with no extra fetch, locale picker, admin previews): use **`?locale=*`** and read **`fields.<id>[<localeCode>]`**. Be ready for **missing entries** (no fallback).
 - **`localized: false` fields:** there is no per-locale split to expand-those fields are stored under the **default locale only** (see *`localized: false`* section). Treat the response shape per the API contract; do not expect a multi-locale map for them under `locale=*`.
 - **Pagination, `select`, `order`:** the `locale` choice is **orthogonal**-keep `locale` consistent across `links.next` calls so the response shape does not change mid-iteration (see **`weegloo-list-pagination`** and **`weegloo-api-query-optimization`**).
+
+## The switcher's locale list is a runtime read — a failed read must not shrink it
+
+A language switcher is built from the Space's **actual** `Locale` list, read at runtime
+(**`GET /v1/spaces/{spaceId}/locales`** on CDA — **no `?locale=` on this one**, per the scope above;
+`sys.code` is the value you later pass as `?locale=` on *content* reads, `sys.name` is the label,
+`sys.default` marks the default), never from a language array invented in the frontend. That read
+fails like any other — a network blip, a wrong or expired `DeliveryAccessToken`, the wrong
+`spaceId`, a rate limit — and **whatever the `catch` does IS the feature**:
+
+```js
+// ✗ the switcher renders empty, or the code hides it — the site looks monolingual by design
+const locales = await fetchLocales().catch(() => []);
+// ✗ worse: the other language is now unreachable, and nothing anywhere says so
+const locales = await fetchLocales().catch(() => [{ code: "en-US", name: "English" }]);
+```
+
+Nothing throws, no status reaches the page, and the result is indistinguishable from a Space that
+was never given a second `Locale`. Three requirements, all of them:
+
+1. **The fallback IS the locale list actually provisioned in THIS Space** — the same codes you
+   created with `cma_CreateLocale`, in the same `code` / `name` / `default` shape the API returns,
+   kept as one constant in the same module as the fetch so the two cannot drift apart. Never `[]`,
+   never the default locale alone, never `navigator.language`. On Weegloo WebHosting nothing runs
+   on the server at request time, so that constant is baked in at **build** time
+   (**`weegloo-web-hosting-rules`**).
+2. **No path may reduce the switcher below that set.** The collapse is usually not written as a
+   `catch`: it hides in `data?.items ?? []`, in `locales.filter(l => hasContent(l))` when the
+   *content* read is what failed, and in `locales.length > 1 && <Switcher/>` computed from a failed
+   read. Render every provisioned locale whenever the read did not succeed, and treat "one language
+   left" as a bug to investigate, not a state to render.
+3. **The failure stays loud.** At minimum `console.error` with the status and the URL; a bare
+   `catch {}` turns a dead token into "the site only has English", with no evidence anywhere. A
+   `401` / `403` here is a **token** problem — fix the token; pinning the array over it hides the
+   broken credential for good.
+
+Running on the fallback is a **degraded mode, not a success**: when reporting the build, say so on a
+red must-know line (**`weegloo-global-rules`**), naming the locales the page loses for as long as
+the read keeps failing.
 
 ## Management vs delivery: where to read a field value (avoid the `[locale]` bug)
 

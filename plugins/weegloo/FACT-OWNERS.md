@@ -204,3 +204,23 @@ git worktrees.
   - `rules/weegloo-global-rules.mdc`
   - `skills/weegloo-platform-integration/SKILL.md`
 - **why**: The two halves fail in opposite directions and neither announces itself. Serialising costs only wall-clock, so nothing ever flags it; batching a wave that has an ordering constraint fails at the call — or, for two writes to one resource, succeeds and drops the loser's fields, since `PUT` is a full replacement. The router states the bootstrap instance (which ContentTypes and rows depend on which); if a third file starts stating the policy itself, read it against the rule before registering it. No `forbidden` row: no drift has been observed yet, and an unwatched pattern scores exactly like a deleted one.
+
+### locale-param-scope
+
+- **fact**: The `locale` query parameter exists only on `ContentType`, `Content` and `Media` reads — the resources that have per-locale buckets. No other endpoint takes it, the switcher's own `GET …/spaces/{spaceId}/locales` included.
+- **owner**: `skills/weegloo-default-locale/SKILL.md`
+- **canary**: `Three resource kinds take`
+- **mentions**: `resource kinds take .locale., and nothing else|belongs to .ContentType. / .Content. / .Media. reads only`
+  - `skills/weegloo-default-locale/SKILL.md`
+  - `skills/weegloo-platform-integration/SKILL.md`
+- **why**: The owner documented the three *modes* of `locale` and never its *scope*, so the parameter generalised from "a delivery read" to every delivery read — landing most often on `…/locales`, the one URL the router hands the agent verbatim. An ignored query parameter raises nothing, so the wrong URL survives into the product and teaches the call after it. No `forbidden` row: the corpus never stated the scope wrongly, it stated nothing at all, and a pattern matching nothing scores exactly like a deleted one (see the header).
+
+### locale-switcher-runtime-list
+
+- **fact**: A language switcher is built from the Space's `Locale` list read at runtime; when that read fails the fallback is the locale set actually provisioned in that Space, and no path may reduce the switcher below it.
+- **owner**: `skills/weegloo-default-locale/SKILL.md`
+- **canary**: `degraded mode, not a success`
+- **mentions**: `must never shrink the switcher|must not shrink it|actually provisioned in THIS Space`
+  - `skills/weegloo-default-locale/SKILL.md`
+  - `skills/weegloo-platform-integration/SKILL.md`
+- **why**: The router owns "build it from the Locale list at runtime" and the owner states what happens when that read fails — two halves of one instruction. A `catch` returning `[]` or one hard-coded code satisfies the router's half while deleting the feature, and the deletion is silent by construction: nothing throws, no status reaches the page, and the page is indistinguishable from a Space that was never given a second `Locale`. No `forbidden` row yet — no drift has been observed, and an unwatched pattern scores exactly like a deleted one.
