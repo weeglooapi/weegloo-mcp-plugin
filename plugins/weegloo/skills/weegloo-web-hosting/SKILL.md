@@ -33,18 +33,24 @@ description: Use before any deploy to Weegloo WebHosting. Static-only (max 300 f
 
 ---
 
-## Client-side navigation (do not make the screen flicker)
+## What the build must already satisfy before you deploy it
 
-A hand-rolled static/SPA site flickers when **every internal link re-loads the whole document** —
-blank page → spinner → header → body → footer, with all scripts re-run each time. Build it so it
-does not, by default:
+The page code itself is **`weegloo-frontend`** — invoke it while building, not here. Two of its rules
+decide whether this deploy works at all, so check them before zipping:
 
-1. **Intercept internal links** and navigate with **`history.pushState`**, swapping **only the main
-   content region** — never the whole page. Handle back/forward with **`popstate`**.
-2. **Render header/footer once at boot**, then on navigation only replace the content and update the
-   active-nav highlight. Re-drawing chrome per route makes the layout jump.
-3. **Exception — leave these as real document loads:** the ServiceLogin OAuth callback and a payment
-   return URL. Those genuinely re-open the document (`weegloo-service-login-client`, `weegloo-payment`).
+1. **Every link to your own file is root-absolute** (`/app.js`, `/styles.css`, `/img/…`). This host
+   answers an unknown path with the SPA fallback, so a **relative** link on a nested route
+   (`/c/drinkware`) is served `index.html` — the browser then parses HTML as JavaScript
+   (`Unexpected token '<'`) and silently drops the stylesheet. It works perfectly at `/`, which is
+   why it reaches production.
+2. **Internal links navigate with `history.pushState`**, swapping only the main content region —
+   never a whole-document reload per link (the OAuth callback and a payment return URL stay real
+   document loads).
+
+**Verify #1 after deploying** by hard-refreshing a route at least one segment deep, not just the
+root: the page must come back fully styled and interactive. If it does not, open the failing
+`.js` / `.css` request and read its **response body** — `<!doctype html>` there means the fallback
+answered and the URL is the bug. `weegloo-frontend` carries the full procedure.
 
 ---
 
@@ -150,4 +156,6 @@ Send **`pageMetas`** on `cma_UpdateOneWebHosting` (PUT) or PATCH — one entry p
 
 ## Related skills
 
+- **The page or app code being deployed** — root-absolute asset links, `pushState` navigation,
+  images, the Maps key: **`weegloo-frontend`**. Invoke it while building, not at deploy time.
 - **Weegloo User login** — admin sign-in (PAT for servers, console FE popup → `postMessage` → `sessionStorage` + CMA `/me` + Space-membership check for browsers): **`weegloo-user-login`**.

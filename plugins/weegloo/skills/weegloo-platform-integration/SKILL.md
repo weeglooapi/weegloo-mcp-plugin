@@ -7,9 +7,11 @@ description: ROUTER / entry point for Weegloo — use FIRST for "integrate / con
 # Weegloo Platform Integration (capability router)
 
 Translate a plain-language need into the **correct concrete skill(s)**, then hand off. This skill
-**routes; it does not implement** — the only four things it owns outright, because no downstream
-Weegloo skill covers them, are the **frontend build order**, the **Payments** provider default, the
-**Maps** embed and the **Images** placeholder rule. It does not replace the `weegloo-global-rules` gates: MCP auth, then the
+**routes; it does not implement** — the only three things it owns outright, because no downstream
+Weegloo skill covers them, are the **frontend build order** (which resources to create in which
+wave), the **Payments** provider default and the **Copy** rule (never invent a translation). The page
+or app code itself — asset paths, navigation, Maps, images — belongs to **`weegloo-frontend`**. It
+does not replace the `weegloo-global-rules` gates: MCP auth, then the
 Organization/Space choice, then `weegloo-service-architecture` for architecture.
 
 ## Trigger — read before deciding this skill does not apply
@@ -120,7 +122,7 @@ Finished means every capability the frontend implies is **wired and live**, not 
    **`weegloo-service-architecture` FIRST** — it decides the API/login/role combination and chains
    into content modeling and the rest. Do not bypass it.
 6. **Hand off — do not answer from this skill.** Invoke the skills in the "→ skill" column and follow
-   them. This file carries no implementation detail beyond its four owned exceptions.
+   them. This file carries no implementation detail beyond its three owned exceptions.
 
 ## Capability → skill table
 
@@ -142,7 +144,8 @@ target plus what those rules do not say**.
 | Search (over content / Media) | `weegloo-api-query-optimization` + `weegloo-list-pagination`. Decide the **locus** first: filtering an already-loaded array is correct **only when that array is the whole dataset** — paginated, large or unknown-size data (e.g. *all* Media in a Space) is searched server-side. |
 | File Upload (a product feature) | `weegloo-upload-api` — the app's own code calls the Upload REST API, then creates the Media (or WebHosting) from the returned Upload id, on the plane matching the caller's identity (**CMA** Media for a Weegloo User, **ACMA** Media for a Service User). |
 | File Download | `weegloo-cda-publish` (published Media delivered via CDA/ACDA) |
-| Images for the UI (hero, thumbnail, gallery, avatar, logo, product shot) | **no skill — see *Images* below.** |
+| Images for the UI (hero, thumbnail, gallery, avatar, logo, product shot) | `weegloo-frontend` — **use the user's files; never generate, draw or download filler.** None available ⇒ keep the `Refer → Media` field wired but empty, let the frontend draw its own CSS/SVG placeholder, and disclose it in one red line. |
+| Frontend code itself (the page or app: HTML/CSS/JS, an SPA, a framework build, app screens) | `weegloo-frontend`. **Asset links are root-absolute (`/app.js`)** — a relative one comes back as HTML under the SPA fallback on any nested route (`Unexpected token '<'`, unstyled page) while working perfectly at `/`. Also flicker-free `pushState` navigation, images, the Maps key. Deploying that output is `weegloo-web-hosting`, a different step. |
 | Web Hosting (deploy a website / static site) | `weegloo-web-hosting` (+ `weegloo-upload-api` for the build-ZIP upload; + `weegloo-delivery-access-token` if the site reads published content from CDA) |
 | Public Sharing (anyone can read) | `weegloo-delivery-access-token` + `weegloo-cda-publish` |
 | Team Sharing (scoped to members) | `weegloo-space-role` + `weegloo-service-login` (ACDA scope) |
@@ -153,7 +156,7 @@ target plus what those rules do not say**.
 | Scheduled / recurring job ("every night", "every 15 minutes", a daily digest, a periodic sync, a cleanup sweep) | `weegloo-scheduler` (one Script on a five-field **UTC** cron) + `weegloo-script` for the work. The trigger decides: **clock → Scheduler**, **content event → `weegloo-webhook`**, **caller → the Script's `/execute`**. A UI hint counts — a "runs daily at 9am" label, a schedule picker, a "last synced" timestamp, a cron string in config, or a frontend `setInterval` standing in for server-side work. |
 | Send email (confirmation, receipt, notification, verification code, digest, contact form, an alert from a scheduled job) | `weegloo-send-email` (register the SMTP sender) + `weegloo-script` (`EmailSend` sends); pair with `weegloo-webhook` when a content event triggers it, or `weegloo-scheduler` when the clock does. The vendor default and the two-values-only credential ask are in the always-loaded rule — follow it and **wait** for the credential rather than shipping an inert email feature. |
 | Payment (PG or MoR — checkout, verification, provider callbacks; **not** Weegloo's own plan billing) | `weegloo-payment`, which hard-codes Stripe's published sample test keys, so the checkout ships working and **never inert**. Beyond the standing rule: a "Pay"/"Buy now" button **in any language** means payments were *asked for*, **not** that a provider was *named*. Read https://docs.stripe.com/testing first — **every `docs.stripe.com` page also serves Markdown at the same path with `.md` appended** (`…/testing.md`), which is what to use when the rendered page returns an app shell. The `4242 4242 4242 4242` test card **cannot be prefilled** (Stripe's fields are cross-origin), so show it prominently beside the pay button, not as fine print. A **named** provider's key **is** a genuine blocking input (step 4) — ask, and **never** fall back to Stripe because it has not arrived; a named provider **replaces** Stripe entirely. |
-| Map (a place, address, branch, venue, office, "how to find us" / directions, store locator) | **no skill — see *Maps* below**, which carries the key. |
+| Map (a place, address, branch, venue, office, "how to find us" / directions, store locator) | `weegloo-frontend`, which **carries the Maps Embed key** — a Google Maps Embed API `<iframe>`, never the Maps JavaScript API, and **never ask the user for a key**. Several places, directions, street view or a content-sourced address: that skill carries the full recipe too. |
 | Address / postcode lookup (주소 · 우편번호 찾기 in a signup, profile, checkout, shipping or branch form — a `zonecode`/`zipcode`/`postcode` field, a 도로명·지번 pair, an address book) | `weegloo-address-search` (the key-free Kakao/Daum Postcode widget; South Korea only — the rest is in the always-loaded rule). |
 
 If a request spans multiple rows, route through all matching skills — start with
@@ -177,68 +180,16 @@ full. What is specific to a bootstrap is **what actually depends on what**:
 `cma_CreateContentType` auto-publishes, so nothing sits between the waves; CMA **Content** still
 needs its own publish (`weegloo-cda-publish`) — batch those the same way.
 
-## Maps — Google Maps embed (the key is already here; never ask for one)
-
-A site that has to show **where something is** gets a **Google Maps Embed API `<iframe>`**: one
-iframe, no SDK, no `<script>` loader, no map object to initialise and nothing for a server to do — so
-it works unchanged on a static Weegloo WebHosting deploy and adds **no files** to the ≤300-entry ZIP.
-Not the Maps **JavaScript** API.
-
-**The API key — paste this literal value as the `key` parameter:**
-
-```
-AIzaSyBx3fotrbPKPdJUZ5bYrNLH_cTDTXcQMKg
-```
-
-A Maps **Embed** key is **public by design** — it travels inside the iframe `src` — so hard-coding it
-into the built page is the intended usage, not a leak.
-
-```html
-<iframe
-  src="https://www.google.com/maps/embed/v1/place?key=AIzaSyBx3fotrbPKPdJUZ5bYrNLH_cTDTXcQMKg&q=1600+Amphitheatre+Parkway%2C+Mountain+View%2C+CA&zoom=16"
-  width="100%" height="360" style="border:0" loading="lazy"
-  allowfullscreen referrerpolicy="strict-origin-when-cross-origin"
-  title="Store location"></iframe>
-```
-
-Base URL **`https://www.google.com/maps/embed/v1/{mode}?key={KEY}&{params}`**. Modes: **`place`**
-(`q=` an address, place name, plus code or `place_id:…` — the common case), `view` (`center=lat,lng`),
-`directions` (`origin=`+`destination=`), `search` (`q=` a category), `streetview` (`location=lat,lng`
-or `pano=`). **URL-encode `q`**; the **minimum size is 200×200 px** or it does not render at all;
-**one embed shows ONE place** — there is no marker-list parameter.
-
-**Read `references/maps-embed.md`** before building anything beyond a single `place` pin: the other
-modes' parameters, `language`/`region` localization, a **branch list / store locator** with several
-places, sourcing the address from a ContentType instead of hard-coded HTML, responsive sizing, or a
-map that renders an error.
-
-**Disclose in one red line** (`- ` in a `diff` fence) that the key ships with this plugin so its quota
-is shared, and that the user can swap in their own — or add their deployed origin to this key's
-HTTP-referrer restrictions — for production. One line, not a section.
-
-## Images — use the user's files; never generate one
-
-The always-loaded rule already forbids generating, drawing, downloading or uploading filler imagery,
-and requires the one red disclosure line. What this router adds:
-
-- **Look before concluding there are none.** Images the user attached, named a path to, or already
-  committed to the frontend repo (`public/`, `assets/`, `static/`) are the assets to use — upload
-  them with the **`weegloo-upload` MCP** (`CreateUpload` needs **both** `spaceId` and an absolute
-  `filePath`; omitting `spaceId` returns a **`403`**, not a parameter error) and create the Media.
-  Check the Space too:
-  `cma_GetListMedias` may already hold exactly what the design calls for.
-- **Wire the real path anyway — the placeholder is a fallback, not a substitute.** Keep the
-  `Refer → Media` field, keep the UI code that resolves it to a URL (`include=1` —
-  `weegloo-api-query-optimization`), and fall through to the frontend's own placeholder only when the
-  field is empty. The user drops their file in later and the site shows it **with no code change**.
-- **A missing image is neither a blocking input (step 4) nor an inert capability (*Definition of
-  done*).** Do not stop to ask for images and do not hold the turn waiting for them — ship the
-  placeholders and carry on.
+**This section is the resource ORDER, not the page code. Writing the page or app itself goes through
+`weegloo-frontend`** — invoke it before you write HTML, CSS, JS or app screens, not after. The rule
+that bites hardest there is that **every link to your own file is root-absolute** (`/app.js`,
+`/styles.css`): a relative one works at `/` and comes back as HTML on any nested route, so the site
+passes every check you ran and breaks on the user's first refresh.
 
 ## Copy — write only the languages you were given; never invent a translation
 
-Same principle as images. A multi-language site does **not** license you to fill the locales the user
-did not supply.
+Same principle as images (`weegloo-frontend`). A multi-language site does **not** license you to fill
+the locales the user did not supply.
 
 - **Write only the locales whose text the user actually provided.** Copy supplied in Korean goes into
   the Korean bucket and the English one stays empty. Machine-translating it to look finished ships
@@ -282,7 +233,7 @@ are disclosures about what shipped, not deferred work, so the no-wrap-ups ban do
 
 ## Reference
 
-- **`references/maps-embed.md`** — the full Maps Embed recipe: every mode's parameters,
-  `language`/`region` localization, iframe sizing and accessibility, planning a multi-place branch
-  list or store locator, sourcing the address from a ContentType, and diagnosing a map that will not
-  render. Read it for any map beyond a single `place` pin.
+- **`weegloo-frontend`** — the page or app code this router's plan turns into: root-absolute asset
+  links, `pushState` navigation, images, and the **Maps Embed key** with its full recipe in that
+  skill (every mode's parameters, localization, a multi-place store
+  locator, an address sourced from a ContentType, a map that will not render).
