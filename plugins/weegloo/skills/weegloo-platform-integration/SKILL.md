@@ -82,6 +82,12 @@ Finished means every capability the frontend implies is **wired and live**, not 
    - **EXCEPTION — Organization / Space MUST still be asked.** "Do not ask" covers *which features*;
      it does not override the `weegloo-global-rules` gate. Confirm Organization + Space with the user
      first — never guess, auto-pick, or take the first list item — then auto-integrate into it.
+   - **A NEW Space's default locale is the language the SERVICE is in — infer it, don't ask.** Pass
+     it as **`cma_CreateSpace.locale`**; it becomes the bucket every Content write lands in and the
+     locale delivery serves by default. Read it off what you already have: the frontend's copy,
+     attached images and documents, and **the language the user is writing to you in** (a Korean
+     conversation about a Korean shop ⇒ `ko-KR`). **Nothing to infer from ⇒ omit the parameter** and
+     let it default to `en-US`.
 4. **Ask for required external inputs JUST-IN-TIME — never batch them into a final wrap-up.** Work
    capability by capability; the **moment** a step genuinely needs a user-only value, **stop, ask for
    that one thing, and wait**, then continue. Never plow through everything and close with a "provide
