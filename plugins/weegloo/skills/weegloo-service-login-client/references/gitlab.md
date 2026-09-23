@@ -6,7 +6,7 @@ there, not here. It covers only the **GitLab** side — registering the applicat
 `clientId` / `clientSecret` that `ServiceLogin` needs, on gitlab.com and on a self-hosted GitLab
 alike.
 
-## GitLab's Redirect URI (deploy-independent — register it now)
+## GitLab's Redirect URI (deploy-independent — hand it over with the credentials ask)
 
 In the GitLab application form the field is **Redirect URI**. Its value, with the real `{spaceId}`
 substituted:

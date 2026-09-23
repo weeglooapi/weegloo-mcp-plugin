@@ -8,7 +8,7 @@ here.
 > Korean-only. The steps below name each field by its **English meaning**; the live console shows the
 > Korean equivalent, so match by meaning/position and look up the current label if a screen has moved.
 
-## Naver's Callback URL (deploy-independent — register it now)
+## Naver's Callback URL (deploy-independent — hand it over with the credentials ask)
 
 In the Naver Developers console, the **Callback URL** (under the **Naver Login** API settings) is, with
 the real `{spaceId}` substituted:

@@ -4,7 +4,7 @@ Read this **only when** the chosen provider is GitHub (`github`). It assumes the
 the wire protocol, the SDK, `callbackUrl`, `exchangeToken` and the ACMA/ACDA token boundary are there,
 not here.
 
-## GitHub's Authorization callback URL (deploy-independent — register it now)
+## GitHub's Authorization callback URL (deploy-independent — hand it over with the credentials ask)
 
 In the GitHub OAuth App, the **Authorization callback URL** is, with the real `{spaceId}` substituted:
 

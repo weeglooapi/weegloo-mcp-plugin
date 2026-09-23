@@ -5,7 +5,7 @@ Console** side alone: creating the OAuth client and producing the `clientId` / `
 `ServiceLogin` needs. It assumes the spine (`SKILL.md`): the wire protocol, the SDK, `callbackUrl`,
 `exchangeToken` and the ACMA/ACDA token boundary are there, not here.
 
-## Google's Authorized redirect URI (deploy-independent — register it now)
+## Google's Authorized redirect URI (deploy-independent — hand it over with the credentials ask)
 
 In the Google Cloud Console OAuth client, the **Authorized redirect URI** is, with the real `{spaceId}`
 substituted:
@@ -20,8 +20,6 @@ The leading **`+ `** is **not part of the URI** — Google's **Authorized redire
 - The `/code/` segment is required — it is the **Google → Weegloo** callback, **not** the browser entry
   URL (`…/login/oauth2/google`). Putting `/code/` in the entry URL, or the entry URL in this field,
   breaks sign-in (spine pitfall **A**).
-- It depends only on `auth.weegloo.com` + your `spaceId` + `google`, so it is **fully known now** —
-  register it before the app is deployed.
 
 ## Walk the user through it — `clientId` / `clientSecret` are blocking inputs
 

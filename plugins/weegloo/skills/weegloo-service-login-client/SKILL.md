@@ -211,7 +211,7 @@ A first integrator wiring an **app that is not deployed yet** routinely stalls o
 
 | URL | Depends on the app's deploy address? | Set it when |
 |---|---|---|
-| **Provider "Authorized redirect URIs"** = `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` | **No** — it always points at `auth.weegloo.com` with your `spaceId` + provider | **Now.** It is fully known the moment the Space and provider exist; nothing about it changes after you deploy. |
+| **Provider "Authorized redirect URIs"** = `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}` | **No** — it always points at `auth.weegloo.com` with your `spaceId` + provider | **In the console visit that creates the OAuth client.** Fully known the moment the Space and provider exist; nothing about it changes after you deploy. |
 | **`ServiceLogin.callbackUrl`** = a page on **your product** that receives `?exchangeToken=...` | **Yes** — it is your app's own origin/path | **After the deploy URL is known.** Until then use a placeholder and patch it (and re-run any config/build step) once the subdomain is final. |
 
 So the deploy chicken-and-egg is only apparent: you can **always** finish the provider side and create the `ServiceLogin` immediately (placeholder `callbackUrl`), then update only `callbackUrl` post-deploy via `cma_UpdateOneServiceLogin` / `cma_PatchOneServiceLogin`. Do **not** block ServiceLogin creation on having a deployed URL, and do **not** put your app's `callbackUrl` into the provider's redirect-URI field (that is pitfall **A** again).
@@ -220,6 +220,12 @@ Being deploy-independent means you can hand the user its final value as soon as 
 the credentials ask (pitfall G) and again in the completion message**. The why and the
 green-presentation are owned by `weegloo-service-login` → *The provider Redirect URI — the user
 registers it by hand*, and are not repeated here.
+
+It does **not** mean *send the user off to register it early, as an errand of its own*. On every
+provider the field belongs to the OAuth client the user is creating — on Google, GitHub and GitLab it
+is a field of that creation form, on Facebook and LINE a screen reachable only once the app or channel
+exists — so until that visit is under way there is nowhere to paste it, and a user sent ahead of the
+walkthrough arrives at a console with nothing to do. One visit, one ask (pitfall **G**).
 
 ### G. `clientId` / `clientSecret` are blocking, user-only inputs
 
@@ -236,8 +242,8 @@ only the console-specific clicks differ — those live in `references/{provider}
 1. **Provider's developer console → create an OAuth 2.0 client (Web application).** Register the
    **Authorized redirect URI** = `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}`
    (the `/code/` form — hit by the provider → Weegloo, not the browser; pitfall **A**).
-   **Deploy-independent — set it now** (pitfall **F**). Then copy that provider's `clientId` /
-   `clientSecret`.
+   **Deploy-independent — fill it in during this same creation, not after the deploy** (pitfall **F**).
+   Then copy that provider's `clientId` / `clientSecret`.
 2. **Create the `ServiceLogin` yourself** — **`cma_CreateServiceLogin`**, not the user clicking through
    the console. The fields split by who can supply them.
 
