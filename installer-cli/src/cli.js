@@ -9,6 +9,7 @@
  */
 
 import { parseArgs } from 'node:util';
+import { normalizeCountryCode } from './country.js';
 
 /**
  * Selectable IDE/agent targets (the installer internally calls this `ide`).
@@ -54,6 +55,11 @@ export const HELP_TEXT = `
                          weegloo origins baked into skills/rules/MCP config for a
                          staging or enterprise stack. Install only — updates
                          reuse the mapping recorded at install time.
+        --country <cc>   ISO country code (e.g. KR, US) that decides which
+                         country-specific skills/rules install. Default:
+                         detected from your network at install; --update
+                         keeps the country the install recorded.
+                         (also reads WEEGLOO_COUNTRY)
         --update         Update an existing install: refresh this agent's installed
                          skills/rules to the branch's newest version, KEEPING the
                          user's selection (auto-adds genuinely new items, prunes
@@ -95,6 +101,7 @@ const OPTIONS = {
   'ignore-skill': { type: 'boolean' },
   'ignore-rule': { type: 'boolean' },
   origins: { type: 'string' },
+  country: { type: 'string' },
   update: { type: 'boolean' },
   uninstall: { type: 'boolean', short: 'u' },
   yes: { type: 'boolean', short: 'y' },
@@ -241,6 +248,21 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
   const envToken = (env.WEEGLOO_TOKEN || '').trim();
   const token = flagToken || envToken || null;
 
+  // ── country (flag > env; which country-tagged skills/rules the run offers) ──────────
+  // null = not pinned: install detects it, update reuses the country the install recorded —
+  // that choice is resolveCountry's (index.js / update.js), not this layer's. A value that is not
+  // an ISO code is an ERROR rather than a fall-back to detection: a typo like `KOR` quietly
+  // replaced by the detected country installs a different set than the user asked for, with
+  // nothing on screen to say so. Uninstall is the exception — it filters nothing, so a bad value
+  // there is just another inapplicable flag (warned below, never fatal).
+  const flagCountry = (values.country != null ? String(values.country) : '').trim();
+  const envCountry = (env.WEEGLOO_COUNTRY || '').trim();
+  const rawCountry = flagCountry || envCountry || null;
+  const country = rawCountry != null ? normalizeCountryCode(rawCountry) : null;
+  if (rawCountry != null && country == null && !values.uninstall) {
+    errors.push(`Invalid --country '${rawCountry}'. Use an ISO 3166-1 alpha-2 code such as KR or US.`);
+  }
+
   const showAllBranches = !!values['all-branches'];
 
   // ── update mode (--update): refresh an existing install's skills/rules ──────
@@ -314,6 +336,9 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
     if (origins != null) {
       warnings.push('--origins has no effect with --uninstall (the recorded mapping is used for reporting).');
     }
+    if (rawCountry != null) {
+      warnings.push('--country has no effect with --uninstall.');
+    }
     if (pluginRef != null) {
       warnings.push('A branch was provided but --uninstall reads no manifest; the branch is ignored.');
     }
@@ -348,6 +373,9 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
   if (!update && !uninstall && host != null && installMcp === false) {
     warnings.push(`--host ${host} only affects the npx upload server, so it has no effect with --no-mcp.`);
   }
+  if (!update && !uninstall && country != null && installSkillsRules === false) {
+    warnings.push('--country only filters Skills/Rules, so it has no effect with --ignore-skill --ignore-rule.');
+  }
   if (showAllBranches && (refPinned || nonInteractive || uninstall)) {
     warnings.push('--all-branches has no effect when the branch is pinned or non-interactive (the picker is skipped).');
   }
@@ -377,6 +405,9 @@ export function resolveConfig({ values, env = {}, isTTY = true, pkgPluginRef = '
       uninstallSkills,
       uninstallRules,
       origins,
+      // Upper-case ISO 3166-1 alpha-2 pinned by --country / WEEGLOO_COUNTRY, or null (detect on
+      // install, reuse the recorded one on update). Set in uninstall mode too, where it is ignored.
+      country,
       token,
       showAllBranches,
     },

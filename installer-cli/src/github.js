@@ -1,6 +1,7 @@
 import path from 'path';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
+import { normalizeCountryCode, normalizeCountrySpec } from './country.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -148,10 +149,24 @@ export async function listBranches() {
 const SUPPORTED_SCHEMA_VERSION = 1;
 
 /**
+ * Reads the OPTIONAL `country` field of a skill/rule entry (the builder's structured form of a
+ * `country:` frontmatter tag — see country.js). `undefined` = absent, i.e. every country: the
+ * normalized entry then carries no `country` key at all, so an untagged corpus normalizes to
+ * exactly the pre-feature shape. `null` = present but malformed → the caller rejects the whole
+ * manifest, like any other bad field (a misread tag would install a skill in the wrong countries).
+ * The field is additive within schemaVersion 1: an older CLI never reads it and installs everything.
+ */
+function entryCountry(entry) {
+  if (!('country' in entry) || entry.country === undefined) return undefined;
+  return normalizeCountrySpec(entry.country);
+}
+
+/**
  * Strictly validates a raw manifest and returns the normalized resource shape, or null
  * if ANYTHING is off: wrong schemaVersion, a missing/non-string field, or a malformed
- * skill/rule entry. The manifest is our own generated artifact, so a mismatch is a build
- * bug — fail loudly (the caller fails fast) instead of defaulting or dropping silently.
+ * skill/rule entry (including a malformed `country`). The manifest is our own generated
+ * artifact, so a mismatch is a build bug — fail loudly (the caller fails fast) instead of
+ * defaulting or dropping silently.
  * Defaults for absent fields belong to the producer (build-installer-manifest.mjs), not here.
  */
 function normalizeManifest(data) {
@@ -170,13 +185,17 @@ function normalizeManifest(data) {
       if (!name || typeof content !== 'string') return null;
       files[name] = content;
     }
-    skills.push({ id: s.id, files });
+    const country = entryCountry(s);
+    if (country === null) return null;
+    skills.push({ id: s.id, ...(country ? { country } : {}), files });
   }
 
   const rules = [];
   for (const r of data.rules) {
     if (!r || typeof r.id !== 'string' || !r.id || typeof r.content !== 'string' || !r.content) return null;
-    rules.push({ id: r.id, content: r.content });
+    const country = entryCountry(r);
+    if (country === null) return null;
+    rules.push({ id: r.id, ...(country ? { country } : {}), content: r.content });
   }
 
   return {
@@ -200,8 +219,11 @@ function normalizeManifest(data) {
  * Returns null when the manifest is unavailable or invalid (404, network error, bad JSON,
  * unsupported schemaVersion) so the caller can fail fast rather than install a degraded set.
  *
+ * `country` is present on an entry ONLY when it is restricted to (`include`) or kept out of
+ * (`exclude`) some countries; filtering on it is the caller's job (`filterResourcesByCountry`).
+ *
  * @param {string} ref
- * @returns {Promise<{ source: string, version: string|null, repoContentPrefix: string, mcp: {weeglooUrl:string, uploadApiUrl:string}, skills: Array<{id:string, files:Record<string,string>}>, rules: Array<{id:string, content:string}> } | null>}
+ * @returns {Promise<{ source: string, version: string|null, repoContentPrefix: string, mcp: {weeglooUrl:string, uploadApiUrl:string}, skills: Array<{id:string, country?: {include:string[]}|{exclude:string[]}, files:Record<string,string>}>, rules: Array<{id:string, country?: {include:string[]}|{exclude:string[]}, content:string}> } | null>}
  */
 export async function loadResources(ref) {
   const url = `${RAW_BASE}/${ref}/${PLUGIN_PACKAGE_ROOT}/installer-manifest.json`;
@@ -209,6 +231,42 @@ export async function loadResources(ref) {
     const res = await httpGet(url, { retry: 2 });
     if (!res.ok) return null;
     return normalizeManifest(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+// ── CountrySource: the client's country for the catalog filter ───────────────
+
+/** Per-attempt deadline for the country lookup — optional data, so much shorter than the manifest's. */
+const COUNTRY_TIMEOUT_MS = 5000;
+
+/**
+ * Asks the country endpoint (`countryCheckUrl(origins)` in country.js — public, unauthenticated,
+ * plain JSON `{ "country": "KR" }`, inferred server-side from the caller's network) which country
+ * this client is in. index.js (install) and update.js (an install that recorded no country) reach
+ * it only through `resolveCountry`, which asks only when neither `--country` / WEEGLOO_COUNTRY nor
+ * the install record already answered.
+ *
+ * Fail-open contract: this NEVER throws and answers only a normalized ISO 3166-1 alpha-2 code or
+ * null. Offline, a timeout, a non-2xx, a non-JSON body, a missing field or an "unknown" placeholder
+ * (`XX`) all come back as null — and null means NO country filter, so the run installs exactly
+ * what it would have before country tags existed. A lookup that cannot answer must never make an
+ * install worse than not asking.
+ *
+ * No request headers — in particular no `Accept`: Weegloo answers with its vendor JSON type and a
+ * forced `Accept: application/json` is exactly what the api-endpoints rule tells clients not to send.
+ *
+ * @param {string} url
+ * @param {{ timeout?: number }} [opts]  per-attempt deadline in ms (one retry on a network error, 429 or 5xx)
+ * @returns {Promise<string|null>}
+ */
+export async function fetchCountry(url, { timeout = COUNTRY_TIMEOUT_MS } = {}) {
+  try {
+    const res = await httpGet(url, { retry: 1, timeout });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return normalizeCountryCode(body?.country);
   } catch {
     return null;
   }

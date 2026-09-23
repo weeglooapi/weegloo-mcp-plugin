@@ -30,6 +30,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { VERSION_URL } from './github.js';
 import { applyOriginMapping, TERMS_CONSENT_RULE_ID } from './origins.js';
+import { normalizeCountryCode } from './country.js';
 import { listWeeglooRuleFiles } from './io.js';
 
 export const SELF_UPDATE_RULE_ID = 'weegloo-version';
@@ -215,8 +216,13 @@ export function getLegacyInstalledRecordPath(scope = 'global', cwd = process.cwd
  * (present in the old catalog but not selected → respect the opt-out). Missing or malformed →
  * empty lists, which makes the first record-capable run a safe no-op.
  *
+ * `origins` and `country` are properties of the install's ENVIRONMENT, reused verbatim by the
+ * update flow: the origins mapping it was made with, and the country its catalog was FILTERED
+ * with (docs/country-filter.md). Both read tolerantly — anything malformed collapses to null.
+ * A null country means "unknown": the install ran unfiltered, and the next update detects it.
+ *
  * @param {string} recordPath
- * @returns {{ skills: string[], rules: string[], availableSkills: string[], availableRules: string[] }}
+ * @returns {{ skills: string[], rules: string[], availableSkills: string[], availableRules: string[], origins: Record<string,string>|null, country: string|null }}
  */
 export function readInstalledRecord(recordPath) {
   const s = readJsonFile(recordPath);
@@ -235,16 +241,21 @@ export function readInstalledRecord(recordPath) {
     availableSkills: list(s.availableSkills),
     availableRules: list(s.availableRules),
     origins,
+    // Same tolerance as origins: a hand-edited `"kr"` still reads as KR, junk reads as unknown
+    // (→ the next update detects) rather than as a country nobody is in.
+    country: normalizeCountryCode(s.country),
   };
 }
 
 /**
  * Persists the installer's record. Best-effort (never throws). Merges over any existing file,
  * so a run that manages only one kind (e.g. --ignore-rule) preserves the other kind's lists.
- * Returns the path written, or null on failure.
+ * `origins` and `country`, when the key is PRESENT in `record`, are set or removed explicitly
+ * rather than merged (see below); a caller that omits the key (uninstall's partial clear) leaves
+ * the stored value alone. Returns the path written, or null on failure.
  *
  * @param {string} recordPath
- * @param {{ skills?: string[], rules?: string[], availableSkills?: string[], availableRules?: string[] }} [record]
+ * @param {{ skills?: string[], rules?: string[], availableSkills?: string[], availableRules?: string[], origins?: Record<string,string>|null, country?: string|null }} [record]
  */
 export function writeInstalledRecord(recordPath, record = {}) {
   try {
@@ -257,6 +268,14 @@ export function writeInstalledRecord(recordPath, record = {}) {
     if ('origins' in record) {
       if (record.origins && Object.keys(record.origins).length > 0) next.origins = record.origins;
       else delete next.origins;
+    }
+    // country likewise: it is the country THIS run's catalog was filtered with. A run whose
+    // country was unknown (fail-open, unfiltered) must not leave an older country behind — that
+    // would claim a filter this install no longer has, and stop the next update from detecting.
+    if ('country' in record) {
+      const country = normalizeCountryCode(record.country);
+      if (country) next.country = country;
+      else delete next.country;
     }
     fs.mkdirSync(path.dirname(recordPath), { recursive: true });
     fs.writeFileSync(recordPath, `${JSON.stringify(next, null, 2)}\n`, 'utf-8');
@@ -332,6 +351,10 @@ export function projectMarkerRuleSharers(agent, cwd = process.cwd()) {
  * version-check.json. Keeping them in separate files is deliberate — the weegloo-version rule
  * periodically overwrites the stamp, and that must never wipe the record.
  *
+ * `origins` and `country` are written on EVERY call (set, or removed when null): they describe
+ * the environment of the run that just happened, not a preference to carry forward. `country` is
+ * the country the catalog was filtered with — null when it was unknown and nothing was filtered.
+ *
  * @param {{
  *   scope: 'global'|'project',
  *   agent?: string,
@@ -341,6 +364,8 @@ export function projectMarkerRuleSharers(agent, cwd = process.cwd()) {
  *   legacyRecordPath?: string,
  *   version?: string|null,
  *   ref?: string|null,
+ *   origins?: Record<string,string>|null,
+ *   country?: string|null,
  *   manageSkills: boolean,
  *   installedSkillIds?: string[],
  *   availableSkillIds?: string[],
@@ -362,6 +387,7 @@ export function syncInstalledRecord({
   version = null,
   ref = null,
   origins = null,
+  country = null,
   manageSkills,
   installedSkillIds = [],
   availableSkillIds = [],
@@ -390,6 +416,7 @@ export function syncInstalledRecord({
     availableSkills: manageSkills ? availableSkillIds : prev.availableSkills,
     availableRules: manageRules ? availableRuleIds : prev.availableRules,
     origins, // 설치의 속성 — 매 실행 명시적으로 set/remove (writeInstalledRecord 참조)
+    country, // same: the country this run's catalog was filtered with (null = unknown → removed)
   });
   const stampWritten = writeVersionStamp(stampPath, { now, version, ref });
 

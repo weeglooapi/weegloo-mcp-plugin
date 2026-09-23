@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseCliArgs, resolveConfig } from '../src/cli.js';
+import { parseCliArgs, resolveConfig, HELP_TEXT } from '../src/cli.js';
 
 /** Resolve helper with sane defaults; override per case. */
 function resolve(argv, { env = {}, isTTY = true } = {}) {
@@ -333,4 +333,78 @@ test('resolveConfig: uninstall fields are null outside uninstall mode', () => {
     [config.uninstallMcp, config.uninstallSkills, config.uninstallRules],
     [null, null, null]
   );
+});
+
+// ── --country (which country-tagged skills/rules a run offers) ──────────────
+
+test('resolveConfig: --country absent ⇒ null (install detects it, update reuses the record)', () => {
+  const { errors, config } = resolve(['-y', '-a', 'claude', '--no-mcp']);
+  assert.deepEqual(errors, []);
+  assert.equal(config.country, null);
+});
+
+test('resolveConfig: --country flag beats WEEGLOO_COUNTRY; env alone pins too', () => {
+  assert.equal(
+    resolve(['-a', 'claude', '--no-mcp', '--country', 'US'], { env: { WEEGLOO_COUNTRY: 'KR' } }).config.country,
+    'US'
+  );
+  assert.equal(resolve(['-a', 'claude', '--no-mcp'], { env: { WEEGLOO_COUNTRY: 'KR' } }).config.country, 'KR');
+  // An empty flag is "not given" (same as --token), so the env still answers.
+  assert.equal(
+    resolve(['-a', 'claude', '--no-mcp', '--country', '  '], { env: { WEEGLOO_COUNTRY: 'JP' } }).config.country,
+    'JP'
+  );
+});
+
+test('resolveConfig: --country is normalized to the manifest spelling (trimmed, upper case)', () => {
+  assert.equal(resolve(['-a', 'claude', '--no-mcp', '--country', 'kr']).config.country, 'KR');
+  assert.equal(resolve(['-a', 'claude', '--no-mcp'], { env: { WEEGLOO_COUNTRY: ' us ' } }).config.country, 'US');
+});
+
+test('resolveConfig: an invalid --country is an error, never a silent fall-back to detection', () => {
+  for (const bad of ['KOR', 'XX', '1']) {
+    const { errors, config } = resolve(['-a', 'claude', '--no-mcp', '--country', bad]);
+    assert.ok(
+      errors.some((e) => e === `Invalid --country '${bad}'. Use an ISO 3166-1 alpha-2 code such as KR or US.`),
+      `${bad} rejected`
+    );
+    assert.equal(config.country, null);
+  }
+  // Same check when the value arrives through the environment (a stale CI variable).
+  assert.ok(
+    resolve(['-a', 'claude', '--no-mcp'], { env: { WEEGLOO_COUNTRY: 'Korea' } }).errors.some((e) =>
+      /Invalid --country 'Korea'/.test(e)
+    )
+  );
+});
+
+test('resolveConfig: --update accepts --country (it overrides and re-records the country)', () => {
+  const { errors, warnings, config } = resolve(['--update', '-a', 'claude', '--country', 'us']);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(warnings, []);
+  assert.equal(config.country, 'US');
+});
+
+test('resolveConfig: --uninstall warns that --country has no effect (never errors, even when invalid)', () => {
+  const { errors, warnings, config } = resolve(['-u', '-a', 'claude', '--country', 'KR']);
+  assert.deepEqual(errors, []);
+  assert.ok(warnings.includes('--country has no effect with --uninstall.'));
+  assert.equal(config.country, 'KR', 'still resolved; the uninstall flow ignores it');
+
+  const bad = resolve(['-u', '-a', 'claude', '--country', 'KOR']);
+  assert.deepEqual(bad.errors, [], 'nothing is filtered, so a bad value cannot block a removal');
+  assert.ok(bad.warnings.includes('--country has no effect with --uninstall.'));
+});
+
+test('resolveConfig: --country on an MCP-only install warns (nothing to filter)', () => {
+  const { errors, warnings } = resolve(['-a', 'claude', '--ignore-skill', '--ignore-rule', '--country', 'KR']);
+  assert.deepEqual(errors, []);
+  assert.ok(warnings.some((w) => /--country only filters Skills\/Rules/.test(w)));
+  // …but not when skills/rules are installed.
+  assert.ok(!resolve(['-a', 'claude', '--no-mcp', '--country', 'KR']).warnings.some((w) => /--country/.test(w)));
+});
+
+test('HELP_TEXT documents --country and WEEGLOO_COUNTRY', () => {
+  assert.match(HELP_TEXT, /--country <cc>/);
+  assert.match(HELP_TEXT, /WEEGLOO_COUNTRY/);
 });

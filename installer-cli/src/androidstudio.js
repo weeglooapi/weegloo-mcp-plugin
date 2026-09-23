@@ -99,6 +99,7 @@ export async function installAndroidStudio({
   availableSkillIds = [],
   availableRuleIds = [],
   origins = null,
+  country = null,
 }) {
   rules = applySelfUpdateTemplate(rules, { version, agent: 'androidstudio', ref: pluginRef, scope, origins });
 
@@ -217,6 +218,7 @@ export async function installAndroidStudio({
       ref: pluginRef,
       version,
       origins,
+      country,
       manageSkills,
       installedSkillIds,
       availableSkillIds,

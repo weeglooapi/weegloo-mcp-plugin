@@ -29,6 +29,7 @@
 | 룰을 고치거나 압축한다 | [§3.6](#36-룰-수정--압축) | GATE-INVENTORY + **룰 변경은 단건 측정** |
 | 같은 사실이 두 파일에 생긴다 | [§3.7](#37-사실fact-이동과-중복) | FACT-OWNERS 등록 |
 | 파일명·경로를 정한다 | [§2.7](#27-파일명--경로-하드-제약-installer가-강제) | installer 정규식이 빌드에서 막는다 |
+| 스킬·룰을 특정 국가에만(또는 특정 국가만 빼고) 설치되게 한다 | [§2.8](#28-국가-태그-country--특정-국가에만-설치) | 태그도 skill·rule 편집이다 — §3.0 확인 먼저 |
 | 테스트·측정을 돌린다 | [§5](#5-가드레일과-측정) | "측정 못 함"을 "이상 없음"으로 바꾸지 말 것 |
 | 배포·릴리스한다 | [§6](#6-배포-파이프라인) | 매니페스트 → 테스트 → 측정 → 커밋 순서, **커밋은 사용자 승인 후** |
 
@@ -236,6 +237,50 @@ description: <트리거 문장> … 권한, 역할, 접근 제어, 관리자 권
 
 → **reference 파일명은 ASCII 소문자 kebab-case + `.md` 하나**로 쓴다.
 
+### 2.8 국가 태그 (`country:`) — 특정 국가에만 설치
+
+스킬의 `SKILL.md`·룰의 `.mdc` frontmatter 에 **최상위 키 한 줄**을 달면, installer 가 클라이언트의
+국가에서 통용되는 것만 설치한다. 설계·기각한 대안: `installer-cli/docs/country-filter.md`.
+
+```markdown
+---
+name: <skill-id>
+description: …
+country: KR
+---
+```
+
+| 표기 | 설치되는 곳 |
+|---|---|
+| (키 생략) · `country:` (코드 없음 — 빈 값, `""`, 주석뿐) | **모든 국가** — 기본값 |
+| `country: KR` · `KR, US, CA` | 이 나라들에서만 |
+| `country: -KR` · `-KR, -JP` | 이 나라들만 빼고 |
+| `country: "*"` | 모든 국가(생략과 같다) — **따옴표 필수** |
+
+- 코드는 **대문자 ISO 3166-1 alpha-2**, 쉼표로 구분(쉼표 뒤 공백은 선택). 값은 **키와 같은 줄에만** 쓴다 —
+  다음 줄로 이어 쓴 값(블록 목록 `  - KR` 등)은 빌드 에러다. 빌더는 그 한 줄만 읽으므로, 막지 않으면
+  빈 값 = 전체로 읽혀 전 국가에 설치된다. 포함·제외 혼용, 중복, 대괄호(`[KR, US]` — 예전 표기)도 빌드 에러.
+- **bare `*` 금지.** `*` 는 YAML alias 표시자라 무효 YAML 이다. 빌더는 줄을 지우지만 플러그인
+  마켓플레이스는 **원본 파일을 직접** 읽는다 — 그래서 빌더가 거부한다.
+- **`description` 앞에 붙이지 않는다**(`description: [KR] …`). 따옴표 없는 `[` 는 flow sequence 라
+  frontmatter 파싱이 실패하고, harness 는 name·description 을 함께 잃는다 — 스킬이 발화하지 않고 에러도 없다.
+- **자리는 frontmatter 의 열 0 최상위 키뿐, 스킬은 `SKILL.md` 에만.** `references/`·`metadata.json` 의 태그와
+  유사 키(`Country:`, `countries:`, 들여쓴 `country:`)는 무시가 아니라 **빌드 에러**다 — 무시하면 저자는
+  제한했다고 믿는데 전 국가에 설치된다. 단위는 스킬·룰 통째다 — 파일 하나·문단 하나는 가를 수 없다.
+- **코어 룰(`weegloo-version`, `weegloo-terms-consent`)은 태그 금지** — 빌더가 거부하고, installer 도 필터에서 뺀다.
+- 빌더가 줄을 **지우고** 매니페스트 엔트리의 `country` 필드로 옮긴다(§6.1) — 설치본에는 그 줄이 없다.
+  태그만 바꿔도 매니페스트 `version` 이 바뀐다 → **매니페스트 재생성 필수**(§6.3-3).
+- 국가: install 은 `--country` > `WEEGLOO_COUNTRY` > 조회(`ai.weegloo.com/v1/country`). **조회 실패 = 필터 없음**
+  (전부 설치, fail-open). `--update` 는 **기록된 국가를 재사용**하고 `--country` 로만 바뀐다 — 기록이 없으면 1회 조회.
+- 마켓플레이스 경로(`.claude-plugin`·`.cursor-plugin`)에는 필터가 없다 — 태그된 스킬도 전 국가에 간다.
+- **통째로 빠진 스킬을 가리키는 줄은 남는다.** 라우터(`weegloo-platform-integration`)·`weegloo-global-rules` 의
+  라우팅 줄이 그 스킬을 이름으로 부르면, 그 나라 세션은 디스크에 없는 스킬로 안내된다. 그 줄은 그 나라에서
+  **링크 없이도 행동 가능**해야 한다(§1.3-4). 빌더가 stderr 에 `WARNING: … reference(s) to a country-restricted
+  skill/rule` 목록을 찍지만 **빌드는 실패하지 않는다** — 목록을 읽고 한 줄씩 판정한다.
+- fixtures(§5.2)는 설치된 코퍼스를 재므로, 태그가 있으면 **측정 장비에 기록된 국가**의 코퍼스를 잰다.
+- **태그를 달거나 바꾸는 것도 skill·rule 편집이다 — §3.0 확인 먼저.** 태그 한 줄이 다음 `--update` 에서
+  제외된 나라 사용자 모두의 디스크에서 그 스킬을 지운다.
+
 ---
 
 ## §3 작업 절차
@@ -384,14 +429,16 @@ description: <트리거 문장> … 권한, 역할, 접근 제어, 관리자 권
 
 ## §5 가드레일과 측정
 
-### 5.1 `installer-cli/test/` — `cd installer-cli && npm test` (현재 242 tests)
+### 5.1 `installer-cli/test/` — `cd installer-cli && npm test`
 
 | 파일 | 잡는 것 | 못 잡는 것 |
 |---|---|---|
 | `budgets.test.js` | 룰 파일별 바이트 캡, `description` ≤ 700 B, 캡 미등록 룰, GATE-INVENTORY 조각 존재 | 그 문장이 여전히 옳은 뜻인지 |
 | `fact-owners.test.js` | §4.2의 세 축 | 등록된 두 파일 사이의 모순 |
-| `manifest.test.js` | 스킬 하위 디렉터리가 **중첩 키**로 매니페스트에 실리는지, 결정성 | — |
+| `manifest.test.js` | 스킬 하위 디렉터리가 **중첩 키**로 매니페스트에 실리는지, 결정성, `country:` 줄 제거·구조 필드·거부(코어 룰, `references/`, 유사 키, bare `*`, 대괄호) (§2.8) | — |
 | `io.test.js` | 중첩 파일 설치·clean-sync·삭제, 경로 이탈 거부 (§6.2) | — |
+| `country.test.js` | 태그 문법(허용 형태·거부 목록), frontmatter 추출·유사 키, 매니페스트 필드 검증, 필터(코어 예외·모름 = 통과), 국가 결정 순서(`--country` > 기록 > 조회), 참조 공백 탐지 (§2.8) | 태그가 **옳은 나라**인지, 가리키는 줄이 대상 없이 행동 가능한지 |
+| `country-source.test.js` | 국가 조회의 fail-open(5xx·비 JSON·`XX`·throw → 모름), `Accept` 헤더 없음, 매니페스트 `country` 필드 통과·생략·손상 시 거부 | 실제 엔드포인트의 응답과 IP 추정의 정확도(`fetch` 는 mock) |
 | `tests/fixtures/routing/` | **행동** — 유일하게 그것을 잡는 것(§5.2) | 아무 fixture도 묻지 않는 것 |
 
 ### 5.2 fixtures — 모든 코퍼스 변경이 통과해야 하는 관문
@@ -446,7 +493,7 @@ CI에 없는 통제 둘(각각 CI가 갖지 못한 비용을 치른다):
 ```
 plugins/weegloo/{skills,rules}          ← 편집
         ↓  scripts/build-installer-manifest.mjs   (로컬 실행 또는 CI)
-plugins/weegloo/installer-manifest.json ← 전 파일 본문을 그대로 임베드 + content version
+plugins/weegloo/installer-manifest.json ← 전 파일 본문을 그대로 임베드(`country:` 줄만 제외) + content version
         ↓  raw.githubusercontent.com/<repo>/<branch>/…  (단일 요청, GitHub API 미사용)
 npx weegloo (installer-cli)             ← 매니페스트만 읽고 디스크에 씀
         ↓
@@ -458,8 +505,13 @@ npx weegloo (installer-cli)             ← 매니페스트만 읽고 디스크�
 - CI 자동 재생성은 **배포 브랜치에서만** 돈다: `latest`, `develop`, `숫자.숫자.숫자`.
   경로 필터는 `plugins/weegloo/skills/**`이라 `references/`도 포함된다.
   **feature 브랜치는 자동 재생성되지 않는다** — 로컬에서 빌더를 돌려 커밋하거나 workflow_dispatch.
+- 매니페스트의 스킬·룰 엔트리는 `country` 필드(`{ "include": [...] }` | `{ "exclude": [...] }`)를 가질 수
+  있다 — 빌더가 frontmatter 의 `country:` 줄을 **본문에서 지우고** 옮긴 것이다(§2.8). 제한하지 않으면 키가
+  없으므로, 태그 없는 코퍼스의 매니페스트는 바이트 그대로다. `schemaVersion` 은 1 그대로이고, 구 CLI 는 이
+  필드를 무시해 전부 설치한다.
 - 설치 기록은 **id 단위**다(`skills: [...]`, `rules: [...]`, `availableSkills/Rules`). 파일 목록은
-  기록하지 않는다 — 그래서 깊이가 늘어나도 기록 포맷은 영향받지 않는다.
+  기록하지 않는다 — 그래서 깊이가 늘어나도 기록 포맷은 영향받지 않는다. 국가는 `country` 한 키로
+  기록된다(필터링에 쓴 국가; 모르면 키 없음).
 
 ### 6.2 depth(`references/`)에 대한 설치·업데이트·삭제 동작 — 실측 확인됨
 
@@ -470,6 +522,7 @@ npx weegloo (installer-cli)             ← 매니페스트만 읽고 디스크�
 | 설치 (claude/cursor/codex/antigravity/androidstudio 전부) | 공통 `io.writeSkillFiles` — 디렉터리를 **먼저 통째로 지우고**(clean-sync) 다시 씀. 부모 디렉터리는 자동 생성 | 5개 파일 모두 같은 함수 호출 |
 | 업데이트 | 같은 clean-sync + 기록 대비 사라진 **스킬 id 디렉터리** prune | `update.js` → `writeSkillFiles`, `syncInstalledRecord` |
 | origins 매핑 | 중첩 파일 본문까지 치환됨 | `applyOriginsToResources` 실측 |
+| 국가 필터 (install·update) | 매니페스트 로드 직후 **카탈로그에서** 제외(`applyTermsExclusion` 뒤) → 피커·`availableSkills/Rules`·prune 이 따라온다. 설치돼 있던 스킬이 제외되면 기록 diff 로 **스킬 id 디렉터리째** prune(공유 스토어는 sharer 가 주장하는 id 보존). 코어 룰은 예외. 국가를 모르면 필터 없음 | `country.filterResourcesByCountry`; `update.test.js`·`record-sync.test.js`의 국가 케이스 |
 | 삭제(uninstall) | `removeSkillDirs`가 `rm -rf`, 이후 빈 부모만 `rmdir`로 정리 | `pruneEmptyDirs`는 비어 있지 않으면 멈춘다 |
 
 실측(임시 디렉터리 왕복): 깊이 4까지 설치됨 → 상류에서 `references/b.md`와 `references/sub/`를
@@ -526,3 +579,4 @@ npx weegloo (installer-cli)             ← 매니페스트만 읽고 디스크�
 | `tests/README.md` | 두 계측기(fixtures / 통제)의 사용법 |
 | `tests/baseline.develop.json`, `tests/run.*.json` | 스코어카드 — 프로비넌스(ref·sha·dirty·코퍼스 바이트) 포함 |
 | `installer-cli/README.md` | CLI 사용법·플래그·설치 레이아웃 |
+| `installer-cli/docs/country-filter.md` | 국가 태그·국가 조회·필터의 설계와 기각한 대안 (§2.8) |

@@ -25,12 +25,20 @@ function withTmp(prefix, fn) {
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf-8'));
 
 /** Full record shape with the catalog keys defaulted — keeps expectations readable. */
-const record = ({ skills = [], rules = [], availableSkills = [], availableRules = [], origins = null } = {}) => ({
+const record = ({
+  skills = [],
+  rules = [],
+  availableSkills = [],
+  availableRules = [],
+  origins = null,
+  country = null,
+} = {}) => ({
   skills,
   rules,
   availableSkills,
   availableRules,
   origins,
+  country,
 });
 
 // ── record paths (per-agent, plus the read-only legacy flat path) ─────────────
@@ -391,5 +399,129 @@ test('syncInstalledRecord: once a per-agent record exists, the legacy record is 
     });
 
     assert.deepEqual(res.removedSkills, [], 'per-agent record wins; legacy no longer consulted');
+  });
+});
+
+// ── country (the country this install's catalog was filtered with — docs/country-filter.md) ──
+
+/** A sync call that manages nothing but writes the record — the country is what is under test. */
+const syncCountry = (root, rec, country) =>
+  syncInstalledRecord({
+    scope: 'global',
+    now: '2026-07-20T12:00:00',
+    stampPath: path.join(root, 'version-check.json'),
+    recordPath: rec,
+    legacyRecordPath: path.join(root, 'no-legacy.json'),
+    country,
+    manageSkills: true,
+    installedSkillIds: ['weegloo-a'],
+    manageRules: true,
+    installedRuleIds: ['weegloo-version'],
+  });
+
+test('country round-trips through syncInstalledRecord → installed.json → readInstalledRecord', () => {
+  withTmp('weegloo-country-', (root) => {
+    const rec = path.join(root, 'installed.json');
+    syncCountry(root, rec, 'KR');
+    assert.equal(readJson(rec).country, 'KR', 'persisted as the plain upper-case code');
+    assert.deepEqual(
+      readInstalledRecord(rec),
+      record({ skills: ['weegloo-a'], rules: ['weegloo-version'], country: 'KR' })
+    );
+    // The country lives in the record only — never in the rule-owned stamp.
+    assert.equal('country' in readJson(path.join(root, 'version-check.json')), false);
+  });
+});
+
+test('readInstalledRecord: an absent or garbled country reads as null (unknown → the next update detects)', () => {
+  withTmp('weegloo-country-', (root) => {
+    const cases = [
+      [{}, null],
+      [{ country: 'kr' }, 'KR'], // a hand-edited lower-case code is still that country
+      [{ country: ' US ' }, 'US'],
+      [{ country: 'KOR' }, null],
+      [{ country: 'XX' }, null], // geo-IP "unknown" placeholder, not a country
+      [{ country: 82 }, null],
+      [{ country: ['KR'] }, null],
+      [{ country: null }, null],
+    ];
+    for (const [stored, expected] of cases) {
+      const rec = path.join(root, 'installed.json');
+      fs.writeFileSync(rec, JSON.stringify({ skills: ['weegloo-a'], ...stored }), 'utf-8');
+      assert.equal(readInstalledRecord(rec).country, expected, `stored ${JSON.stringify(stored)}`);
+    }
+  });
+});
+
+test('syncInstalledRecord: a run with country null DELETES a previously recorded country', () => {
+  withTmp('weegloo-country-', (root) => {
+    const rec = path.join(root, 'installed.json');
+    syncCountry(root, rec, 'KR');
+    assert.equal(readJson(rec).country, 'KR');
+
+    // The next run could not determine the country and installed unfiltered: keeping 'KR' would
+    // claim a filter this install no longer has, and stop the next update from detecting.
+    syncCountry(root, rec, null);
+    assert.equal('country' in readJson(rec), false, 'key removed, not set to null');
+    assert.equal(readInstalledRecord(rec).country, null);
+  });
+});
+
+test('syncInstalledRecord: country set/removal leaves every unrelated field of the record intact', () => {
+  withTmp('weegloo-country-', (root) => {
+    const rec = path.join(root, 'installed.json');
+    fs.writeFileSync(
+      rec,
+      JSON.stringify({
+        skills: ['weegloo-old'],
+        rules: ['weegloo-version'],
+        availableSkills: ['weegloo-old'],
+        availableRules: ['weegloo-version'],
+        origins: { cma: 'https://cma.acme.com' },
+        country: 'US',
+        futureField: { keep: true }, // a key a newer CLI may write — must survive this one
+      }),
+      'utf-8'
+    );
+
+    syncInstalledRecord({
+      scope: 'global',
+      now: '2026-07-20T12:00:00',
+      stampPath: path.join(root, 'version-check.json'),
+      recordPath: rec,
+      legacyRecordPath: path.join(root, 'no-legacy.json'),
+      origins: { cma: 'https://cma.acme.com' },
+      country: 'KR',
+      manageSkills: false, // skills kind untouched this run
+      manageRules: true,
+      installedRuleIds: ['weegloo-version'],
+      availableRuleIds: ['weegloo-version', 'weegloo-global-rules'],
+    });
+
+    assert.deepEqual(readJson(rec), {
+      skills: ['weegloo-old'],
+      rules: ['weegloo-version'],
+      availableSkills: ['weegloo-old'],
+      availableRules: ['weegloo-version', 'weegloo-global-rules'],
+      origins: { cma: 'https://cma.acme.com' },
+      country: 'KR',
+      futureField: { keep: true },
+    });
+  });
+});
+
+test('writeInstalledRecord: country is set only when valid; a write WITHOUT the key keeps the stored one', () => {
+  withTmp('weegloo-country-', (root) => {
+    const rec = path.join(root, 'installed.json');
+    writeInstalledRecord(rec, { skills: ['weegloo-a'], country: 'jp' });
+    assert.equal(readJson(rec).country, 'JP', 'normalized on write');
+
+    // uninstall's partial clear passes only the lists — the country is not its business.
+    writeInstalledRecord(rec, { skills: [], availableSkills: [] });
+    assert.equal(readJson(rec).country, 'JP');
+
+    // A present-but-invalid value is "unknown" → removed, never written through as junk.
+    writeInstalledRecord(rec, { country: 'Japan' });
+    assert.equal('country' in readJson(rec), false);
   });
 });

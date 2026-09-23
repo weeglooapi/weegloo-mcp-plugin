@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { planUpdate, runUpdate } from '../src/update.js';
+import { planUpdate, runUpdate, countryReportLines } from '../src/update.js';
+import { countryCheckUrl } from '../src/country.js';
 import { listWeeglooSkillDirs, listWeeglooRuleFiles, listWeeglooRuleMarkers } from '../src/io.js';
 import { upsertRuleInAgentsMd } from '../src/codex.js';
 import { readInstalledRecord } from '../src/self-update.js';
@@ -154,7 +155,13 @@ async function inTmpProject(fn) {
   }
 }
 
-const quiet = { log: () => {} };
+/**
+ * The country lookup a test gets unless it says otherwise: "unknown", instantly. Every runUpdate
+ * call in this file must inject one — a record without a country makes the update DETECT, and
+ * the default is the real network fetch. Tests never hit the network.
+ */
+const noCountry = async () => null;
+const quiet = { log: () => {}, fetchCountryFn: noCountry };
 const loadOk = async () => MANIFEST;
 
 /** Seeds a claude project-scope install: selected skills/rules on disk + per-agent state. */
@@ -182,7 +189,7 @@ test('runUpdate: nothing installed → no-op with guidance, nothing created', as
     const lines = [];
     const res = await runUpdate(
       { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
-      { loadResourcesFn: loadOk, log: (s) => lines.push(String(s)) }
+      { loadResourcesFn: loadOk, fetchCountryFn: noCountry, log: (s) => lines.push(String(s)) }
     );
     assert.equal(res.status, 'nothing-installed');
     assert.ok(lines.some((l) => l.includes('Nothing to update')));
@@ -440,7 +447,7 @@ test('runUpdate: shared AGENTS.md + diverging sharer branch → non-interactive 
     const lines = [];
     const res = await runUpdate(
       { update: true, agent: 'androidstudio', scope: 'project', nonInteractive: true },
-      { loadResourcesFn: loadOk, log: (s) => lines.push(String(s)) }
+      { loadResourcesFn: loadOk, fetchCountryFn: noCountry, log: (s) => lines.push(String(s)) }
     );
 
     assert.equal(res.status, 'updated');
@@ -524,7 +531,7 @@ test('runUpdate: a hand-deleted skill is RESTORED from the record (drift repair,
     const lines = [];
     const res = await runUpdate(
       { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
-      { loadResourcesFn: loadOk, log: (s) => lines.push(String(s)) }
+      { loadResourcesFn: loadOk, fetchCountryFn: noCountry, log: (s) => lines.push(String(s)) }
     );
 
     assert.equal(res.status, 'updated');
@@ -957,7 +964,7 @@ test('runUpdate: sharer on the SAME branch but DIFFERENT origins is a conflict',
     const lines = [];
     const res = await runUpdate(
       { update: true, agent: 'androidstudio', scope: 'project', nonInteractive: true },
-      { loadResourcesFn: loadOk, log: (s) => lines.push(String(s)) }
+      { loadResourcesFn: loadOk, fetchCountryFn: noCountry, log: (s) => lines.push(String(s)) }
     );
 
     assert.equal(res.status, 'updated');
@@ -966,4 +973,302 @@ test('runUpdate: sharer on the SAME branch but DIFFERENT origins is a conflict',
       'origins 상이가 충돌로 감지·표기됨'
     );
   });
+});
+
+// ── country filter (docs/country-filter.md — record reuse, --country override, fail-open) ────
+
+const COUNTRY_MANIFEST = {
+  version: 'v2',
+  skills: [
+    { id: 'weegloo-a', files: { 'SKILL.md': 'a v2' } },
+    { id: 'weegloo-not-kr', country: { exclude: ['KR'] }, files: { 'SKILL.md': 'not-kr v2' } },
+    { id: 'weegloo-kr-only', country: { include: ['KR'] }, files: { 'SKILL.md': 'kr-only v2' } },
+  ],
+  rules: [
+    { id: 'weegloo-version', content: 'version-rule {{WEEGLOO_VERSION_URL}}' },
+    { id: 'weegloo-terms-consent', content: 'terms-rule v2' },
+    { id: 'weegloo-global-rules', content: 'global-rule v2' },
+  ],
+};
+const loadCountryManifest = async () => COUNTRY_MANIFEST;
+
+/** A country lookup that counts its calls and remembers the URL it was asked. */
+function countryProbe(answer) {
+  const probe = {
+    calls: 0,
+    urls: [],
+    fn: async (url) => {
+      probe.calls += 1;
+      probe.urls.push(url);
+      if (answer instanceof Error) throw answer;
+      return answer;
+    },
+  };
+  return probe;
+}
+
+test('runUpdate: recorded country is reused — no lookup; -KR selected skill pruned, KR new skill auto-added', async () => {
+  await inTmpProject(async () => {
+    seedClaude({
+      skills: ['weegloo-a', 'weegloo-not-kr'], // not-kr on disk from before it was tagged -KR
+      rules: ['weegloo-version', 'weegloo-terms-consent'],
+      record: {
+        skills: ['weegloo-a', 'weegloo-not-kr'],
+        rules: ['weegloo-version', 'weegloo-terms-consent'],
+        availableSkills: ['weegloo-a', 'weegloo-not-kr'], // kr-only did not exist yet
+        availableRules: ['weegloo-version', 'weegloo-terms-consent', 'weegloo-global-rules'],
+        country: 'KR',
+      },
+      stamp: { last_check: 'x', version: 'v1', ref: 'latest' },
+    });
+
+    const probe = countryProbe('US'); // would be wrong — and must never be asked
+    const lines = [];
+    const res = await runUpdate(
+      { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: loadCountryManifest, ...quiet, fetchCountryFn: probe.fn, log: (s) => lines.push(String(s)) }
+    );
+
+    assert.equal(res.status, 'updated');
+    assert.equal(probe.calls, 0, 'the record answered — no country request');
+    assert.equal(fs.existsSync('.claude/skills/weegloo-not-kr'), false, 'not offered in KR → pruned like an upstream deletion');
+    assert.equal(fs.readFileSync('.claude/skills/weegloo-kr-only/SKILL.md', 'utf-8'), 'kr-only v2', 'new in the KR catalog → auto-added');
+    assert.equal(fs.readFileSync('.claude/skills/weegloo-a/SKILL.md', 'utf-8'), 'a v2');
+    const rec = readInstalledRecord('.weegloo/claude/installed.json');
+    assert.equal(rec.country, 'KR', 'record keeps its country');
+    assert.deepEqual(rec.skills, ['weegloo-a', 'weegloo-kr-only']);
+    assert.deepEqual(rec.availableSkills, ['weegloo-a', 'weegloo-kr-only'], 'catalog snapshot is the FILTERED catalog');
+    assert.ok(lines.some((l) => l.includes('Country: KR (recorded at install)')));
+    assert.ok(lines.some((l) => l.includes('Not offered in KR: 1 skill(s) (weegloo-not-kr)') && !l.includes('rule(s)')));
+  });
+});
+
+test('runUpdate: --country overrides the recorded country and is re-recorded', async () => {
+  await inTmpProject(async () => {
+    // A KR install: its catalog never offered not-kr, and it has kr-only.
+    seedClaude({
+      skills: ['weegloo-a', 'weegloo-kr-only'],
+      rules: ['weegloo-version'],
+      record: {
+        skills: ['weegloo-a', 'weegloo-kr-only'],
+        rules: ['weegloo-version'],
+        availableSkills: ['weegloo-a', 'weegloo-kr-only'],
+        availableRules: ['weegloo-version', 'weegloo-terms-consent', 'weegloo-global-rules'],
+        country: 'KR',
+      },
+      stamp: { last_check: 'x', version: 'v1', ref: 'latest' },
+    });
+
+    const probe = countryProbe('KR');
+    const lines = [];
+    await runUpdate(
+      { update: true, agent: 'claude', scope: 'project', nonInteractive: true, country: 'US' },
+      { loadResourcesFn: loadCountryManifest, ...quiet, fetchCountryFn: probe.fn, log: (s) => lines.push(String(s)) }
+    );
+
+    assert.equal(probe.calls, 0, 'a pinned country needs no lookup');
+    assert.equal(fs.existsSync('.claude/skills/weegloo-kr-only'), false, 'KR-only skill pruned in US');
+    assert.equal(
+      fs.readFileSync('.claude/skills/weegloo-not-kr/SKILL.md', 'utf-8'),
+      'not-kr v2',
+      'never offered under KR → offered as NEW under US'
+    );
+    const rec = readInstalledRecord('.weegloo/claude/installed.json');
+    assert.equal(rec.country, 'US', 're-recorded — the next plain --update stays US');
+    assert.deepEqual(rec.availableSkills, ['weegloo-a', 'weegloo-not-kr']);
+    assert.ok(lines.some((l) => l.includes('Country: US (--country)')));
+  });
+});
+
+test('runUpdate: no recorded country → ONE lookup (through the recorded origins), result applied and recorded', async () => {
+  await inTmpProject(async () => {
+    const origins = { ai: 'https://ai.acme.com' };
+    seedClaude({
+      skills: ['weegloo-a', 'weegloo-not-kr'],
+      rules: ['weegloo-version'],
+      record: {
+        skills: ['weegloo-a', 'weegloo-not-kr'],
+        rules: ['weegloo-version'],
+        availableSkills: ['weegloo-a', 'weegloo-not-kr', 'weegloo-kr-only'],
+        availableRules: ['weegloo-version', 'weegloo-terms-consent', 'weegloo-global-rules'],
+        origins, // pre-feature install on a mapped environment — no `country` key
+      },
+      stamp: { last_check: 'x', version: 'v1', ref: 'latest' },
+    });
+
+    const probe = countryProbe('kr'); // lower case from the wire is still KR
+    const lines = [];
+    await runUpdate(
+      { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: loadCountryManifest, ...quiet, fetchCountryFn: probe.fn, log: (s) => lines.push(String(s)) }
+    );
+
+    assert.equal(probe.calls, 1, 'detected exactly once');
+    assert.deepEqual(probe.urls, [countryCheckUrl(origins)], 'the lookup follows the recorded origins mapping');
+    assert.equal(fs.existsSync('.claude/skills/weegloo-not-kr'), false, 'detected KR filter applied');
+    assert.equal(fs.existsSync('.claude/skills/weegloo-kr-only'), false, 'offered before and not selected → stays out');
+    const rec = readInstalledRecord('.weegloo/claude/installed.json');
+    assert.equal(rec.country, 'KR', 'detected country recorded → the next update asks nothing');
+    assert.deepEqual(rec.origins, origins, 'origins untouched by the country write');
+    assert.ok(lines.some((l) => l.includes('Country: KR (detected)')));
+  });
+});
+
+test('runUpdate: lookup fails → fail-open: nothing filtered, nothing pruned for country, no country recorded', async () => {
+  await inTmpProject(async () => {
+    seedClaude({
+      skills: ['weegloo-a', 'weegloo-not-kr', 'weegloo-kr-only'],
+      rules: ['weegloo-version'],
+      record: {
+        skills: ['weegloo-a', 'weegloo-not-kr', 'weegloo-kr-only'],
+        rules: ['weegloo-version'],
+        availableSkills: ['weegloo-a', 'weegloo-not-kr', 'weegloo-kr-only'],
+        availableRules: ['weegloo-version', 'weegloo-terms-consent', 'weegloo-global-rules'],
+      },
+      stamp: { last_check: 'x', version: 'v1', ref: 'latest' },
+    });
+
+    const probe = countryProbe(new Error('ECONNRESET')); // even a throwing lookup must not break the update
+    const lines = [];
+    const res = await runUpdate(
+      { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: loadCountryManifest, ...quiet, fetchCountryFn: probe.fn, log: (s) => lines.push(String(s)) }
+    );
+
+    assert.equal(res.status, 'updated');
+    assert.equal(probe.calls, 1);
+    for (const id of ['weegloo-a', 'weegloo-not-kr', 'weegloo-kr-only']) {
+      assert.ok(fs.existsSync(path.join('.claude', 'skills', id, 'SKILL.md')), `${id} kept — an unknown country filters nothing`);
+    }
+    const raw = readJson('.weegloo/claude/installed.json');
+    assert.equal('country' in raw, false, 'unknown is not recorded — the next update detects again');
+    assert.deepEqual(raw.skills, ['weegloo-a', 'weegloo-not-kr', 'weegloo-kr-only']);
+    assert.ok(lines.some((l) => l.includes('Could not determine your country') && l.includes('updating every skill/rule')));
+  });
+});
+
+test('runUpdate: a core rule tagged in the manifest is still installed; a tagged optional rule is pruned', async () => {
+  await inTmpProject(async () => {
+    seedClaude({
+      skills: ['weegloo-a'],
+      rules: ['weegloo-terms-consent', 'weegloo-global-rules'], // weegloo-version hand-deleted
+      record: {
+        skills: ['weegloo-a'],
+        rules: ['weegloo-version', 'weegloo-terms-consent', 'weegloo-global-rules'],
+        availableSkills: ['weegloo-a'],
+        availableRules: ['weegloo-version', 'weegloo-terms-consent', 'weegloo-global-rules'],
+        country: 'KR',
+      },
+      stamp: { last_check: 'x', version: 'v1', ref: 'latest' },
+    });
+    // The builder refuses to tag core rules; this manifest tests the installer's second lock.
+    const tagged = {
+      ...COUNTRY_MANIFEST,
+      skills: [{ id: 'weegloo-a', files: { 'SKILL.md': 'a v2' } }], // untagged — only rules are under test
+      rules: COUNTRY_MANIFEST.rules.map((r) => ({ ...r, country: { exclude: ['KR'] } })),
+    };
+
+    const lines = [];
+    await runUpdate(
+      { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: async () => tagged, ...quiet, log: (s) => lines.push(String(s)) }
+    );
+
+    assert.ok(fs.existsSync('.claude/rules/weegloo-version.md'), 'core rule restored despite its -KR tag');
+    assert.ok(fs.existsSync('.claude/rules/weegloo-terms-consent.md'), 'core rule kept despite its -KR tag');
+    assert.equal(fs.existsSync('.claude/rules/weegloo-global-rules.md'), false, 'optional -KR rule pruned');
+    const rec = readInstalledRecord('.weegloo/claude/installed.json');
+    assert.deepEqual(rec.rules, ['weegloo-version', 'weegloo-terms-consent']);
+    assert.ok(lines.some((l) => l.includes('Not offered in KR: 1 rule(s) (weegloo-global-rules)') && !l.includes('skill(s)')));
+  });
+});
+
+test('runUpdate: nothing installed → no country lookup either', async () => {
+  await inTmpProject(async () => {
+    const probe = countryProbe('KR');
+    const res = await runUpdate(
+      { update: true, agent: 'claude', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: loadCountryManifest, ...quiet, fetchCountryFn: probe.fn }
+    );
+    assert.equal(res.status, 'nothing-installed');
+    assert.equal(probe.calls, 0, 'a no-op makes no request');
+  });
+});
+
+/** Marks codex as installed in this project on `latest` with a record carrying `country`. */
+function seedCodexWithCountry(country) {
+  fs.mkdirSync(path.join('.weegloo', 'codex'), { recursive: true });
+  fs.writeFileSync(
+    path.join('.weegloo', 'codex', 'version-check.json'),
+    JSON.stringify({ last_check: 'x', version: 'v1', ref: 'latest' }),
+    'utf-8'
+  );
+  fs.writeFileSync(
+    path.join('.weegloo', 'codex', 'installed.json'),
+    JSON.stringify({ skills: [], rules: ['weegloo-version'], ...(country ? { country } : {}) }),
+    'utf-8'
+  );
+}
+
+test('runUpdate: sharer on the same branch and origins but a DIFFERENT country is a conflict', async () => {
+  await inTmpProject(async () => {
+    seedAndroidStudio(); // latest, no record → its country is detected (KR below)
+    seedCodexWithCountry('US');
+
+    const lines = [];
+    const res = await runUpdate(
+      { update: true, agent: 'androidstudio', scope: 'project', nonInteractive: true },
+      { loadResourcesFn: loadOk, ...quiet, fetchCountryFn: async () => 'KR', log: (s) => lines.push(String(s)) }
+    );
+
+    assert.equal(res.status, 'updated');
+    assert.ok(
+      lines.some((l) => l.includes('codex(latest, different country)') && l.includes('last write wins')),
+      'country mismatch is detected and named'
+    );
+  });
+});
+
+test('runUpdate: a sharer whose country is unknown or equal is NOT a country conflict', async () => {
+  for (const sharerCountry of [null, 'KR']) {
+    await inTmpProject(async () => {
+      seedAndroidStudio();
+      seedCodexWithCountry(sharerCountry);
+
+      let prompted = false;
+      const res = await runUpdate(
+        { update: true, agent: 'androidstudio', scope: 'project', nonInteractive: false },
+        {
+          loadResourcesFn: loadOk,
+          ...quiet,
+          fetchCountryFn: async () => 'KR',
+          promptSelect: async () => ((prompted = true), 'abort'),
+        }
+      );
+
+      assert.equal(res.status, 'updated', `sharer country ${sharerCountry}`);
+      assert.equal(prompted, false, `sharer country ${sharerCountry}: no conflict prompt`);
+    });
+  }
+});
+
+test('countryReportLines: known country with/without exclusions, unknown warning with the flow verb', () => {
+  const none = countryReportLines({ country: 'KR', source: 'detected', excludedSkills: [], excludedRules: [] }, 'installing');
+  assert.equal(none.length, 1, 'nothing excluded → no "Not offered" line');
+  assert.ok(none[0].includes('Country: KR (detected)'));
+
+  const both = countryReportLines(
+    { country: 'US', source: 'flag', excludedSkills: ['weegloo-x', 'weegloo-y'], excludedRules: ['weegloo-r'] },
+    'installing'
+  );
+  assert.ok(both[0].includes('Country: US (--country)'));
+  assert.ok(both[1].includes('Not offered in US: 2 skill(s) (weegloo-x, weegloo-y), 1 rule(s) (weegloo-r)'));
+
+  const unknown = countryReportLines({ country: null, source: 'unknown', excludedSkills: [], excludedRules: [] }, 'updating');
+  assert.equal(unknown.length, 1);
+  assert.ok(
+    unknown[0].includes(
+      'Could not determine your country — updating every skill/rule (no country filter). Pin one with --country <code>.'
+    )
+  );
 });

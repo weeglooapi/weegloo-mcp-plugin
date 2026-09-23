@@ -31,6 +31,7 @@ Run with no options for the interactive installer. **Any option below pre-fills 
 | `--ignore-skill` | Do not install Skills. |
 | `--ignore-rule` | Do not install Rules. |
 | `--origins <file>` | Origins mapping (JSON file or inline JSON) for a staging or enterprise stack (see [Origins mapping](#origins-mapping-staging--enterprise)). Also reads `WEEGLOO_ORIGINS`. Install only. |
+| `--country <cc>` | ISO 3166-1 alpha-2 country code (e.g. `KR`, `US`) that decides which country-specific skills/rules install (see [Country-specific skills and rules](#country-specific-skills-and-rules)). Default: detected from your network at install; `--update` keeps the country the install recorded. Also reads `WEEGLOO_COUNTRY` (the flag wins). Ignored by `--uninstall`. |
 | `--update` | Update an existing install's skills/rules, keeping your selection (see [Updating](#updating)). Requires `--agent`; never touches MCP config, so no token. |
 | `-u, --uninstall` | Remove an install and restore the pre-install state (see [Uninstalling](#uninstalling)). Works offline; no token. Interactive by default; with `-y` it needs `--agent`. |
 | `-y, --yes` | Non-interactive: use defaults for anything not given. |
@@ -112,8 +113,9 @@ This is the command the installed `weegloo-version` rule shows when a newer vers
 - **auto-adds genuinely new items** — things that did not exist in the catalog when you last installed. Items you deliberately deselected stay out.
 - **prunes upstream-deleted items**, and always restores the core rules (`weegloo-version`, `weegloo-terms-consent`).
 - **stays on your branch** — read from the install's stamp (`ref`), not defaulted to `latest`. Pass `--branch` only to deliberately switch branches.
-- **never touches MCP config**, so no token is needed and it runs unattended (no `--yes`). The one interactive question is the rare shared-file conflict when multiple agents in one project sit on different branches/origins.
+- **never touches MCP config**, so no token is needed and it runs unattended (no `--yes`). The one interactive question is the rare shared-file conflict when multiple agents in one project sit on different branches/origins/countries.
 - reapplies the [origins mapping](#origins-mapping-staging--enterprise) recorded at install time. `--update --origins` is rejected — changing environments is a reinstall.
+- **keeps the country** the install was filtered with (see [Country-specific skills and rules](#country-specific-skills-and-rules)); `--update --country <cc>` changes it.
 
 If nothing is installed for that agent/scope, `--update` is a no-op with a pointer to the install command (it never silently installs everything).
 
@@ -182,6 +184,27 @@ npx weegloo@latest --agent claude --origins ./origins.acme.json --token <PAT>
 ```
 
 The mapping sticks to the install — `--update` reapplies it automatically. To change environments (or go back to production), reinstall.
+
+## Country-specific skills and rules
+
+Some skills and rules only apply in certain countries (a South Korean postcode widget, say), or do not apply in one. The plugin marks those with a `country:` tag — `KR` or `KR, US, CA` = only these countries, `-KR` = every country but these, untagged or no code (`country:`) = everywhere — and the installer installs only what applies to your country.
+
+- **What gets filtered:** whole skills and rules, before the picker. An item not offered in your country is not in the list, not in `-y`'s "everything", and not written to disk. The core rules (`weegloo-version`, `weegloo-terms-consent`) always install. An MCP-only install makes no country lookup.
+- **How the country is found:** `--country <cc>` (or `WEEGLOO_COUNTRY`) if given; otherwise one unauthenticated `GET https://ai.weegloo.com/v1/country` (`{ "country": "KR" }`), made in parallel with the manifest fetch. The answer is inferred from your network, so a VPN, a corporate proxy or a CI runner abroad can misplace you — pin it with `--country`.
+- **Fail-open:** if the lookup fails or answers something that is not a country (offline, a timeout, `XX`), nothing is filtered — every skill/rule installs, exactly as before this feature — and a yellow warning says so.
+- **`--update` keeps the recorded country:** the country an install was filtered with is saved in `.weegloo/<agent>/installed.json` and reused, so an update makes no lookup and your set does not change because you travelled. An install that recorded none (an older install, or one whose lookup failed) looks it up once on its next update and records the result.
+- **Changing it:** `--update --country <cc>` re-filters with the new country and records it — items no longer offered are removed, items newly offered are added. Unlike `--origins`, this is allowed on update: the country changes only skills/rules, never MCP config.
+- **Staging / tests:** `WEEGLOO_COUNTRY_URL` replaces the lookup URL, and an [origins mapping](#origins-mapping-staging--enterprise) with an `ai` key moves it along with the rest of the stack (`"ai": "https://dev-ai.weegloo.com"` → `https://dev-ai.weegloo.com/v1/country`).
+
+```bash
+# Pin the country (no lookup)
+npx weegloo@latest -y --agent claude --no-mcp --country KR
+
+# Fix a mis-detected country on an existing install
+npx weegloo@latest --agent claude --location global --update --country KR
+```
+
+The Claude Code and Cursor plugin marketplaces read the repository files directly, so installs made that way are not country-filtered.
 
 ## Installation Flow
 

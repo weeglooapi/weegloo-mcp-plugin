@@ -8,6 +8,14 @@
  * otherwise the regenerate-on-push workflow's `git diff --quiet` idempotence guard
  * would never hold and every push would pile up empty commits. File/skill/rule
  * order is sorted so output is identical across platforms and CI runs.
+ *
+ * Bodies are embedded verbatim (LF-normalized) with ONE exception: a `country:` line in a
+ * SKILL.md's or a rule's frontmatter. The builder validates it, removes it from the embedded
+ * text and records it as the entry's structured `country` field (`{ include: [...] }` |
+ * `{ exclude: [...] }`), so the installer filters on data and never parses frontmatter.
+ * The field is written ONLY when it restricts something — an untagged, empty or `"*"` entry has no
+ * `country` key — so a corpus with no tags builds the same bytes it did before tags existed.
+ * Grammar and rationale: installer-cli/src/country.js.
  */
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -16,6 +24,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // The installer owns the authoritative definition of a safe skill file key; importing it
 // keeps the build-time and install-time checks from drifting apart.
 import { SAFE_REL_PATH } from '../installer-cli/src/io.js';
+// Same reasoning for the country tag: the grammar the builder accepts and the spec shape the
+// installer validates come from one module, so the two cannot disagree about what a tag means.
+import { extractCountryTag, findCountryReferenceGaps } from '../installer-cli/src/country.js';
+import { CORE_RULE_IDS } from '../installer-cli/src/self-update.js';
 
 const SCHEMA_VERSION = 1;
 const DEFAULT_MCP_URL = 'https://ai.weegloo.com/mcp';
@@ -81,9 +93,20 @@ function listSkillFilesSorted(skillDir) {
   return out.sort((a, b) => byteCompare(a.key, b.key));
 }
 
+/**
+ * A manifest entry with the key order `id, country?, <body>`. `country` is present only when it
+ * restricts something (null = every country → no key), which is what keeps an untagged corpus's
+ * manifest byte-identical to one built before country tags existed.
+ */
+function entry(id, country, body) {
+  return country ? { id, country, ...body } : { id, ...body };
+}
+
 function buildSkills(skillsDir) {
   return listDirsSorted(skillsDir).map((id) => {
     const skillDir = path.join(skillsDir, id);
+    const label = `skill '${id}'`;
+    let country = null;
     const files = {};
     for (const { key, full } of listSkillFilesSorted(skillDir)) {
       // Defense in depth: the installer re-validates every key before it becomes a path,
@@ -91,29 +114,66 @@ function buildSkills(skillsDir) {
       if (!SAFE_REL_PATH.test(key)) {
         throw new Error(`skill file key is not a safe relative path: '${key}' (in ${skillDir})`);
       }
-      files[key] = readEmbeddableText(full);
+      const text = readEmbeddableText(full);
+      if (key === 'SKILL.md') {
+        const tag = extractCountryTag(text, label);
+        country = tag.country;
+        files[key] = tag.text;
+        continue;
+      }
+      // The tag is read from SKILL.md ONLY. A `country:` line anywhere else (a reference page's
+      // frontmatter, a nested SKILL.md) would be embedded as text and never become a filter —
+      // its author believes the skill is restricted while it installs everywhere. Compare the
+      // text rather than the parsed value so even a no-op `"*"` there is refused: the line
+      // is in the wrong file either way.
+      let stray;
+      try {
+        stray = extractCountryTag(text, label).text !== text;
+      } catch {
+        // An invalid or look-alike tag in the wrong file is still a tag in the wrong file —
+        // report where it belongs rather than how to fix a line that has to move anyway.
+        stray = true;
+      }
+      if (stray) {
+        throw new Error(
+          `${label} file '${key}': 'country:' belongs in SKILL.md frontmatter — a tag in any other file is never read`
+        );
+      }
+      files[key] = text;
     }
     // Mirror the installer's strict invariants: a manifest the consumer would reject
     // must fail the build here, not get committed and brick every install on this branch.
     if (Object.keys(files).length === 0) {
       throw new Error(`skill '${id}' has no files — installer would reject this manifest`);
     }
-    return { id, files };
+    return entry(id, country, { files });
   });
 }
 
 function buildRules(rulesDir) {
   if (!existsSync(rulesDir)) return [];
+  const core = new Set(CORE_RULE_IDS);
   return readdirSync(rulesDir, { withFileTypes: true })
     .filter((e) => e.isFile() && e.name.endsWith('.mdc'))
     .map((e) => e.name.replace(/\.mdc$/, ''))
     .sort(byteCompare)
     .map((id) => {
-      const content = readEmbeddableText(path.join(rulesDir, `${id}.mdc`));
+      const { country, text: content } = extractCountryTag(
+        readEmbeddableText(path.join(rulesDir, `${id}.mdc`)),
+        `rule '${id}'`
+      );
+      // Checked on the STRIPPED text: the tag is not content, and the installer sees only what
+      // is embedded.
       if (!content) {
         throw new Error(`rule '${id}' is empty — installer would reject this manifest`);
       }
-      return { id, content };
+      // The installer force-installs these (the update notifier, the terms gate) and exempts
+      // them from the country filter as a second lock. A tag on one would be a promise the
+      // installer deliberately breaks, so it is refused here, where the author can see it.
+      if (country && core.has(id)) {
+        throw new Error(`core rule '${id}' is force-installed and cannot be country-restricted`);
+      }
+      return entry(id, country, { content });
     });
 }
 
@@ -155,6 +215,9 @@ function buildMcp(contentRoot, rootDir) {
  * The value changes iff the installed skills/rules/mcp change, which is exactly the signal
  * the self-update flow needs (installer records it; the `weegloo-self-update` rule compares
  * it against the branch's latest). Unrelated commits (e.g. README) do NOT move it.
+ * A `country:` tag is hashed as the entry's structured `country` field (its line is stripped
+ * from the body), so retagging a skill or rule — and nothing else — still moves it: which
+ * countries get a file is part of what is installed.
  */
 function contentVersion(content) {
   return createHash('sha256').update(JSON.stringify(content)).digest('hex').slice(0, 12);
@@ -188,6 +251,36 @@ export function serializeManifest(manifest) {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
+/**
+ * The build's country report, as stderr lines (empty when nothing is country-restricted).
+ *
+ * A country filter removes a whole skill/rule, but not the lines ELSEWHERE that name it — the
+ * router, `weegloo-global-rules` — so in a country where the target is not installed an agent is
+ * routed to something that is not on disk. That is fine only if the naming line is actionable
+ * without its target (CLAUDE.md §1.3-4), which only a person can judge: hence warnings for the
+ * author, never a build failure.
+ *
+ * @param {{ skills: object[], rules: object[] }} manifest
+ * @returns {string[]}
+ */
+export function countryReport(manifest) {
+  const restrictedSkills = manifest.skills.filter((s) => s.country).length;
+  const restrictedRules = manifest.rules.filter((r) => r.country).length;
+  if (restrictedSkills === 0 && restrictedRules === 0) return [];
+  const lines = [`country-restricted: ${restrictedSkills} skill(s), ${restrictedRules} rule(s)`];
+  const gaps = findCountryReferenceGaps(manifest);
+  if (gaps.length > 0) {
+    lines.push(`WARNING: ${gaps.length} reference(s) to a country-restricted skill/rule from where it is not installed:`);
+    for (const g of gaps) {
+      lines.push(`  ${g.from} names ${g.to}, but is installed where ${g.to} is not (${g.fromCountry} ⊄ ${g.toCountry})`);
+    }
+    lines.push(
+      '  Each referencing line must stay actionable without its target in those countries (CLAUDE.md §1.3-4).'
+    );
+  }
+  return lines;
+}
+
 // CLI entry: write the manifest to disk.
 // Use pathToFileURL so the comparison holds on Windows too (where process.argv[1]
 // is a backslash path that never matches a hand-built `file://` string).
@@ -201,4 +294,6 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   console.error(
     `installer-manifest.json: ${manifest.skills.length} skills, ${manifest.rules.length} rules → ${path.relative(rootDir, out)}`
   );
+  // Report only — the manifest is already written and the exit code stays 0 (see countryReport).
+  for (const line of countryReport(manifest)) console.error(line);
 }

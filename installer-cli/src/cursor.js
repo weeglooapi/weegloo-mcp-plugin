@@ -82,6 +82,7 @@ export async function installCursor({
   availableSkillIds = [],
   availableRuleIds = [],
   origins = null,
+  country = null,
 }) {
   // Bake this install's version + refresh command into the self-update rule (option B).
   rules = applySelfUpdateTemplate(rules, { version, agent: 'cursor', ref: pluginRef, scope, origins });
@@ -180,6 +181,7 @@ export async function installCursor({
       ref: pluginRef,
       version,
       origins,
+      country,
       manageSkills,
       installedSkillIds,
       availableSkillIds,

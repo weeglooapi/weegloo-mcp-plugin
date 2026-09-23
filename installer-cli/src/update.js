@@ -19,6 +19,11 @@
  *  - MCP config is never touched (remote server is always current), so no token is needed;
  *  - the origins mapping recorded at install time is reapplied verbatim (docs/origins-mapping.md §5)
  *    — never taken from a flag (cli.js rejects --update --origins: environment changes reinstall);
+ *  - the country recorded at install time is reused the same way (docs/country-filter.md) — no
+ *    lookup when the record has one; only `--country` changes it (and is re-recorded). A record
+ *    with no country (pre-feature, or the install's lookup failed) is detected ONCE here and the
+ *    result recorded. Country-excluded items leave the catalog, so they prune like upstream
+ *    deletions and come back as "new" when the country changes;
  *  - it is idempotent: re-running against an unchanged branch just repairs drift.
  *
  * Never falls back to installing: a scope/agent with no weegloo artifacts is a no-op with a
@@ -30,7 +35,8 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { select } from '@inquirer/prompts';
 
-import { REPO, loadResources } from './github.js';
+import { REPO, loadResources, fetchCountry } from './github.js';
+import { countryCheckUrl, resolveCountry, filterResourcesByCountry } from './country.js';
 import {
   CORE_RULE_IDS,
   applySelfUpdateTemplate,
@@ -111,12 +117,38 @@ export function planUpdate({
 }
 
 /**
+ * The country lines an install and an update print once the catalog is filtered — one
+ * implementation so both flows describe the same filter the same way. Returns the lines (each
+ * flow keeps its own output sink). `verb` fills the unknown-country warning: 'installing' /
+ * 'updating'.
+ *
+ * @param {{ country: string|null, source: string, excludedSkills: string[], excludedRules: string[] }} info
+ * @param {string} verb
+ * @returns {string[]}
+ */
+export function countryReportLines({ country, source, excludedSkills = [], excludedRules = [] }, verb) {
+  if (!country) {
+    return [
+      chalk.yellow('  ⚠  ') +
+        chalk.dim(`Could not determine your country — ${verb} every skill/rule (no country filter). Pin one with --country <code>.`),
+    ];
+  }
+  const label = { flag: ' (--country)', recorded: ' (recorded at install)', detected: ' (detected)' }[source] ?? '';
+  const lines = [chalk.dim(`  Country: ${country}${label}`)];
+  const parts = [];
+  if (excludedSkills.length > 0) parts.push(`${excludedSkills.length} skill(s) (${excludedSkills.join(', ')})`);
+  if (excludedRules.length > 0) parts.push(`${excludedRules.length} rule(s) (${excludedRules.join(', ')})`);
+  if (parts.length > 0) lines.push(chalk.dim(`  - Not offered in ${country}: ${parts.join(', ')}`));
+  return lines;
+}
+
+/**
  * Refs of the OTHER agents that share a store with `agent` in this scope, read from their
  * per-agent stamps. A sharer that predates per-agent tracking is invisible here (its artifacts
  * live in the very stores it shares, so nothing on disk attributes to it) — that limitation is
  * accepted: last-writer-wins is also what installs have always done.
  *
- * @returns {Array<{ agent: string, ref: string|null }>}
+ * @returns {Array<{ agent: string, ref: string|null, origins: object|null, country: string|null }>}
  */
 function detectSharerRefs(agent, scope, sharedWith) {
   const sharers = [];
@@ -125,12 +157,16 @@ function detectSharerRefs(agent, scope, sharedWith) {
     const recordPath = getInstalledRecordPath(scope, other);
     const hasRecord = fs.existsSync(recordPath);
     if (Object.keys(stamp).length > 0 || hasRecord) {
+      const record = hasRecord ? readInstalledRecord(recordPath) : null;
       sharers.push({
         agent: other,
         ref: typeof stamp.ref === 'string' ? stamp.ref : null,
         // origins too: a sharer on the same branch but a DIFFERENT environment mapping would
         // still get this run's domains stamped into the shared store — same conflict class.
-        origins: hasRecord ? readInstalledRecord(recordPath).origins : null,
+        origins: record ? record.origins : null,
+        // and country: the shared files would carry THIS run's country catalog — items the
+        // sharer's country excludes get written into its store. Unknown on either side = no claim.
+        country: record ? record.country : null,
       });
     }
   }
@@ -152,11 +188,16 @@ function writeSkill(skillsDir, skill) {
  * command carries no `--yes`.
  *
  * @param {object} config  resolved CLI config (update mode)
- * @param {{ loadResourcesFn?: typeof loadResources, promptSelect?: typeof select, log?: (s:string)=>void }} [deps]
+ * @param {{ loadResourcesFn?: typeof loadResources, fetchCountryFn?: typeof fetchCountry, promptSelect?: typeof select, log?: (s:string)=>void }} [deps]
  * @returns {Promise<{ ok: boolean, status: string }>}
  */
 export async function runUpdate(config, deps = {}) {
-  const { loadResourcesFn = loadResources, promptSelect = select, log = console.log } = deps;
+  const {
+    loadResourcesFn = loadResources,
+    fetchCountryFn = fetchCountry,
+    promptSelect = select,
+    log = console.log,
+  } = deps;
 
   const agent = config.agent;
   const scope = agent === 'androidstudio' ? 'project' : config.scope || 'global';
@@ -224,8 +265,19 @@ export async function runUpdate(config, deps = {}) {
   const stamp = readJsonSafe(stampPath);
   const ref = config.pluginRef || (typeof stamp.ref === 'string' ? stamp.ref : null) || 'latest';
 
+  // Country: pinned flag > the country this install recorded > ONE live lookup (a record with
+  // none — pre-feature, or the install's lookup failed). Placed after the no-op return so an
+  // agent with nothing installed makes no request, and run alongside the manifest fetch.
+  // resolveCountry never rejects: a failed lookup is `unknown` → no filter (fail-open).
+  const countryPromise = resolveCountry({
+    pinned: config.country,
+    recorded: prev.country,
+    detect: () => fetchCountryFn(countryCheckUrl(origins)),
+  });
+
   const spinner = ora({ text: `  Fetching manifest  ${chalk.dim(`${REPO} @ ${ref}`)}`, indent: 0 }).start();
-  let resources = await loadResourcesFn(ref);
+  const [loaded, countryResult] = await Promise.all([loadResourcesFn(ref), countryPromise]);
+  let resources = loaded;
   if (!resources) {
     spinner.fail(`  Could not load the manifest for branch '${ref}'.`);
     log(chalk.dim('     Nothing was changed. Check your network connection (or the branch name) and retry.'));
@@ -237,6 +289,14 @@ export async function runUpdate(config, deps = {}) {
   // Same mapped view as an install: content rewritten in memory, terms-consent dropped from
   // the catalog when cma is mapped (its prune then falls out of the set arithmetic below).
   resources = applyTermsExclusion(applyOriginsToResources(resources, origins), origins);
+
+  // Country filter at the same catalog stage: an item not offered in this country is, for this
+  // update, simply not in the catalog — the add-set, `newIds`, the prune diff and the recorded
+  // `availableSkills/Rules` all follow from that. Core rules are exempt (force-installed).
+  const { country } = countryResult;
+  const filtered = filterResourcesByCountry(resources, country, { exemptRuleIds: CORE_RULE_IDS });
+  resources = filtered.resources;
+  for (const l of countryReportLines({ ...countryResult, ...filtered }, 'updating')) log(l);
 
   const catalogSkillIds = resources.skills.map((s) => s.id);
   const catalogRuleIds = resources.rules.map((r) => r.id);
@@ -272,14 +332,16 @@ export async function runUpdate(config, deps = {}) {
   let skipSharedStores = false;
   if (sharedWith.length > 0) {
     const sharers = detectSharerRefs(agent, scope, sharedWith);
+    const countryDiffers = (s) => s.country != null && country != null && s.country !== country;
     const conflicting = sharers.filter(
-      (s) => s.ref == null || s.ref !== ref || !originsEqual(s.origins, origins)
+      (s) => s.ref == null || s.ref !== ref || !originsEqual(s.origins, origins) || countryDiffers(s)
     );
     if (conflicting.length > 0) {
       const names = conflicting
         .map((s) => {
           const why = [s.ref ?? 'unknown branch'];
           if (!originsEqual(s.origins, origins)) why.push('different origins');
+          if (countryDiffers(s)) why.push('different country');
           return `${s.agent}(${why.join(', ')})`;
         })
         .join(', ');
@@ -355,6 +417,7 @@ export async function runUpdate(config, deps = {}) {
     version: resources.version,
     ref,
     origins,
+    country,
     manageSkills: effectiveManageSkills,
     installedSkillIds: plan.addSkillIds,
     availableSkillIds: catalogSkillIds,

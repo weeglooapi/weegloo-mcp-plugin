@@ -1,11 +1,12 @@
 import { select, checkbox, password, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
 import ora from 'ora';
-import { PKG_PLUGIN_REF, listBranches, loadResources } from './github.js';
+import { PKG_PLUGIN_REF, listBranches, loadResources, fetchCountry } from './github.js';
 import { orderBranchesForPicker } from './versions.js';
 import { parseCliArgs, resolveConfig, HELP_TEXT } from './cli.js';
-import { partitionCoreRules } from './self-update.js';
-import { runUpdate } from './update.js';
+import { CORE_RULE_IDS, partitionCoreRules } from './self-update.js';
+import { runUpdate, countryReportLines } from './update.js';
+import { countryCheckUrl, resolveCountry, filterResourcesByCountry } from './country.js';
 import { runUninstall } from './uninstall.js';
 import { loadOrigins, applyOriginsToResources, applyTermsExclusion, applyOriginMapping } from './origins.js';
 import { installCursor } from './cursor.js';
@@ -376,8 +377,18 @@ async function main() {
 
   // At least one of MCP / skills+rules is selected (guarded above), so the manifest is
   // always needed: one fetch covers skill/rule lists + content + MCP URLs (no api.github.com).
+  // The country lookup (docs/country-filter.md) runs alongside it — only when skills/rules are
+  // installed, since the country decides nothing else (an MCP-only install asks nothing and
+  // records nothing). --country / WEEGLOO_COUNTRY pins it and skips the request. resolveCountry
+  // never rejects: a failed lookup is `unknown`, i.e. no filter (fail-open).
   const resourceSpinner = ora({ text: '  Fetching plugin manifest...', indent: 0 }).start();
-  let resources = await loadResources(pluginRef);
+  const [loaded, countryResult] = await Promise.all([
+    loadResources(pluginRef),
+    installSkillsRules
+      ? resolveCountry({ pinned: config.country, detect: () => fetchCountry(countryCheckUrl(origins)) })
+      : null,
+  ]);
+  let resources = loaded;
 
   // Fail fast: the manifest is the required source for this version's skills/rules/MCP.
   if (!resources) {
@@ -395,6 +406,19 @@ async function main() {
   // cascades everywhere (picker, core forcing, record, future update pruning) with no further
   // conditionals. No mapping ⇒ byte-identical passthrough.
   resources = applyTermsExclusion(applyOriginsToResources(resources, origins), origins);
+
+  // Country filter — the same catalog stage, the same cascade: a skill/rule not offered in this
+  // country leaves `resources` here, so the pickers, `available*Ids`, the record and every later
+  // update's prune follow with no further conditionals. Core rules are exempt (force-installed;
+  // the builder also refuses to tag them). The record keeps `country` so --update reuses it.
+  let country = null;
+  if (countryResult) {
+    const filtered = filterResourcesByCountry(resources, countryResult.country, { exemptRuleIds: CORE_RULE_IDS });
+    resources = filtered.resources;
+    country = countryResult.country;
+    for (const l of countryReportLines({ ...countryResult, ...filtered }, 'installing')) console.log(l);
+    console.log();
+  }
   const mcp = resources.mcp;
 
   if (installMcp) {
@@ -570,7 +594,8 @@ async function main() {
   //
   // available* is the FULL catalog this ref offers (independent of the user's selection) — the
   // update flow diffs a future catalog against it to auto-add genuinely new skills/rules while
-  // still respecting deliberate deselections.
+  // still respecting deliberate deselections. "Offers" is after the country filter: an item
+  // withheld for this country was never offered, so a later country change auto-adds it as new.
   const answers = {
     token: installMcp ? token : undefined,
     pluginRef,
@@ -590,6 +615,7 @@ async function main() {
     availableSkillIds: resources.skills.map((s) => s.id),
     availableRuleIds: resources.rules.map((r) => r.id),
     origins,
+    country,
   };
 
   if (ide === 'cursor') {
