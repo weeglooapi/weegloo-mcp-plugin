@@ -144,7 +144,8 @@ The script creates the Content (POST) then publishes it (PUT), skips automatical
 publish status to the user.
 
 ## Guardrails
-- `title`/`summary` ≤ 64 chars, `body` ≤ 204800 chars — enforced by both the agent's
+- `title`/`summary` ≤ 64 chars, `body` ≤ 20480 chars, and all three fields of all 10 locales
+  together ≤ 102400 chars — enforced by both the agent's
   self-check and the publisher; if the publisher rejects a value, regenerate (step 2),
   don't hand-edit.
 - `announcement.json` is gitignored — it is a throwaway build artifact, never commit it.

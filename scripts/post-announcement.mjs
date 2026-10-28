@@ -98,12 +98,12 @@ for (const f of ['summary', 'body']) {
   }
 }
 
-// Per-field length caps — hard publish constraints. Count characters (code points),
-// not bytes, so CJK/Devanagari are measured fairly.
-const MAX_LEN = { title: 64, summary: 64, body: 204800 };
+// Per-field length caps — hard publish constraints. Measured in UTF-16 code units, the unit the
+// server counts in: CJK/Devanagari count one each, an emoji counts two.
+const MAX_LEN = { title: 64, summary: 64, body: 20480 };
 for (const f of ['title', 'summary', 'body']) {
   for (const [locale, value] of Object.entries(ann[f])) {
-    const len = [...String(value)].length;
+    const len = String(value).length;
     if (len > MAX_LEN[f]) {
       const preview = f === 'body' ? '' : `: ${JSON.stringify(value)}`;
       fail(`${f}[${locale}] is ${len} chars (max ${MAX_LEN[f]})${preview}`);
@@ -121,6 +121,17 @@ const payload = {
   },
   metadata: { tags: [] },
 };
+
+// The server also caps one Content's text as a whole — every text value of every field, in every
+// locale, added together — so a body that fits one locale can still fail across ten.
+const MAX_TOTAL_TEXT = 102400;
+const totalText = Object.values(payload.fields)
+  .flatMap((byLocale) => Object.values(byLocale))
+  .filter((value) => typeof value === 'string')
+  .reduce((sum, value) => sum + value.length, 0);
+if (totalText > MAX_TOTAL_TEXT) {
+  fail(`text across all fields and locales is ${totalText} chars (max ${MAX_TOTAL_TEXT}) — shorten body, which repeats in every locale`);
+}
 
 const createUrl = `${CMA_BASE}/spaces/${SPACE_ID}/content-types/${CONTENT_TYPE_ID}/contents`;
 console.log(`[post-announcement] create + publish (${ann.changed.length} change(s), ${Object.keys(ann.title).length} locales)`);

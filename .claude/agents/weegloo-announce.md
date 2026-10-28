@@ -90,13 +90,15 @@ use the defaults above.
 
 5. **Verify lengths with code — do NOT eyeball them.** You cannot reliably count
    characters by reading, so after writing, run a command that measures every field and
-   prints any that exceed its limit (`title`/`summary` ≤ 64, `body` ≤ 204800):
+   prints any that exceed its limit (`title`/`summary` ≤ 64, `body` ≤ 20480, and all three
+   fields of all locales added together ≤ 102400):
 
    ```bash
    node -e 'const j=JSON.parse(require("fs").readFileSync(process.env.OUTPUT_PATH||"announcement.json","utf8"));
-   const LIM={title:64,summary:64,body:204800}; let bad=0;
+   const LIM={title:64,summary:64,body:20480}, TOTAL=102400; let bad=0, total=0;
    for (const f of ["title","summary","body"]) for (const [k,v] of Object.entries(j[f]||{})) {
-     const n=[...String(v)].length; if (n>LIM[f]){bad++; console.log(`OVER ${f}[${k}] = ${n} (max ${LIM[f]})`);}}
+     const n=String(v).length; total+=n; if (n>LIM[f]){bad++; console.log(`OVER ${f}[${k}] = ${n} (max ${LIM[f]})`);}}
+   if (total>TOTAL){bad++; console.log(`OVER all fields and locales together = ${total} (max ${TOTAL})`);}
    console.log(bad? `FAIL: ${bad} over-length` : "OK: all fields within limits");'
    ```
 
@@ -153,8 +155,10 @@ use the defaults above.
     locale** (same character-count rule as title). Keep it well under when you can.
   - `body` — the full announcement in **GitHub-Flavored Markdown**: `##`/`###` headings,
     `-` bullets, `**bold**`. This is the grouped (New / Improved / …) content.
-    **Hard limit: at most 204800 characters per locale** (a generous ceiling — a normal
-    announcement is nowhere near it; just never blow past it).
+    **Hard limit: at most 20480 characters per locale.** The server also caps the text of
+    one Content as a whole: `title` + `summary` + `body` of all 10 locales together must stay
+    **≤ 102400 characters**, so keep each locale's body under about 10,000 characters (a
+    normal announcement is far below that).
 - **Localize, don't machine-translate.** Each language must read as if written by a
   native speaker for that audience — natural phrasing, idiom, and tone for that locale,
   not a word-for-word render of the English (or Korean). The *meaning* and the set of
@@ -190,8 +194,10 @@ those are fixed values added downstream.
 Requirements:
 - `title`, `summary`, `body` MUST each contain **all 10 locales** — same key set, no
   locale missing, none extra.
-- Every `title` and every `summary` value MUST be **≤ 64 characters** (per locale,
-  counted as characters), and every `body` value MUST be **≤ 204800 characters**. These
+- Every `title` and every `summary` value MUST be **≤ 64 characters** (per locale),
+  every `body` value MUST be **≤ 20480 characters**, and the three fields of all locales
+  added together MUST be **≤ 102400 characters**. Characters are counted the way the server
+  counts them (UTF-16 code units: CJK/Devanagari count one, an emoji counts two). These
   are hard publish constraints — over-length values are rejected downstream.
 - `body` values are **GFM strings** (real newlines in the JSON, not the characters
   `\n`). Use `##`/`###` headings, `-` bullets, `**bold**`. Group by impact
