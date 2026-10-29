@@ -347,6 +347,203 @@ ZIP 엔트리는 디렉터리를 포함해 최대 300개입니다.
   },
 ];
 
+// Four samples for the two judge asserts of 30 — two failure modes each, every sample right on the
+// other assert. `timeout-only` is the shape that shipped: the wait does end, but only after an
+// arbitrary timeout, so a question loosened to "does the code handle a login that never completes"
+// would accept it. `silent-on-localhost` never claims localhost works — it just never says where the
+// sign-in can be tested, which leaves a user who said they would check it on `npm run dev` to find
+// out from the console's error screen.
+const USER_LOGIN_WRONG_ANSWERS = [
+  {
+    id: 'no-close-watch',
+    violates: ['ends-wait-on-close'],
+    // The example as it stood before 291b9d7: the wait ends only when a token arrives.
+    text: `관리자 페이지(/admin) 로그인 계획입니다. 관리자는 Space 에 초대된 Weegloo User 이므로 ServiceLogin 이 아니라
+Weegloo 콘솔 로그인 팝업으로 로그인하고, 받은 토큰으로 CMA 를 호출합니다. PAT 는 브라우저에 넣지 않습니다.
+
+## 로그인 코드
+\`\`\`javascript
+// 콘솔이 보내는 토큰을 받는 리스너 — 앱 시작 시 한 번만 등록
+window.addEventListener("message", (event) => {
+  if (event.origin !== "https://console.weegloo.com") return
+  const token = event.data?.accessToken
+  if (typeof token === "string" && token.trim()) {
+    sessionStorage.setItem("access_token", token.trim())
+    verifyAdmin() // 아래 '로그인 확인' — 끝나면 "확인 중…" 상태를 풉니다
+  }
+})
+
+// 관리자 로그인 버튼
+function openLoginPopup() {
+  window.open(
+    "https://console.weegloo.com/login?origin=" + encodeURIComponent(location.origin),
+    "weegloo-login",
+    "width=500,height=600"
+  )
+  showSigningIn() // 버튼을 "확인 중…"으로 바꾸고 비활성화
+}
+\`\`\`
+
+## 로그인 확인
+1. \`GET https://cma.weegloo.com/v1/me\` 로 토큰이 유효한지 확인합니다. 401 이면 토큰을 지우고 로그아웃 상태로 돌립니다.
+2. \`GET /v1/me/space-memberships\` 의 \`item.sys.space.sys.id\` 에 우리 Space 가 있는지 확인하고, 없으면 토큰을 지웁니다.
+3. 통과하면 관리 화면을 띄우고, 메뉴 Content 는 CMA 로 PATCH 한 뒤 Publish 합니다.
+
+## 로컬 개발
+콘솔 로그인 팝업은 같은 환경의 Weegloo WebHosting 에서 서빙된 앱에서만 로그인이 끝납니다. \`http://localhost:5173\` 에서는
+콘솔이 일반 에러 화면으로 끝나므로, 화면 작업은 로컬에서 하되 로그인은 배포한 WebHosting 에서 확인하세요.`,
+  },
+  {
+    id: 'timeout-only',
+    violates: ['ends-wait-on-close'],
+    // What the production app did: a 5-minute timeout and no popup.closed check. The wait does end
+    // — after the user has given up.
+    text: `관리자 페이지(/admin) 로그인 계획입니다. 관리자는 Space 에 초대된 Weegloo User 이므로 ServiceLogin 이 아니라
+Weegloo 콘솔 로그인 팝업으로 로그인하고, 받은 토큰으로 CMA 를 호출합니다. PAT 는 브라우저에 넣지 않습니다.
+
+## 로그인 코드
+\`\`\`javascript
+let loginTimer = null
+
+// 콘솔이 보내는 토큰을 받는 리스너 — 앱 시작 시 한 번만 등록
+window.addEventListener("message", (event) => {
+  if (event.origin !== "https://console.weegloo.com") return
+  const token = event.data?.accessToken
+  if (typeof token === "string" && token.trim()) {
+    clearTimeout(loginTimer)
+    sessionStorage.setItem("access_token", token.trim())
+    verifyAdmin()
+  }
+})
+
+// 관리자 로그인 버튼
+function openLoginPopup() {
+  window.open(
+    "https://console.weegloo.com/login?origin=" + encodeURIComponent(location.origin),
+    "weegloo-login",
+    "width=500,height=600"
+  )
+  showSigningIn()
+  // 로그인이 끝나지 않으면 5분 뒤 대기를 끝내고 다시 시도할 수 있게 합니다
+  clearTimeout(loginTimer)
+  loginTimer = setTimeout(() => {
+    showSignedOut("로그인 시간이 초과되었습니다. 다시 시도하세요.")
+  }, 5 * 60 * 1000)
+}
+\`\`\`
+
+## 로그인 확인
+1. \`GET https://cma.weegloo.com/v1/me\` 로 토큰이 유효한지 확인합니다. 401 이면 토큰을 지우고 로그아웃 상태로 돌립니다.
+2. \`GET /v1/me/space-memberships\` 의 \`item.sys.space.sys.id\` 에 우리 Space 가 있는지 확인하고, 없으면 토큰을 지웁니다.
+3. 통과하면 관리 화면을 띄우고, 메뉴 Content 는 CMA 로 PATCH 한 뒤 Publish 합니다.
+
+## 로컬 개발
+콘솔 로그인 팝업은 같은 환경의 Weegloo WebHosting 에서 서빙된 앱에서만 로그인이 끝납니다. \`http://localhost:5173\` 에서는
+콘솔이 일반 에러 화면으로 끝나므로, 화면 작업은 로컬에서 하되 로그인은 배포한 WebHosting 에서 확인하세요.`,
+  },
+  {
+    id: 'localhost-origin',
+    violates: ['signin-on-webhosting'],
+    // What the old spine's "not WebHosting-specific" invites: localhost becomes the origin, so the
+    // login is "testable" locally. The close watch is correct.
+    text: `관리자 페이지(/admin) 로그인 계획입니다. 관리자는 Space 에 초대된 Weegloo User 이므로 ServiceLogin 이 아니라
+Weegloo 콘솔 로그인 팝업으로 로그인하고, 받은 토큰으로 CMA 를 호출합니다. PAT 는 브라우저에 넣지 않습니다.
+
+## 로그인 코드
+\`\`\`javascript
+let loginWatch = null
+
+// 콘솔이 보내는 토큰을 받는 리스너 — 앱 시작 시 한 번만 등록
+window.addEventListener("message", (event) => {
+  if (event.origin !== "https://console.weegloo.com") return
+  const token = event.data?.accessToken
+  if (typeof token === "string" && token.trim()) {
+    clearInterval(loginWatch)
+    sessionStorage.setItem("access_token", token.trim())
+    verifyAdmin()
+  }
+})
+
+// 관리자 로그인 버튼
+function openLoginPopup() {
+  clearInterval(loginWatch) // 이전 대기가 남아 있으면 정리
+  const popup = window.open(
+    "https://console.weegloo.com/login?origin=" + encodeURIComponent(location.origin),
+    "weegloo-login",
+    "width=500,height=600"
+  )
+  showSigningIn()
+  // 토큰 없이 창이 닫히면(사용자가 닫음, 콘솔 에러 화면) 대기를 끝내고 다시 시도할 수 있게 합니다
+  loginWatch = setInterval(() => {
+    if (popup.closed) {
+      clearInterval(loginWatch)
+      showSignedOut("로그인 창이 닫혔습니다. 다시 시도하세요.")
+    }
+  }, 500)
+}
+\`\`\`
+
+## 로그인 확인
+1. \`GET https://cma.weegloo.com/v1/me\` 로 토큰이 유효한지 확인합니다. 401 이면 토큰을 지우고 로그아웃 상태로 돌립니다.
+2. \`GET /v1/me/space-memberships\` 의 \`item.sys.space.sys.id\` 에 우리 Space 가 있는지 확인하고, 없으면 토큰을 지웁니다.
+3. 통과하면 관리 화면을 띄우고, 메뉴 Content 는 CMA 로 PATCH 한 뒤 Publish 합니다.
+
+## 로컬 개발
+\`npm run dev\` 로 띄우면 \`location.origin\` 이 \`http://localhost:5173\` 이 되고 그 값이 그대로 \`origin\` 으로 전달되므로,
+로컬에서도 로그인부터 관리 화면까지 끝까지 확인할 수 있습니다. 확인이 끝나면 빌드해 WebHosting 에 다시 배포합니다.`,
+  },
+  {
+    id: 'silent-on-localhost',
+    violates: ['signin-on-webhosting'],
+    // Claims nothing wrong — and never says where the sign-in can be tested. A question loosened to
+    // "does the answer avoid saying localhost works" would accept it.
+    text: `관리자 페이지(/admin) 로그인 계획입니다. 관리자는 Space 에 초대된 Weegloo User 이므로 ServiceLogin 이 아니라
+Weegloo 콘솔 로그인 팝업으로 로그인하고, 받은 토큰으로 CMA 를 호출합니다. PAT 는 브라우저에 넣지 않습니다.
+
+## 로그인 코드
+\`\`\`javascript
+let loginWatch = null
+
+// 콘솔이 보내는 토큰을 받는 리스너 — 앱 시작 시 한 번만 등록
+window.addEventListener("message", (event) => {
+  if (event.origin !== "https://console.weegloo.com") return
+  const token = event.data?.accessToken
+  if (typeof token === "string" && token.trim()) {
+    clearInterval(loginWatch)
+    sessionStorage.setItem("access_token", token.trim())
+    verifyAdmin()
+  }
+})
+
+// 관리자 로그인 버튼
+function openLoginPopup() {
+  clearInterval(loginWatch) // 이전 대기가 남아 있으면 정리
+  const popup = window.open(
+    "https://console.weegloo.com/login?origin=" + encodeURIComponent(location.origin),
+    "weegloo-login",
+    "width=500,height=600"
+  )
+  showSigningIn()
+  // 토큰 없이 창이 닫히면(사용자가 닫음, 콘솔 에러 화면) 대기를 끝내고 다시 시도할 수 있게 합니다
+  loginWatch = setInterval(() => {
+    if (popup.closed) {
+      clearInterval(loginWatch)
+      showSignedOut("로그인 창이 닫혔습니다. 다시 시도하세요.")
+    }
+  }, 500)
+}
+\`\`\`
+
+## 로그인 확인
+1. \`GET https://cma.weegloo.com/v1/me\` 로 토큰이 유효한지 확인합니다. 401 이면 토큰을 지우고 로그아웃 상태로 돌립니다.
+2. \`GET /v1/me/space-memberships\` 의 \`item.sys.space.sys.id\` 에 우리 Space 가 있는지 확인하고, 없으면 토큰을 지웁니다.
+3. 통과하면 관리 화면을 띄우고, 메뉴 Content 는 CMA 로 PATCH 한 뒤 Publish 합니다.
+
+## 배포
+작업이 끝나면 빌드해 기존 WebHosting 에 다시 배포합니다.`,
+  },
+];
+
 // Controlled fixture file → its wrong answers. A fixture joins by adding a line here; its judge
 // questions are read from the fixture itself.
 const CONTROLS = {
@@ -354,6 +551,7 @@ const CONTROLS = {
   '08-space-teardown.mjs': TEARDOWN_WRONG_ANSWERS,
   '26-payment-amount-grant-once.mjs': PAYMENT_WRONG_ANSWERS,
   '28-payment-default-kr-toss.mjs': KR_DEFAULT_WRONG_ANSWERS,
+  '30-user-login-popup-close.mjs': USER_LOGIN_WRONG_ANSWERS,
 };
 
 function agent(prompt) {
