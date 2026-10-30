@@ -17,11 +17,11 @@ Base URLs, Accept header, and OpenAPI links live in **`weegloo-api-endpoints`** 
 
 **Weegloo User** (platform account — Space owner or **invited** member; PAT or console FE login popup) drives **CMA / Upload / CDA**. **Service User** (an end-user of the product, **open sign-up** through ServiceLogin) drives **ACMA / ACDA / Upload**. Tokens never cross; **Upload** is the one shared surface, and the Media create that follows stays on the plane matching the uploader (CMA vs ACMA).
 
-The invite-only nature of Space membership is the architectural consequence: **product end-users are never Weegloo Users**, so anything with open sign-up needs ServiceLogin. Identity mechanics and token scopes are already loaded — `weegloo-api-endpoints` ("Two login models", "SpaceRole & ServiceUserRole", "ACMA — member CRUD scope"). This skill decides only **which plane each path of the product uses**.
+The invite-only nature of Space membership is the architectural consequence: **product end-users are never Weegloo Users**, so every end-user account is a ServiceLogin account — open sign-up, or invite-only with `approvalRequired: true` (approved in the console, or by a Script that sets the ServiceUser's `enableLogin`). A product invitation is never a Space invitation. Identity mechanics and token scopes are already loaded — `weegloo-api-endpoints` ("Two login models", "SpaceRole & ServiceUserRole", "ACMA — member CRUD scope"). This skill decides only **which plane each path of the product uses**.
 
 ## Recipes by service type
 
-Pick the row that matches the product. Each recipe lists the **client-side** APIs and the **roles/tokens** to provision.
+Decide **per actor — owner/admin, members, anonymous visitors — not per product**, and combine the recipes that match: one product often mixes Weegloo User login and ServiceLogin (a family diary: recipe 2's admin path for the owner + recipe 3 for invited family, no CDA). Each recipe lists the **client-side** APIs and the **roles/tokens** to provision.
 
 ### 1. Fully public service (read-only site)
 

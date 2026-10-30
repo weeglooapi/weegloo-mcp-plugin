@@ -544,6 +544,91 @@ function openLoginPopup() {
   },
 ];
 
+// Four samples for the two judge asserts of 31 — two failure modes each, every sample right on the
+// other assert. `family-as-space-members` is the trap the old spine set: ServiceLogin was described only
+// as open sign-up, so an INVITED family read like invited Space members — and that design still passes
+// the invite gate. `diary-on-public-cda` signs everyone in correctly and leaks anyway: a UI that hides
+// pages until login does not hide the token in the bundle.
+const HYBRID_LOGIN_WRONG_ANSWERS = [
+  {
+    id: 'family-as-space-members',
+    violates: ['both-logins'],
+    // One login for everyone, on the Weegloo side: every grandparent becomes a Space member.
+    text: `가족 육아일기 로그인·권한 설계입니다.
+
+## 로그인
+- 부부와 가족 모두 Weegloo 계정으로 로그인합니다. 앱의 로그인 버튼은 Weegloo 콘솔 로그인 팝업
+  (\`https://console.weegloo.com/login?origin=...\`)을 열고, 받은 토큰을 sessionStorage 에 둡니다.
+- 로그인 뒤 \`GET /v1/me/space-memberships\` 의 \`item.sys.space.sys.id\` 에 우리 Space 가 있는지 확인합니다.
+  멤버가 아니면 토큰을 지우고 들여보내지 않습니다.
+
+## 가족 초대
+- 가족(할머니, 고모)은 Weegloo 콘솔에서 우리 Space 에 멤버로 초대합니다. 초대받은 가족은 Weegloo 계정을 만들고
+  초대를 수락하면 들어올 수 있습니다.
+- SpaceRole 은 둘입니다. 부부는 "일기 관리"(일기·사진 Content/Media 생성·수정·발행), 가족은 "가족 읽기"
+  (일기 Content Read, 하트 Content Create, 자기 하트만 Delete — \`createdBy :self\`).
+
+## 읽기·쓰기
+- 모두 CMA 로 읽고 씁니다. 부부는 일기를 쓰고 발행하고, 가족은 같은 방식으로 하트를 남깁니다.
+- 초대받지 않은 사람은 Space 멤버가 아니라 로그인 단계에서 막히고, 로그인 없이 읽는 공개 경로
+  (DeliveryAccessToken, CDA)는 만들지 않습니다.`,
+  },
+  {
+    id: 'everyone-on-service-login',
+    violates: ['both-logins'],
+    // One login for everyone, on the ServiceLogin side: the parents' editing becomes a ServiceUserRole.
+    text: `가족 육아일기 로그인·권한 설계입니다. 부부와 가족 모두 같은 Google 로그인(ServiceLogin)을 씁니다.
+
+## ServiceLogin
+- Google 을 provider 로 ServiceLogin 을 만들고 \`approvalRequired: true\` 로 둡니다. 승인되지 않은 계정은
+  로그인할 수 없습니다.
+- 기본 역할(\`sys.defaultRole\`)은 아무것도 읽지 못하는 "대기" 역할입니다.
+
+## 역할 (ServiceUserRole)
+- "부부": 일기·사진 Content/Media 생성·읽기·수정·삭제. 부부 두 계정은 콘솔에서 승인하고 \`roleOverride\` 로 이 역할을 줍니다.
+- "가족": 일기 읽기, 하트 생성, 자기 하트만 삭제(\`createdBy :self\`). 초대 링크를 연 가족이 로그인하면 초대 Script 가
+  초대에 적힌 이메일의 ServiceUser 를 승인(\`enableLogin\`)하고 \`roleOverride\` 를 "가족"으로 바꿉니다.
+
+## 읽기·쓰기
+- 부부는 ACMA 로 일기를 쓰고(생성하면 바로 발행), 모두 ACDA 로 읽습니다. 사진은 Upload → ACMA Media 입니다.
+- 로그인 없이 읽는 공개 경로(DeliveryAccessToken, CDA)는 없습니다.`,
+  },
+  {
+    id: 'open-signup-reader-default',
+    violates: ['invite-gate'],
+    // Both logins right; the "invite" is only a link, and the reader role is everyone's default.
+    text: `가족 육아일기 로그인·권한 설계입니다. 로그인은 두 가지입니다.
+
+## 부부 — Weegloo 계정
+- 부부는 우리 Space 의 소유자와, Space 에 초대한 배우자입니다. 앱의 관리자 로그인은 Weegloo 콘솔 로그인 팝업이고,
+  \`/v1/me/space-memberships\` 로 이 Space 의 멤버인지 확인합니다.
+- 일기·사진은 CMA 로 쓰고 저장할 때마다 발행합니다. 사진은 Upload → CMA Media 입니다.
+
+## 가족 — ServiceLogin (Google)
+- Google 을 provider 로 ServiceLogin 을 만들고, 기본 역할(\`sys.defaultRole\`)을 "가족" ServiceUserRole 로 둡니다.
+  "가족" 역할은 일기·사진 읽기, 하트 생성, 자기 하트만 삭제(\`createdBy :self\`)입니다.
+- 가족 초대는 앱 주소 링크를 카카오톡으로 보내는 것입니다. 링크를 받은 가족이 Google 로 로그인하면 가족 역할로
+  ACDA 에서 일기를 읽고, 하트는 ACMA 로 남깁니다.
+- 로그인 없이 읽는 공개 경로(DeliveryAccessToken, CDA)는 만들지 않습니다.`,
+  },
+  {
+    id: 'diary-on-public-cda',
+    violates: ['invite-gate'],
+    // Both logins right and sign-in approval-gated — but the diary itself is read through a token in the bundle.
+    text: `가족 육아일기 로그인·권한 설계입니다. 로그인은 두 가지입니다.
+
+## 부부 — Weegloo 계정
+- 부부는 Space 소유자와 Space 에 초대한 배우자입니다. Weegloo 콘솔 로그인 팝업으로 로그인하고
+  \`/v1/me/space-memberships\` 로 멤버인지 확인한 뒤, CMA 로 일기·사진을 쓰고 발행합니다.
+
+## 가족 — ServiceLogin (Google)
+- ServiceLogin 을 \`approvalRequired: true\` 로 만들고, 기본 역할은 하트 생성과 자기 하트 삭제(\`createdBy :self\`)만 둡니다.
+  초대 링크로 들어온 가족은 초대 Script 가 \`enableLogin\` 을 켜서 승인합니다. 승인되지 않은 계정은 로그인하지 못합니다.
+- 일기 본문과 사진은 빠르게 보여 주려고 CDA 로 읽습니다. 앱 빌드에 읽기 전용 DeliveryAccessToken 을 넣고,
+  가족이 로그인한 뒤에만 일기 화면을 보여 줍니다. 하트는 ACMA 로 남깁니다.`,
+  },
+];
+
 // Controlled fixture file → its wrong answers. A fixture joins by adding a line here; its judge
 // questions are read from the fixture itself.
 const CONTROLS = {
@@ -552,6 +637,7 @@ const CONTROLS = {
   '26-payment-amount-grant-once.mjs': PAYMENT_WRONG_ANSWERS,
   '28-payment-default-kr-toss.mjs': KR_DEFAULT_WRONG_ANSWERS,
   '30-user-login-popup-close.mjs': USER_LOGIN_WRONG_ANSWERS,
+  '31-hybrid-login-family.mjs': HYBRID_LOGIN_WRONG_ANSWERS,
 };
 
 function agent(prompt) {
