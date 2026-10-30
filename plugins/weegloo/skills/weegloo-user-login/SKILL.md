@@ -56,7 +56,7 @@ Two mechanisms can produce a Weegloo User Bearer Token. Pick the one that matche
 
 When the runtime is a **browser** — for example a custom admin UI deployed as a static site on Weegloo WebHosting — open a popup to the Weegloo Console FE, let the user sign in to Weegloo there, and receive the access token back via `postMessage`. The rest of this skill documents that flow.
 
-The flow is **not WebHosting-specific** even though static-site admin UIs are the most common use case (no server to perform a normal OAuth exchange). It also works on any other browser-hosted site that wants a CMA session against Weegloo.
+Static-site admin UIs are the most common use case (no server to perform a normal OAuth exchange). **The popup sign-in completes only for an app served from a Weegloo WebHosting of the same environment** (see the `origin` note in step 2); a local dev server cannot complete it.
 
 ---
 
@@ -94,18 +94,44 @@ window.addEventListener("message", (event) => {
 Open the console **login** URL with the **current site origin** so the console can post the token back to the opener:
 
 ```javascript
-const popup = window.open(
-  "https://console.weegloo.com/login?origin=" +
-    encodeURIComponent(location.origin),
-  "weegloo-login",
-  "width=500,height=600"
-)
+let pendingLogin = null
+
+function openLoginPopup() {
+  endPendingLogin() // a second click must not leave the first wait running
+  const popup = window.open(
+    "https://console.weegloo.com/login?origin=" +
+      encodeURIComponent(location.origin),
+    "weegloo-login",
+    "width=500,height=600"
+  )
+  if (!popup) {
+    showSignedOut("The login popup was blocked. Allow popups for this site and try again.")
+    return
+  }
+  const watch = setInterval(() => {
+    if (popup.closed) {
+      endPendingLogin()
+      showSignedOut("The login window was closed. Try again.")
+    }
+  }, 500)
+  pendingLogin = { stop: () => clearInterval(watch) }
+  showSigningIn()
+}
+
+function endPendingLogin() {
+  pendingLogin?.stop()
+  pendingLogin = null
+}
 ```
+
+Call **`endPendingLogin()`** from the `message` handler as soon as a token arrives (section 3).
 
 **Notes:**
 
-- **`name`** (`"weegloo-login"`) — reuse the same name so repeated clicks target the same window where appropriate.
+- **End the wait when the window closes, not only when a token arrives.** The popup can end without posting anything: the user closes it, or the console shows an error screen (not a member of the Space, terms not accepted, …) and the user dismisses it. With no `popup.closed` check the app sits in "signing in" indefinitely, or until an arbitrary timeout, with no hint to retry. During a normal sign-in `popup.closed` stays `false` across the provider round trip (verified on dev with Google), so the check does not end a sign-in that is still in progress.
+- **`name`** (`"weegloo-login"`) — reuse the same name so repeated clicks target the same window where appropriate. Because the window is reused, end the previous wait before starting a new one (as above); otherwise every earlier wait's listener and timer stays alive.
 - **`origin`** query param — must be the **exact** origin of the app (scheme + host + port), matching **`location.origin`**.
+- **`origin` must be a Weegloo WebHosting of the same environment.** From any other origin, **`localhost` / `127.0.0.1`** included, the sign-in ends on a generic error screen. Test the sign-in against a deployed WebHosting, not a local dev server.
 - If the product supports **multiple console bases** (dev vs prod), read the FE base from **`NEXT_PUBLIC_*`** or your app's runtime config and build  
   `{feOrigin}/login?origin=${encodeURIComponent(location.origin)}`.
 
@@ -120,6 +146,7 @@ After the console completes login, it **`postMessage`s** to the opener. The payl
 const token = event.data?.accessToken
 if (typeof token === "string" && token.trim()) {
   sessionStorage.setItem("access_token", token.trim())
+  endPendingLogin() // stop the popup.closed watch from step 2
 }
 ```
 
@@ -183,7 +210,8 @@ There is no server-side session to revoke unless the product also calls a CMA re
 | Step | Action |
 |------|--------|
 | 1 | Single **`message`** listener; **`event.origin`** === console FE origin |
-| 2 | **`window.open`** → `{console}/login?origin=encodeURIComponent(location.origin)` |
+| 2 | **`window.open`** → `{console}/login?origin=encodeURIComponent(location.origin)`; the app is served from a **Weegloo WebHosting** (from any other origin, `localhost` included, sign-in cannot complete) |
+| 2a | Poll **`popup.closed`**; when it turns `true` (or a token arrives) end the wait and show a retry state; end any earlier wait before opening again |
 | 3 | On message: **`event.data.accessToken`** → **`sessionStorage.setItem("access_token", …)`** |
 | 4 | **`GET /v1/me`** with Bearer → **200** ⇒ token valid as a Weegloo User |
 | 5 | **`GET /v1/me/space-memberships`** → must include **target `SPACE_ID`** at **`item.sys.space.sys.id`** (nested under `sys`, **not** `item.space`); else remove token |
