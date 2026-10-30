@@ -123,6 +123,18 @@ HTTP-referrer restrictions — for production. One line, not a section.
 
 ---
 
+## Web 4 — recommended: keep the site's fixed Weegloo values in one key/value file
+
+A recommendation, not a rule. Put every fixed Weegloo value the site uses — the Space id, the
+DeliveryAccessToken, ContentType / Content / Media / Script ids — in **one** small key/value file
+(e.g. `/weegloo.config.js` exporting an object), as **plain string literals**, and read them from
+there instead of scattering literals through the code. That is one place to switch Space or
+environment, and one place to check if the site is later registered as a MarketApp: the install
+rewrites these values only where they appear verbatim, and only for resources included in the
+bundle (`weegloo-market-app`).
+
+---
+
 ## Where the rest lives
 
 - **`references/web.md`** — read it **before reporting a web build finished**: the per-framework

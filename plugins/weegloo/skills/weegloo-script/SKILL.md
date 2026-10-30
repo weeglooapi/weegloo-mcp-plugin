@@ -347,8 +347,9 @@ loop-retry; surface the upgrade path.
     they are deleted.
   - A decrypted value is only as private as the statements keep it: never `Return` it, `SetVar` or
     store it, or send it anywhere but the API it belongs to.
-  - A Script installed from a MarketApp arrives with every secret value set to `******` — fill in
-    the real values before it can call out.
+  - Packed into a MarketApp, every secret value ships as `******` and each installer enters their
+    own at install. So a third-party key belongs here, but a Weegloo resource id stays written in
+    the statement, where the install rewrites it (`weegloo-market-app`).
 - **Execute authorization:** only the caller's **Script `Execute`** permission is checked at
   `/execute` (missing ⇒ **`403`**); on `/execute/anonymous` nothing is checked. The resource
   operations *inside* run with the **Script author's authority, delegated** — **not** re-validated per

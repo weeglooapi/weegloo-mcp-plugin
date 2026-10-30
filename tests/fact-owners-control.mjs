@@ -78,6 +78,9 @@ const DEFECT_AT = {
   // `d627b62` is develop's first-parent commit before `807ca33`, which is a tip of develop, latest
   // and 1.22.1: its api-endpoints rule still teaches the CMA Media-list `mimeGroups` filter.
   'media-read-by-id-only': 'd627b62',
+  // `d658092` is the parent of `18a862e`, which is a tip of origin/develop, latest and 1.22.3: its
+  // Script skill still says a Script installed from a MarketApp arrives with `******` secrets to fill in.
+  'market-app-secret-install-input': 'd658092',
 };
 
 const NOT_CORPUS = new Set(['FACT-OWNERS.md', 'GATE-INVENTORY.md']);

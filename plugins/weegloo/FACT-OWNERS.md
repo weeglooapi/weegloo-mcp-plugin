@@ -301,3 +301,13 @@ git worktrees.
   - `skills/weegloo-upload-api/SKILL.md`
 - **forbidden**: `mimeGroups=` — the Media-list filter recipe (`fields.file.{locale}.mimeGroups={MimeGroup}`, `fields.file.en-US.mimeGroups=Image`) that taught product code to search Media by a field: the always-loaded rule's *CMA Media list* section, `weegloo-api-query-optimization` §5 and two lines of `weegloo-list-pagination`. Present in 3 file(s) at `d627b62`, 0 after the fix. A sentence that names the filter in order to forbid it does not trip this row as long as it gives the parameter no `=` value.
 - **why**: The wrong side was the always-loaded rule, scoped to application code: it told every agent building a gallery or a file box to filter the Media list server-side, and the feature works on the first upload. A Media list has no ContentType scope and its labels are console text, so the feature later breaks with no error. Every restatement is a pointer at the rule's section title, which is what `mentions` matches — a new file that starts describing how to look a Media up must be read against the owner before it is registered. No canary: the verdict is pinned by `GATE-INVENTORY.md`, and the restatements are pointers, not copies.
+
+### market-app-secret-install-input
+
+- **fact**: Packing a Script into a MarketApp leaves its Weegloo resource ids where they are written (the install rewrites them) and ships every `definition.secrets` value as `******`; each installer enters their own value at install, so an installed Script holds the installer's value, never `******`. Only a value that is not a Weegloo resource id belongs in a secret.
+- **owner**: `skills/weegloo-market-app/SKILL.md`
+- **mentions**: `\*{6}|installer input`
+  - `skills/weegloo-market-app/SKILL.md`
+  - `skills/weegloo-script/SKILL.md`
+- **forbidden**: `arrives with every secret value set to` — the claim that a Script installed from a MarketApp arrives with `******` secrets to fill in by hand. `ScriptPacker` turns every secret into a required install input and `BundleParameterResolver` refuses an install that leaves one unresolved, so the installed Script holds the installer's value. Present in 1 file(s) at `d658092`, 0 after the fix.
+- **why**: The Script skill said the opposite of the server, and both copies read plausibly — the agent obeys whichever it loaded: one makes a secret the installer's own input at install, the other a slot to patch by hand afterwards. The verdict lives in `weegloo-market-app`; the Script skill's line is a pointer that agrees with it. No canary: the restatement is a pointer, not a copy.
