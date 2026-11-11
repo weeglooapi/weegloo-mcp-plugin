@@ -1,6 +1,6 @@
 ---
 name: weegloo-api-query-optimization
-description: Reading Weegloo Content/Media lists. `select` projection is the default on every read, your own cma_GetList* MCP calls included; sys.id[in] batching instead of N GETs; sys.version before PATCH/PUT; Media read by sys.id only. Master/detail UIs (history list, gallery, inbox, sidebar→item), Refer→Media resolved to an image URL, /style1../style10 thumbnail/avatar resizing. SEARCH: in-memory vs server-side, and the X-Weegloo-Advanced-Search header required for any fields.* filter/order (MCP cannot send it). Use when fetching, listing or searching content/media, on an empty fields.* filter or a slow list. 목록 조회, 검색, 썸네일, 갤러리, 이미지 크기, 타임아웃.
+description: Reading Weegloo Content/Media lists. `select` projection is the default on every read, your own cma_GetList* MCP calls included; sys.id[in] batching instead of N GETs; sys.version before PATCH/PUT; Media read by sys.id only. Master/detail UIs (history list, gallery, inbox, sidebar→item), Refer→Media resolved to an image URL, /style1../style10 thumbnail/avatar resizing. SEARCH: in-memory vs server-side, and the X-Weegloo-Advanced-Search header required for any fields.* filter/order (MCP: only Content list tools). Use when fetching, listing or searching content/media, on an empty fields.* filter or a slow list. 목록 조회, 검색, 썸네일, 갤러리, 이미지 크기, 타임아웃.
 ---
 
 # Weegloo - query optimization for list APIs
@@ -192,7 +192,7 @@ thumb / hero), and the two availability cases where a styled URL is not yet live
 it the match is **exact equality**, so a substring query returns an **empty list rather than an
 error**; the header is also what keeps the query off an unindexed scan. Where to search (server-side
 over the whole dataset vs. in-memory over a fully-loaded array), the locale segment, the speed/index
-rationale, the MCP tools' inability to send the header, and RichText/Json being unsearchable are all
+rationale, which MCP tools can send the header, and RichText/Json being unsearchable are all
 in `weegloo-global-rules` (*Searching `fields.*` — Advanced Search is required*) — always loaded;
 deleted from here rather than restated.
 
