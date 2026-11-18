@@ -8,7 +8,7 @@ description: Reading Weegloo Content/Media lists. `select` projection is the def
 ## When to use
 
 - Designing or reviewing **HTTP** calls to Weegloo **list** endpoints (CMA, CDA, or other documented list APIs) where **payload size**, **latency**, or **request count** matter.
-- Combining **`select`** with **`include`** (reference expansion) so expanded linked resources do not bloat the response.
+- Narrowing **`include`** (reference expansion) to the types you need with **`includeTypes`**, and pairing it with **`select`**, so expanded linked resources do not bloat the response.
 - Replacing **one GET-by-id** when you only need a **subset of fields**, or replacing **many GET-by-id** calls with **one filtered list**.
 - Loading **`sys.id`** and **`sys.version`** before **`PATCH`** or **`PUT`** without paying for a full **single-resource GET** on each id.
 
@@ -76,15 +76,35 @@ Every list request is sorted — by **`order`** when you pass it, otherwise by t
 
 Example: **`?order=sys.id,fields.name`** together with **`select`** → keep **`sys.id`** and **`fields.name`** reachable in the response.
 
-### Interaction with `include` (reference expansion)
+### Interaction with `include` (reference expansion) — narrow it with `includeTypes`
 
-If the request uses **`?include=`** (or equivalent) so that **linked references** are **expanded** in the response, **`select`** becomes **especially important**: expansion can pull in **full linked documents** (e.g. a **Space**).
+**`include=1` expands EVERY `Refer` on the resource, whatever its type.** Asking for a Content's
+author (`sys.createdBy` → `User`) also pulls in its `Space`, its `ContentType` and every
+`Refer → Media` / `Refer → Content` field — full linked documents nobody asked for.
 
-When you **do not** need those linked details:
+**Name the types you need with `includeTypes`** — one comma-separated value that narrows what
+`include` expands. `include` alone keeps its old behaviour (every type — the over-fetch above), so
+add `includeTypes` whenever you need only some of them:
 
-- Prefer **`select`** to **drop** or **narrow** the corresponding branches (e.g. the **space** subtree) so that **expanded Space payloads** are not shipped unnecessarily.
+- **Correct:** **`?include=1&includeTypes=User`** — the author byline only.
+- **Correct:** **`?include=1&includeTypes=Media`** — resolve image/file fields only.
+- **Correct:** **`?include=1&includeTypes=User,Media`** — both, nothing else.
 
-Otherwise, **`include`** may undo optimization by enlarging the body with nested resource graphs.
+Three ways it goes silently wrong — no error, just a missing or bloated `include.<Type>`:
+
+- **Matched case-sensitively against the stub's `sys.targetType`** — the same PascalCase as the
+  response's `include.<Type>` keys (`Media`, `User`, `Content`, `Space`, `ContentType`). Copy the name
+  off the stub; `includeTypes=media` expands nothing.
+- **An unlisted type is neither returned nor followed.** With `include=2`, reaching a Media through a
+  referenced Content needs **both** `includeTypes=Content,Media`; listing only `Media` stops at the
+  Content and the nested Media never arrives.
+- **`includeTypes` without `include` has no effect** — no error and nothing expanded (`include`
+  defaults to `0`), so `?includeTypes=Media` alone returns no `include.Media`.
+
+It applies wherever `include` does — CMA, CDA, ACMA and ACDA, list and single-resource reads — and to
+your own MCP calls (`cma_GetListContents`, `cma_GetOneContent`, … take an `includeTypes` parameter).
+Keep **`select`** on the request as always: `includeTypes` decides **which** linked resources are
+expanded at all, `select` how much of each item comes back.
 
 ### Scoping the ContentType for a `fields.*` filter or `order`
 
@@ -172,8 +192,8 @@ detail or image view straight from the list response." A **list/sidebar → open
   is a defect, not an optimization.
 - **Detail: fetch that ONE Content by id, lazily, on click.** A by-id GET for the item the user
   actually opened is **correct and expected** — §3's "avoid N GETs" is about a *batch* up front.
-- **A `Refer → Media` is a stub, never a URL.** Resolve it (follow `sys.id`, or `?include=1` and read
-  `include.Media`) — see `weegloo-global-rules` (*Resource Search*, the *References are NEVER
+- **A `Refer → Media` is a stub, never a URL.** Resolve it (follow `sys.id`, or
+  `?include=1&includeTypes=Media` and read `include.Media`) — see `weegloo-global-rules` (*Resource Search*, the *References are NEVER
   embedded* item). Do this on the **detail** fetch, not from the list response.
 - **Thumbnails: append a preset style segment to the Media file URL** — `/style1`…`/style10` =
   32 / 64 / 128 / 192 / 256 / 320 / 480 / 640 / 960 / 1024 px **max dimension**, aspect preserved,

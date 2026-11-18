@@ -35,7 +35,9 @@ only as the anchor for the rendering rules below.) Two ways to get the real reso
 
 1. **Follow the id.** Read `…sys.id` from the Refer and fetch the target directly, e.g.
    `GET /v1/spaces/{spaceId}/medias/{id}` for a `Refer → Media`.
-2. **Expand on read with `?include=1`.** The response then carries every referenced resource in a
+2. **Expand on read with `?include=1&includeTypes=Media`** — name the `targetType`s you need; without
+   `includeTypes`, `include=1` expands every reference, Space and ContentType included (spine §1,
+   *Interaction with `include`*). The response then carries those resources in a
    **sibling, singular `include` object keyed by PascalCase `targetType`** — `include.Media`,
    `include.Content`, `include.Space`, `include.Organization`, `include.User`, … . Resolve a field's
    `sys.id` against the matching `include.<Type>` array by id. (Shape detail + a both-shapes
@@ -43,7 +45,8 @@ only as the anchor for the rendering rules below.) Two ways to get the real reso
 
 ### Rendering a referenced Media (image / file fields)
 
-- On the **detail** fetch, expand the reference (`?include=1`) — or follow up with a Media fetch —
+- On the **detail** fetch, expand the reference (`?include=1&includeTypes=Media`) — or follow up with
+  a Media fetch —
   and read the file URL from the **Media's** `fields.file`, whose **shape depends on the plane**: on a
   **delivery** read (CDA / ACDA, default) it is **flat** — **`fields.file.url`**; on a **management**
   read (CMA / ACMA), and on delivery with `locale=*`, it is a **per-locale bucket** —
