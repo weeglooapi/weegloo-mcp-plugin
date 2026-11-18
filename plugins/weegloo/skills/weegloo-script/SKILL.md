@@ -127,8 +127,10 @@ cap **2**; retries only on status ≥ 400), `ignoreStatusCode` (default `false`)
   `{ status, body }` for any status so you branch on `{ /<name>/status }` yourself.
 - **Sending a file: `urlBody` / `multipartBody`** — the platform fetches the bytes from a URL (e.g. a
   Media file's `url`) and sends them as the raw body or as `multipart/form-data` file parts. Every
-  fetched URL passes the same egress check as `url`, must answer **2xx directly — a redirect fails** —
-  and is size-capped **per plan**. A failed fetch or an over-cap file **fails the action even with
+  fetched URL passes the same egress check as `url` and is size-capped **per plan**. A **2xx or 3xx**
+  answer counts as success, but a **3xx is NOT followed** — its own (usually empty) body is what gets
+  sent, with no error — so point `urlBody` / a part `url` at the **final** file URL, never one that
+  redirects. A failed fetch or an over-cap file **fails the action even with
   `ignoreStatusCode: true`, and is not retried** — catch it with `Try`.
 - **Response body cap 10 MiB** — larger **throws** (catchable). Never pull large binaries through
   `Http`: have the provider return a **URL** and ingest it as Media with `encoding: "url"`.
