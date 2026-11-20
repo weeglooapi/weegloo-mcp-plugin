@@ -81,11 +81,9 @@ coerced:
 **Idempotency.** Providers retry. Verify first, then look the event up by its provider-side id
 (`ResourceFind` on a `fields.eventId` — `ResourceCreate` takes no `sys.id` of your choosing, so that
 id cannot be the receipt's) and return the existing result instead of doing the work twice. The
-receipt's `ResourceCreate` takes `propagateEvents: true`: a Script's writes are silent by default and
-may never reach the synced copy that find reads (`SKILL.md` → *Resource writes*), so a retry could
-miss the receipt and do the work again. That write fires Webhooks too — filter each Content-topic one
-to its ContentType (`weegloo-webhook`). Full PG / MoR guidance, including which of `/execute` and
-`/execute/anonymous` a given provider can reach: **`weegloo-payment`**.
+receipt needs no `propagateEvents` (it only fires Webhooks): with or without it, the receipt reaches
+the synced copy that find reads about a second later (`SKILL.md` → *Resource reads*). Full PG / MoR guidance, including
+which of `/execute` and `/execute/anonymous` a given provider can reach: **`weegloo-payment`**.
 
 ## The anonymous endpoint — `anonymousCallEnabled`
 

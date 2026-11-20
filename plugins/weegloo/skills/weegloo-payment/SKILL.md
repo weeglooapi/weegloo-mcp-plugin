@@ -283,7 +283,7 @@ every value (`weegloo-script` → `Http`).
   "timeoutMs": 10000 },
 
 // the order is created HERE, by the Script, with the Script's number in it — see §6a
-{ "type": "ResourceCreate", "resource": "Content", "locale": "en-US", "propagateEvents": true,
+{ "type": "ResourceCreate", "resource": "Content", "locale": "en-US",
   "contentType": { "sys": { "id": "<orderCtId>" } },
   "fields": { "orderId": "{ /payload/orderId }", "status": "pending", "currency": "krw",
               "product": { "sys": { "type": "Refer", "id": "{ /product/sys/id }", "targetType": "Content" } },
@@ -294,9 +294,9 @@ every value (`weegloo-script` → `Http`).
 { "type": "Return", "value": { "url": "{ /session/body/url }" } }
 ```
 
-- **`propagateEvents: true` on the order create is not optional.** A Script's writes are silent by
-  default — no search indexing — and §6c finds the order with a `ResourceFind`, which searches the
-  indexed copy: a silent create is never found, and every confirm answers `404`.
+- **The order create needs no `propagateEvents`** — that flag only fires Webhooks. §6c finds the
+  order with a `ResourceFind` on the indexed copy, which picks the create up about a second later
+  either way; the buyer is back from checkout long after that.
 - **A cart** prices every line the same way — `Loop` over the lines with a declared
   `maxIterations`, each line priced from its own product row, `SetVar` to add them up
   (`weegloo-script`) — and stores the lines it priced; it never totals what the page sent.

@@ -17,8 +17,8 @@ step throws.
 There is no transaction manager: compensation is something you author. Writes already committed stay
 committed, so the `catch` block has to undo them explicitly, and a body that may be retried should be
 **idempotent** (a natural key checked with `ResourceFind` before creating, say). That check takes
-**`advanced: false`** — the attempt it guards against created its row moments ago, silently
-(`SKILL.md` → *Resource writes*), and the synced copy the default path reads may not hold it; pair
+**`advanced: false`** — the attempt it guards against created its row moments ago, and the synced
+copy the default path reads trails the writes by about a second, so it may not hold it yet; pair
 the key with system axes so the unindexed match stays small (`queries-and-iteration.md`).
 
 ## 2. Concurrency-safe writes with `version` (optimistic locking)
@@ -76,12 +76,10 @@ with its **author's** delegated authority (pattern 3), `ResourceFind`s that cred
 the comparison happens *inside* the Script, the secret store never reaches the client: a caller
 holding nothing but `script.Execute` can neither read another post's password nor skip the gate.
 
-The credential row comes from the Script that creates the post, and its `ResourceCreate` takes
-**`propagateEvents: true`**: a silent Script write may never reach the synced copy the gate's
-`ResourceFind` reads (`SKILL.md` → *Resource writes*), and the gate then answers `bad-password` to
-the rightful owner. (Not `advanced: false` on the gate: its `where` is a `fields.*` match, which that
-path scans.) That write fires Webhooks too — filter every Content-topic Webhook to the ContentType it
-is for (`weegloo-webhook`), or a URL one posts the credential row out. The row's `postId` is the
+The credential row comes from the Script that creates the post, as a plain write — it needs no
+`propagateEvents`: with or without it, the row reaches the synced copy the gate's `ResourceFind`
+reads about a second later, long before the owner comes back to edit. (Not `advanced: false` on the gate: its
+`where` is a `fields.*` match, which that path scans.) The row's `postId` is the
 `sys.id` that Script's post create returned, never a payload value, and the public role holds no
 `Create` on the credential type — through either, a caller adds a second row for someone else's
 post, and the gate's find may return theirs.

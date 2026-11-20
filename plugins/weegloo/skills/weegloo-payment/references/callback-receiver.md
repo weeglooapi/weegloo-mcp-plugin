@@ -159,9 +159,9 @@ ordering or exactly-once delivery, so **key on `event.id`** (`evt_…`), not on 
 
 1. `ResourceFind` a receipt Content by that `evt_…` id.
 2. If found ⇒ `Return` `200` immediately (a success, not an error — otherwise the PG keeps retrying).
-3. Otherwise write it with `propagateEvents: true`, then do the work — a silent receipt may never
-   reach the synced copy step 1's find reads (`weegloo-script` → *Resource writes*), and every retry
-   would pass step 1 again.
+3. Otherwise write it, then do the work. The receipt needs no `propagateEvents` (that only fires
+   Webhooks): with or without it, the receipt reaches the synced copy step 1's find reads about a
+   second later (`weegloo-script` → *Resource reads*).
 
 The payload's `data.object` is the resource the event is about — for `checkout.session.completed`, the
 Checkout Session, carrying `client_reference_id`, `amount_total`, `currency` and `payment_status`.

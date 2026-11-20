@@ -182,7 +182,7 @@ order:
     "then": [ { "type": "Return", "isError": true, "statusCode": 400, "value": "invalid order" } ] },
 
   { "type": "ResourceCreate", "name": "order", "resource": "Content",
-    "contentType": { "sys": { "id": "<orderCtId>" } }, "locale": "en-US", "propagateEvents": true,
+    "contentType": { "sys": { "id": "<orderCtId>" } }, "locale": "en-US",
     "fields": { "orderId": "{ /payload/orderId }", "status": "pending",
       "product": { "sys": { "type": "Refer", "id": "{ /product/sys/id }", "targetType": "Content" } },
       "quantity": "{ /payload/quantity }",
@@ -197,8 +197,9 @@ order:
     authority, so without it a buyer passes the id of another row that carries a `price` — one
     they wrote themselves included. An id that is no published product fails the read or the
     check, and nothing is created.
-  - **Keep `propagateEvents: true`.** A Script's writes are silent by default and never reach the
-    search index; §4 finds this order by searching, so without it every confirm answers `404`.
+  - **No `propagateEvents` here** — that flag only fires Webhooks. §4 finds this order by
+    searching the indexed copy, which picks the create up about a second later either way; the
+    buyer is back from the payment window long after that.
   - **A cart** prices every line the same way — `Loop` over the lines with a declared
     `maxIterations`, `SetVar` to add them up (`weegloo-script`) — and stores the lines it priced;
     it never totals what the page sent.

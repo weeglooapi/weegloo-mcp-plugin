@@ -91,8 +91,14 @@ index, then `ResourcePatch`es an `indexedAt` value back onto it. (Full patterns:
   topic (usually **`Content.Create`**); adding `Content.Publish` on the same Webhook double-fires.
 - Filter to one ContentType (`sys.contentType.sys.id` `EQ` `<id>`) so unrelated content doesn't
   trigger it.
-- **Loop protection:** a Script (or URL side effects) that changes content emits events that may fire
-  other Webhooks; the platform blocks infinite create/update loops.
+- **Loop protection covers Script chains only.** A Script's write with `propagateEvents: true` fires
+  the next Webhook one generation deeper, and the platform stops that chain after 3 generations — at
+  most 4 Script runs in one chain. A write that comes back from **outside** — a URL
+  Webhook's receiver writing to the same Space over CMA, or a `url` pointed at
+  `script.weegloo.com/…/execute` — starts at generation 0 every time, so **nothing stops that loop**:
+  give the receiver its own stop condition (skip the write when the row already holds what it would
+  write). Script executions are one Organization-wide monthly allowance, so such a loop can stop
+  every Script and Scheduler in the Organization.
 
 ## Endpoints (CMA)
 

@@ -106,14 +106,12 @@ simply not in that copy yet. "My `where` is on an indexed field" answers a quest
 and says nothing about **freshness**. Inside the lag window that search takes `advanced: false` too,
 exactly like a `fields.*` one.
 
-**And for a Script's own writes the lag is not the whole story.** They are silent by default
-(`propagateEvents: false`), and a silent write does not fire search indexing
-(`SKILL.md` → *Resource writes*), so the synced copy may never hold a row a Script created that
-way, however long ago. A search for such a row — a wallet, an idempotency receipt, a credential —
-takes `advanced: false` (cheap on a system-axis `where`), or its create takes
-`propagateEvents: true`, which indexes it about a second later and fires Webhooks too.
+**Nor does `propagateEvents` change the lag.** It decides only whether a write fires Webhooks
+(`SKILL.md` → *Resource writes*); search indexing does not depend on it, so a Script's silent write
+reaches the synced copy about a second later like any other indexed write. Turning it on never makes a row searchable sooner, and a
+row a Script wrote silently before the window is found on the default path like any other.
 
-**Even in that case, first try to restructure so it can stay `true`** — and usually you can:
+**Even inside the window, first try to restructure so it can stay `true`** — and usually you can:
 
 - Fetch it **by id** with **`ResourceRead`**. That statement never takes the indexed path at all, so
   it is both exact and unaffected by `advanced`. If you hold the `sys.id`, this is the answer.

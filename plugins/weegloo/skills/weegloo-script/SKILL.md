@@ -181,9 +181,8 @@ All reads take **`from`**: **`Current`** (live draft, what CMA/ACMA read; **defa
 - **`ResourceFind`** — **first match or `null`**: `contentType` (**required** for Content), `where`
   (`fields.<name> → { op: value }`, `:self` supported), `order` (decides which match is "first"),
   `from`, `advanced`. Branch on existence with `{ "==": [ "{ /name }", null ] }` (find-then-upsert —
-  its `ResourceCreate` takes `propagateEvents: true`: a silent create may never reach the synced copy
-  the find reads, so a later run can miss the row and create it again; that also fires Webhooks, so
-  rule out a loop, `references/patterns.md` §5).
+  its `ResourceCreate` reaches the synced copy the find reads about a second after it lands,
+  `propagateEvents` or not; a run that can come sooner than that is the note below).
 - **`ResourceForEach`** (iterate every match via `onEach`; binds no result) and **`ResourceCount`**
   (how many match — binds a number, **`0` not `null`** when none, and `ContentType` is countable):
   **`references/queries-and-iteration.md`**, together with `advanced` / Advanced Search in full.
@@ -225,7 +224,7 @@ All reads take **`from`**: **`Current`** (live draft, what CMA/ACMA read; **defa
 | `locale` | Create/Update/Patch | literal code **or** value expression. Omitting it does **not** default to the space locale. |
 | `version` | Update/Patch/Publish/Unpublish/Archive/Unarchive | **optimistic lock** (→ Int): the write applies only if `sys.version` matches; a mismatch aborts with a catchable conflict error. Omit ⇒ no check. |
 | `publish` | Content/Media Create/Update/Patch | **default `true`** — publish after the write so CDA/ACDA deliver it; `false` keeps a draft. |
-| `propagateEvents` | **every Content/Media write** | **default `false` — a Script's writes are SILENT**: no `EntityEvent`s, so **search indexing and Webhooks do NOT fire**. Set `true` per action when a write must index the row or trigger other Webhooks. |
+| `propagateEvents` | **every Content/Media write** | **default `false` — a Script's writes are SILENT**: no `EntityEvent`s, so **Webhooks do NOT fire**. Set `true` per action when a write must trigger other Webhooks (`weegloo-webhook` → loop protection). **Search indexing does not depend on it** — an indexed write reaches the synced copy about a second later, silent or not (*Resource reads*). |
 
 **Media ingest** — `fields.file.{locale} = { "source": "…", "encoding": "url" | "base64" }` on a Media
 `ResourceCreate` / `ResourceUpdate` (re-ingests the listed locales) / `ResourcePatch` (just the named
@@ -406,12 +405,11 @@ it. One Script does the whole thing.
    `{ /payload/… }` value: a caller who sends `0` or a negative cost calls the provider free or
    mints credit.
    ⚠️ **Every find of the wallet takes `advanced: false`** — the crediting Script's too, where a miss
-   drops a verified payment's credit or makes a second wallet. The wallet's create is a Script write,
-   silent by default (*Resource writes*), and a default find reads the synced copy, which a silent
-   write may never reach and any write reaches only about a second later (*Resource reads*): it can
-   answer `null` for a wallet that exists. On a `createdBy` `where` the `false` path is cheap. Do not
-   swap the find for a `ResourceRead` of an id the caller sends: the Script runs with the author's
-   authority, so it would charge whichever wallet the caller names.
+   drops a verified payment's credit or makes a second wallet. The wallet may have been created
+   moments ago, and a default find reads the synced copy, which trails the writes by about a second
+   (*Resource reads*): it can answer `null` for a wallet that exists. On a `createdBy` `where`
+   the `false` path is cheap. Do not swap the find for a `ResourceRead` of an id the caller sends:
+   the Script runs with the author's authority, so it would charge whichever wallet the caller names.
    ⚠️ **Lock the deduction to the wallet's `sys.version`** — unlocked, two concurrent runs both pass
    the balance check and both write the same reduced balance: two provider calls paid for once. Take
    the balance and version from the **`ResourceRead`**, not from the `ResourceFind` that located the

@@ -164,9 +164,9 @@ payment id**, not on arrival:
 
 1. `ResourceFind` a receipt Content by that id.
 2. If found ⇒ `Return` `200` immediately (a success, not an error — otherwise the PG keeps retrying).
-3. Otherwise write it with `propagateEvents: true`, then do the work — a silent receipt may never
-   reach the synced copy step 1's find reads (`weegloo-script` → *Resource writes*), and every retry
-   would pass step 1 again.
+3. Otherwise write it, then do the work. The receipt needs no `propagateEvents` (that only fires
+   Webhooks): with or without it, the receipt reaches the synced copy step 1's find reads about a
+   second later (`weegloo-script` → *Resource reads*).
 
 Before fulfilling, match the delivery to **your own order row** and check it exactly as in shape A —
 amount and status against what you stored, never the payload alone. A verified delivery proves *the
@@ -174,8 +174,8 @@ PG sent this*, not *this is the order you think it is*.
 
 For a counter or balance that two deliveries could race on, pass the row's **`sys.version`** as the
 write's `version` (optimistic lock) and let `Try` handle the conflict. And remember a Script's writes
-are **silent** by default — they neither index the row nor fire Webhooks; set `propagateEvents: true`
-on a write that must do either (both mechanics: `weegloo-script`).
+are **silent** by default — they fire no Webhooks; set `propagateEvents: true` on a write that must
+(both mechanics: `weegloo-script`).
 
 ## The Toss 가상계좌 deposit — ask Toss; the delivery is only a trigger
 
@@ -256,14 +256,14 @@ about where a `secret` may live, which the page cannot see.
   §4's patch and be refused once — harmless, its retry a minute later passes; a genuine delivery
   refused on every retry means the find missed the order or `SKILL.md` §4 never stored the
   `paymentKey`, and Toss's failure email is the alarm. No `Return` echoes the order or Toss's body.
-- **Decide from `ResourceRead`, not from the search.** The find reads the indexed copy, which has
-  `orderId` because the order Script creates it with `propagateEvents: true` (`SKILL.md` → *The
-  order Script*; §4's own find depends on the same). `paymentKey`
-  and `status` come from **silent** Script patches — §4's and this receiver's — so they are taken
-  from `ResourceRead`, which never uses the index. **No write here needs `propagateEvents: true` to
-  be correct**; set it on the two patches only if a `Webhook` fulfils, or stops fulfilment, from
-  them (B-5) — and make that Webhook idempotent, because the `WAITING_FOR_DEPOSIT` patch also runs on
-  an order that already reads `awaiting_deposit`.
+- **Decide from `ResourceRead`, not from the search.** The find reads the indexed copy, which trails
+  the writes by about a second: it has `orderId`, written when the order Script created the order
+  long before any notice (`SKILL.md` → *The order Script*; §4's own find depends on the same).
+  `paymentKey` and `status` come from Script patches — §4's and this receiver's — that can land
+  moments before a notice, so they are taken from `ResourceRead`, which never uses the index.
+  **No write here needs `propagateEvents: true` to be correct**; set it on the two patches only if
+  a `Webhook` fulfils, or stops fulfilment, from them (B-5) — and make that Webhook idempotent,
+  because the `WAITING_FOR_DEPOSIT` patch also runs on an order that already reads `awaiting_deposit`.
 - **This is B-2's exception: it has to call out.** `timeoutMs: 5000`, with `retry` left at `0`, keeps
   the run well inside the **10 seconds** Toss waits for a `200`. A Toss error or a mismatch answers
   `503`, a version conflict `409`, and an `Http` timeout fails the run — none of them a `200` — so
