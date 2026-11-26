@@ -137,6 +137,26 @@ cap **2**; retries only on status ≥ 400), `ignoreStatusCode` (default `false`)
 - `Http` draws on the Organization's **webhook outbound-network quota**; suspended ⇒ a catchable
   **`WGL403012`**.
 
+### `JWT` — sign a token for an API that authenticates with one
+
+For a provider that wants a JWT signed with your private key — a Google **service account**, a
+**GitHub App**, any OAuth **`jwt-bearer`** grant. It binds the **compact token string** as
+`{ /<name> }` (**`name` required**), which you post as a token endpoint's `assertion` or send as
+`Bearer { /<name> }`.
+
+- **`algorithm`: `RS256` only.** ES256 and HS256 are not available, so a Script cannot sign the token
+  APNs, the App Store Server API or Sign in with Apple requires.
+- **`signingKey`** — the RSA private key as **PEM**, read from **`{ /secrets/<key> }`**.
+- **`claims`** (required, at least one) and **`header`** (optional, e.g. `kid`; never `alg`/`typ`) are
+  **data slots**: `"exp": { "$+": [ "{ /now/seconds }", 3600 ] }` — with a bare `+`, `exp` is an
+  object, not a time.
+- **Caught at run time, not at save:** a claim or header value resolving to `null`, an unusable key,
+  or `alg`/`typ` in `header` fails the statement `400`; claims serializing past 65,536 chars, `422`.
+
+**Read `references/signed-jwt.md`** before writing one: the Google token-exchange recipe, storing the
+key (a key file's `private_key` stored with its line breaks as literal `\n` saves fine and fails every
+run), and the full failure list.
+
 ### `ParseJson`, `SetVar`, `Cache`, `EmailSend`
 
 - **`ParseJson`** — turn a **JSON string into a value** you can address with pointers. `value` (the
@@ -278,8 +298,8 @@ Any string value may embed a pointer. Roots:
 name**, so where keys belong to your data an operator needs a **`$` prefix**:
 
 - **Data slots** — `fields` (Create/Update/Patch) · `Http.body` · `Return.value` · `SetVar.value` ·
-  `Cache.value`/`defaultValue` · `EmailSend.templateBody.data`: a key without `$` is **always a field
-  name**; operators **must** use `$`.
+  `Cache.value`/`defaultValue` · `EmailSend.templateBody.data` · `JWT.claims`/`header`: a key without
+  `$` is **always a field name**; operators **must** use `$`.
 - **Expression slots** — `If.condition` · `Loop.while` · `version`: the whole value is an expression,
   so bare and `$` both work.
 - **Template slots** — everything else (`url`, `headers[].value`, `locale`, `order`, `over`,
@@ -313,8 +333,8 @@ Keep an iterating body **idempotent / resumable** and split work that cannot fit
 Everyday caps: `Http` `timeoutMs` **60s** (default 30s), `retry` **2**, response body **10 MiB** ·
 `EmailSend` **30s**, 50 recipients · `SetVar` **10** · `Cache` **5** · `Loop` `maxIterations` /
 `ForEach` `limit` **10,000**. **Statement count and external-I/O count are per-plan — never
-hard-code them.** Full table, the resolved-length caps on `Signature`/`Hash`/`Regex`, and the rest of
-save-time validation: **`references/queries-and-iteration.md`**.
+hard-code them.** Full table, the resolved-length caps on `Signature`/`Hash`/`Regex`/`JWT`, and the
+rest of save-time validation: **`references/queries-and-iteration.md`**.
 
 Scripts **per Space** are plan-limited, and **executions are a monthly allowance for the whole
 Organization** shared with Webhook-run Scripts and every **Scheduler** run — when it is spent, Script
@@ -325,10 +345,11 @@ loop-retry; surface the upgrade path.
 
 - **Every private, non-generic value goes in `definition.secrets` and is read as
   `{ /secrets/<key> }`** — a PG or third-party API secret key, a webhook signing secret, a precomputed
-  `Basic …` credential, an OAuth client secret. **Never write one literally into a statement** — not
-  in an `Http` `url` (query string included), `headers` or `body`, not in `Signature.secret` or
-  `Hash.value`, not in a `SetVar` — and never in `payload` or Content fields. Published **test keys**
-  go there too, so going live changes one secret value, not the statements.
+  `Basic …` credential, an OAuth client secret, a `JWT` signing key. **Never write one literally into a
+  statement** — not in an `Http` `url` (query string included), `headers` or `body`, not in
+  `Signature.secret`, `Hash.value` or `JWT.signingKey`, not in a `SetVar` — and never in `payload` or
+  Content fields. Published **test keys** go there too, so going live changes one secret value, not
+  the statements.
 
   ```jsonc
   "secrets": [ { "key": "LLM_API_KEY", "value": "sk-…", "description": "LLM provider API key" } ],
@@ -490,6 +511,9 @@ on create, alongside every **other non-optional locale** the space defines — `
   searches, iterates or counts, or is large enough that the run budget matters.
 - **`references/verify-callbacks.md`** — `Signature` / `Hash` / `Regex`, the replay window and the
   anonymous endpoint. Read it when the Script *receives* a signed request instead of sending one.
+- **`references/signed-jwt.md`** — the `JWT` statement in full: the service-account token exchange,
+  storing the private key, what fails at run time. Read it before a Script signs a token for an
+  outbound call.
 - **`references/value-expressions.md`** — the `date` operator and operator edge cases. Read it
   whenever a date is compared, stored or read out of the payload.
 - **`references/transformations.md`** — `transformations` / `PdfWatermark` in full: what is drawn,

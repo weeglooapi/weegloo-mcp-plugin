@@ -167,15 +167,16 @@ are not searchable at all) — `weegloo-create-content-type`.
 | `Hash` `value` — **resolved** message | **128 chars** (over ⇒ statement fails, `422`) |
 | `Regex` `pattern` — as authored | **128 chars** (rejected at save) |
 | `Regex` `value` — **resolved** text | **10,240 chars** (over ⇒ statement fails) |
+| `JWT` `claims` — **resolved**, serialized | **65,536 chars** (over ⇒ statement fails, `422`) |
 | Max `Http` **response body** size | **10 MiB** (larger ⇒ statement throws) |
 | `Http` file body — each `urlBody` / part `url` fetched | **per-plan** (larger ⇒ action fails, not retried) |
 | External calls inside `Loop` / `ResourceForEach` | **allowed** |
 
 **The resolved-length caps are checked when the statement runs, not at save** — they bound the
-message a `Signature`/`Hash` actually authenticates and the text a `Regex` scans, and those lengths
-are unknown until the pointers resolve. `Signature`'s cap is sized for a real webhook body: the
-expression `{ /rawPayload }` is sixteen characters standing for however many kilobytes the caller
-sent.
+message a `Signature`/`Hash` actually authenticates, the text a `Regex` scans and the claims a `JWT`
+signs, and those lengths are unknown until the pointers resolve. `Signature`'s cap is sized for a
+real webhook body: the expression `{ /rawPayload }` is sixteen characters standing for however many
+kilobytes the caller sent.
 
 **How the time budget is priced.** Every declared `timeoutMs` adds to it — `Http` counts `1 + retry`
 times, `EmailSend` once — while anything that declares no time of its own (store round-trips, Media
